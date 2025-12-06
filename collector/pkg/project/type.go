@@ -119,3 +119,14 @@ type Error struct {
 	Message string `json:"message"`
 	Keyword string `json:"keyword,omitempty"`
 }
+
+// ProgressCallbackRequest represents the progress webhook callback payload.
+// Gửi tới POST /internal/progress/callback
+type ProgressCallbackRequest struct {
+	ProjectID string `json:"project_id"`
+	UserID    string `json:"user_id"`
+	Status    string `json:"status"` // INITIALIZING, CRAWLING, PROCESSING, DONE, FAILED
+	Total     int64  `json:"total"`
+	Done      int64  `json:"done"`
+	Errors    int64  `json:"errors"`
+}

@@ -51,14 +51,11 @@ func (c Consumer) consume(exchange pkgRabbit.ExchangeArgs, queueName string, rou
 
 	c.l.Infof(ctx, "Queue %s is being consumed", q.Name)
 
-	var forever chan bool
-	go func() {
-		for msg := range msgs {
-			workerFunc(msg)
-		}
-	}()
-
-	<-forever
+	// Process messages directly in this goroutine (blocking)
+	// This keeps the consumer alive until the channel is closed
+	for msg := range msgs {
+		workerFunc(msg)
+	}
 }
 
 func catchPanic() {

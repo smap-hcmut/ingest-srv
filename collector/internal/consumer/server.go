@@ -8,6 +8,9 @@ import (
 	dispatcherUsecase "smap-collector/internal/dispatcher/usecase"
 	resultsConsumer "smap-collector/internal/results/delivery/rabbitmq/consumer"
 	resultsUsecase "smap-collector/internal/results/usecase"
+	stateRedis "smap-collector/internal/state/repository/redis"
+	stateUsecase "smap-collector/internal/state/usecase"
+	webhookUsecase "smap-collector/internal/webhook/usecase"
 	"smap-collector/pkg/project"
 )
 
@@ -23,31 +26,28 @@ func (srv *Server) Run(ctx context.Context) error {
 	if err := prod.Run(); err != nil {
 		return err
 	}
-	// TODO: Add Close() to cleanup if needed, though srv.Close() handles conn.
 
-	// 2. Init UseCases
-	dispatcherUC, err := dispatcherUsecase.NewUseCase(srv.l, prod, srv.cfg.DispatcherOptions)
-	if err != nil {
-		return err
-	}
-
-	// 2.1 Init Project Client for results webhook
+	// 2. Init Microservice
 	projectClient := project.NewClient(srv.cfg.ProjectConfig, srv.l)
 
-	// 2.2 Init Results UseCase
-	resultsUC := resultsUsecase.NewUseCase(srv.l, projectClient)
-
-	// 3. Init Consumers
+	// 3. Init UseCases
+	stateRepo := stateRedis.NewRedisRepository(srv.l, srv.cfg.RedisClient)
+	stateUC := stateUsecase.NewUseCase(srv.l, stateRepo, srv.cfg.StateOptions)
+	webhookUC := webhookUsecase.NewUseCase(srv.l, projectClient)
+	dispatcherUC := dispatcherUsecase.NewUseCaseWithDeps(srv.l, prod, srv.cfg.DispatcherOptions, stateUC, webhookUC)
+	resultsUC := resultsUsecase.NewUseCase(srv.l, projectClient, stateUC, webhookUC)
 	dispatchC := dispatcherConsumer.NewConsumer(srv.l, srv.conn, dispatcherUC)
 	resultsC := resultsConsumer.NewConsumer(srv.l, srv.conn, resultsUC)
 
-	// 4. Start Consumers
 	dispatchC.Consume()
+	srv.l.Info(ctx, "Dispatcher consumer started (collector.inbound.tasks)")
+
+	dispatchC.ConsumeProjectEvents()
+	srv.l.Info(ctx, "Dispatcher consumer started (smap.events.project.created)")
+
 	resultsC.Consume()
-
-	srv.l.Info(ctx, "All consumers started - dispatcher and results")
-
-	// Block until context cancelled (caller should cancel via signal).
+	srv.l.Info(ctx, "Dispatcher consumer started (results.inbound.data)")
+	srv.l.Info(ctx, "All consumers started")
 	<-ctx.Done()
 
 	return nil

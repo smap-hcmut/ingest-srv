@@ -5,9 +5,11 @@ import (
 
 	"smap-collector/config"
 	"smap-collector/internal/dispatcher"
+	"smap-collector/internal/state"
 	"smap-collector/pkg/discord"
 	pkgLog "smap-collector/pkg/log"
 	"smap-collector/pkg/rabbitmq"
+	pkgRedis "smap-collector/pkg/redis"
 )
 
 type Server struct {
@@ -17,12 +19,15 @@ type Server struct {
 	disc *discord.DiscordWebhook
 }
 
+// Config contains all dependencies for the consumer server.
 type Config struct {
 	Logger            pkgLog.Logger
 	AMQPConn          *rabbitmq.Connection
 	Discord           *discord.DiscordWebhook
 	DispatcherOptions dispatcher.Options
 	ProjectConfig     config.ProjectConfig
+	RedisClient       pkgRedis.Client
+	StateOptions      state.Options
 }
 
 func New(cfg Config) (*Server, error) {

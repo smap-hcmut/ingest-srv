@@ -2,7 +2,6 @@ package usecase
 
 import (
 	"context"
-	"fmt"
 
 	"smap-collector/internal/dispatcher"
 	rabb "smap-collector/internal/dispatcher/delivery/rabbitmq"
@@ -67,7 +66,8 @@ func (uc implUseCase) Dispatch(ctx context.Context, req models.CrawlRequest) ([]
 		}
 
 		if errPublish != nil {
-			return nil, fmt.Errorf("%w: %v", dispatcher.ErrPublish, errPublish)
+			uc.l.Errorf(ctx, "dispatcher.usecase.dispatch: publish failed for platform=%s, job_id=%s: %v", platform, req.JobID, errPublish)
+			return nil, ErrPublishFailed
 		}
 
 		tasks = append(tasks, task)

@@ -13,6 +13,9 @@ type Config struct {
 	// Message Queue Configuration
 	RabbitMQConfig RabbitMQConfig
 
+	// Redis Configuration for State Management
+	Redis RedisConfig
+
 	// External Services
 	Project ProjectConfig
 
@@ -37,6 +40,21 @@ type DiscordConfig struct {
 // which is used to connect to RabbitMQ server.
 type RabbitMQConfig struct {
 	URL string `env:"RABBITMQ_URL"`
+}
+
+// RedisStateConfig is the configuration for Redis state management.
+// Used for tracking project execution state (DB 1).
+type RedisConfig struct {
+	RedisAddr       []string `env:"REDIS_HOST"`
+	RedisStandAlone bool     `env:"REDIS_STANDALONE"`
+	RedisPassword   string   `env:"REDIS_PASSWORD"`
+	RedisDB         string   `env:"REDIS_DATABASE"`
+	MinIdleConns    int      `env:"REDIS_MIN_IDLE_CONNS"`
+	PoolSize        int      `env:"REDIS_POOL_SIZE"`
+	PoolTimeout     int      `env:"REDIS_POOL_TIMEOUT"`
+	Password        string   `env:"REDIS_PASSWORD"`
+	DB              int      `env:"REDIS_DATABASE"`
+	StateDB         int      `env:"REDIS_STATE_DB" envDefault:"1"`
 }
 
 // ProjectConfig is the configuration for the Project Service.

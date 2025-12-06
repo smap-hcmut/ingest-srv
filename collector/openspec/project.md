@@ -2,219 +2,210 @@
 
 ## Purpose
 
-The **SMAP Dispatcher Service** (also known as the Collector Service) is the central coordinator for the SMAP data collection system. It serves as an intelligent task router that:
+SMAP Collector Service (Dispatcher) là service trung tâm trong hệ thống SMAP data collection. Service này nhận các crawl request từ Project Service (qua RabbitMQ event `project.created`) hoặc từ legacy API, validate và phân phối các task chi tiết đến các platform-specific workers (YouTube, TikTok) thông qua RabbitMQ.
 
-- Receives high-level crawl requests from backend services or schedulers
-- Validates and transforms generic requests into platform-specific tasks
-- Distributes granular tasks to specialized workers (YouTube, TikTok) via RabbitMQ
-- Acts as a decoupling layer between request initiators and scraping workers
+**Core Responsibilities:**
 
-**Core Goals:**
-- Provide a unified interface for multi-platform data collection
-- Ensure type-safe payload mapping and validation
-- Enable horizontal scalability through message queue architecture
-- Maintain clean separation between business logic and transport mechanisms
+- Consume `project.created` events từ `smap.events` exchange
+- Transform project events thành crawl tasks cho từng platform
+- Dispatch tasks đến YouTube và TikTok workers
+- Quản lý state tracking trong Redis (DB 1)
+- Gọi progress webhook để notify Project Service
+- Nhận results từ workers và cập nhật state
+
+> **Note:** `data.collected` event được publish bởi Crawler (Worker) services, không phải Collector.
 
 ## Tech Stack
 
-### Core Technologies
-- **Go 1.23.8** - Primary programming language
-- **RabbitMQ (amqp091-go)** - Message queue for task distribution
-- **MongoDB (mongo-driver)** - Primary database for persistence
-- **PostgreSQL** - Secondary database (via sqlboiler)
-- **MinIO** - Object storage with async upload capabilities
-
-### Key Libraries
-- **Zap (uber/zap)** - Structured logging
-- **Env (caarlos0/env)** - Configuration management
-- **UUID (google/uuid)** - Unique identifier generation
-- **Zstandard (klauspost/compress)** - Data compression
-- **Mockery** - Mock generation for testing
-
-### Development Tools
-- **Docker & Docker Compose** - Containerization
-- **Kubernetes** - Container orchestration
-- **Makefile** - Build automation
-- **SQLBoiler** - Type-safe ORM code generation
+- **Language**: Go 1.25.4
+- **Message Queue**: RabbitMQ (amqp091-go)
+- **State Management**: Redis (go-redis/v9)
+- **Logging**: Zap (go.uber.org/zap)
+- **Configuration**: caarlos0/env/v9
+- **Testing**: testify
+- **Future**: MongoDB (for persistence)
 
 ## Project Conventions
 
 ### Code Style
 
-**Package Organization:**
-- `cmd/` - Application entry point (consumer)
-- `internal/` - Private application code (domain logic)
-- `pkg/` - Reusable packages (utilities, clients)
-- `config/` - Configuration loading and management
-
-**Naming Conventions:**
-- Use descriptive, intention-revealing names
-- Interfaces: `UseCase`, `Repository`, `Producer`
-- Implementations: `implUseCase`, `implRepository`
-- Constants: `PascalCase` for exported, `camelCase` for private
-- Files: `snake_case.go` (e.g., `dispatch_uc.go`, `uc_interface.go`)
-
-**Error Handling:**
-- Define domain-specific errors in `uc_errors.go`
-- Wrap errors with context using `fmt.Errorf("%w: %v", ErrType, err)`
-- Return errors explicitly, avoid panics in business logic
-
-**Logging:**
-- Use structured logging with Zap
-- Include context (trace IDs, job IDs) in log messages
-- Log levels: Debug (development), Info (production), Error (failures)
+- **Naming**:
+  - Packages: lowercase, single word
+  - Types: PascalCase (e.g., `CrawlRequest`, `CollectorTask`)
+  - Functions: PascalCase for exported, camelCase for private
+  - Constants: PascalCase for exported (e.g., `PlatformYouTube`)
+- **File Organization**:
+  - One main type per file
+  - Test files: `*_test.go`
+  - Constructor functions: `new.go` hoặc `New*` functions
+- **Error Handling**:
+  - Return errors explicitly, không panic trừ khi fatal
+  - Use custom error types trong `*_errors.go` files
+  - Context-aware logging với `log.Logger` interface
+- **Comments**:
+  - Vietnamese comments cho business logic
+  - English comments cho technical details
+  - Package-level comments mô tả purpose
 
 ### Architecture Patterns
 
-**Clean Architecture:**
-The project strictly follows Clean Architecture principles with clear layer separation:
+**Clean Architecture Layers:**
 
-1. **Delivery Layer** (`delivery/`):
-   - RabbitMQ consumers and producers
-   - HTTP handlers (future expansion)
-   - Transport-agnostic; can be swapped without affecting business logic
+```
+cmd/consumer/          # Entry point
+  ↓
+internal/consumer/     # Server orchestration
+  ↓
+internal/dispatcher/   # Core domain
+  ├── delivery/        # Transport (RabbitMQ consumers/producers)
+  ├── usecase/         # Business logic (Dispatch, Map, Event handling)
+  └── models/          # Domain entities
+  ↓
+pkg/                   # Infrastructure (Logger, RabbitMQ, Redis, etc.)
+```
 
-2. **Use Case Layer** (`usecase/`):
-   - Pure business logic (Dispatch, Mapping, Validation)
-   - Platform-agnostic
-   - No dependencies on external frameworks
+**Key Patterns:**
 
-3. **Domain Models** (`models/`):
-   - Core entities: `CrawlRequest`, `CollectorTask`, `Platform`, `TaskType`
-   - DTOs for platform-specific payloads (YouTube, TikTok)
+- **Dependency Injection**: Tất cả dependencies được inject qua constructors (`New*` functions)
+- **Interface Segregation**: Mỗi layer định nghĩa interfaces riêng (e.g., `dispatcher.UseCase`, `state.UseCase`)
+- **Strategy Pattern**: Payload mapping dựa trên Platform + TaskType
+- **Factory Pattern**: `NewUseCase`, `NewUseCaseWithDeps` cho optional dependencies
+- **Event-Driven Architecture**:
+  - Consume: `project.created` từ `smap.events` exchange
+  - State updates: Redis hash `smap:proj:{projectID}`
+  - Progress notifications: HTTP webhook đến Project Service
+  - Note: `data.collected` được publish bởi Crawler services
 
-**Design Patterns:**
-- **Dependency Injection**: All components receive dependencies via constructors
-- **Strategy/Factory Pattern**: `mapPayload()` selects validation and transformation strategies based on platform and task type
-- **Producer-Consumer**: RabbitMQ-based async task distribution
-- **Fan-out**: Single request dispatched to multiple platform queues
+**Module Structure:**
 
-**SOLID Principles:**
-- Single Responsibility: Each use case handles one specific concern
-- Open/Closed: New platforms can be added without modifying existing code
-- Dependency Inversion: Business logic depends on interfaces, not implementations
+- `internal/dispatcher/`: Core dispatch logic, event handling
+- `internal/state/`: Redis state management (status, progress tracking)
+- `internal/results/`: Result processing từ workers
+- `internal/webhook/`: Progress webhook client
+- `internal/models/`: Shared domain models (Task, Event, State)
+- `pkg/`: Reusable utilities (log, rabbitmq, redis, etc.)
 
 ### Testing Strategy
 
-**Current Test Coverage:**
-- Unit tests for critical packages: `compressor`, `minio` (async upload, compression integration)
-- Mock generation via Mockery (`.mockery.yaml`)
-
-**Testing Approach:**
-- **Unit Tests**: Test business logic in isolation with mocks
-- **Integration Tests**: Test RabbitMQ and MinIO interactions
-- **Test File Naming**: `*_test.go` alongside source files
-
-**Future Testing Goals:**
-- Increase coverage for dispatcher use cases
-- Add contract tests for RabbitMQ message formats
-- Implement end-to-end tests for full dispatch flow
+- **Unit Tests**:
+  - Test files: `*_test.go` trong cùng package
+  - Mock interfaces: Manual mocks (e.g., `mockStateRepository`)
+  - Testify: `assert`, `require` packages
+- **Test Coverage**:
+  - Focus on business logic (usecase layer)
+  - Mock external dependencies (RabbitMQ, Redis, HTTP clients)
+- **Test Examples**:
+  - `pkg/compressor/compressor_test.go`: Compression/decompression
+  - `internal/state/usecase/state_uc_test.go`: State management với mocks
+  - `internal/models/event_transform_test.go`: Event transformation
 
 ### Git Workflow
 
-**CI/CD Pipeline (Jenkins):**
-1. **Pull Code**: Checkout from SCM
-2. **Build API Image**: Build Docker image from `cmd/api/Dockerfile`
-3. **Push to Registry**: Push to private registry (`registry.tantai.dev`)
-4. **Deploy to Kubernetes**: Update deployment in `smap` namespace
-5. **Verify Deployment**: Health check with readiness probes
-6. **Cleanup**: Remove old Docker images (retain last 2)
-7. **Notify Discord**: Send build status notifications
-
-**Deployment Strategy:**
-- **Environment**: Production (`smap` namespace)
-- **Registry**: Private Docker registry at `registry.tantai.dev`
-- **K8s Deployment**: Rolling updates with health checks
-- **Monitoring**: Discord webhook notifications for build status
+- **Branching**: Feature branches từ `master-collector`
+- **Commits**: Conventional commits với clear messages
+- **Code Review**: Required trước khi merge
+- **OpenSpec**:
+  - Changes trong `openspec/changes/` cho proposals
+  - Specs trong `openspec/specs/` cho deployed capabilities
+  - Archive completed changes vào `openspec/changes/archive/`
 
 ## Domain Context
 
-### Supported Platforms
-- **YouTube** (`PlatformYouTube`): Video search, channel crawling, comment extraction
-- **TikTok** (`PlatformTikTok`): Video search, creator profiles, engagement metrics
+**SMAP System Overview:**
+SMAP là hệ thống data collection và analysis cho social media platforms (YouTube, TikTok). Flow chính:
 
-### Task Types
-1. **`research_keyword`**: Search for content based on keywords
-   - Returns list of videos/posts matching search criteria
-   - Supports sorting, time range filtering, result limits
+1. **Project Creation** (Project Service): User tạo project với keywords
+2. **Project Execution** (Project Service): Publish `project.created` event
+3. **Task Dispatch** (Collector Service): Transform project → crawl tasks → workers
+4. **Data Collection** (Workers): Crawl data từ platforms, upload MinIO
+5. **Data Event** (Workers): Publish `data.collected` event
+6. **Analysis** (Analytics Service): Fetch data từ MinIO và process
 
-2. **`crawl_links`**: Scrape specific URLs
-   - Extract detailed metadata from provided video/profile URLs
-   - Optional: download media, fetch comments, channel info
+**Event-Driven Choreography:**
 
-3. **`research_and_crawl`**: Composite task
-   - First searches for content, then immediately scrapes results
-   - Combines both research and crawl operations
+- Exchange: `smap.events` (topic)
+- Routing Keys:
+  - `project.created`: Project Service → Collector Service
+  - `data.collected`: Crawler (Worker) → Analytics Service
+  - `analysis.finished`: Analytics Service → Insight Service
+  - `job.completed`: Analytics Service → Notification
 
-### Message Flow
-```
-External Service → RabbitMQ (collector.inbound) → Dispatcher Consumer
-                                                        ↓
-                                    [Validate & Map Payload]
-                                                        ↓
-                        ┌───────────────────────────────┴───────────────────────┐
-                        ↓                                                       ↓
-            RabbitMQ (collector.youtube)                        RabbitMQ (collector.tiktok)
-                        ↓                                                       ↓
-                YouTube Worker                                          TikTok Worker
-```
+**State Management:**
 
-### Payload Mapping
-The dispatcher transforms generic `CrawlRequest.Payload` into strict, platform-specific structs:
-- **YouTube**: `YouTubeResearchKeywordPayload`, `YouTubeCrawlLinksPayload`, `YouTubeResearchAndCrawlPayload`
-- **TikTok**: `TikTokResearchKeywordPayload`, `TikTokCrawlLinksPayload`, `TikTokResearchAndCrawlPayload`
+- Redis DB 1: Project execution state
+- Key schema: `smap:proj:{projectID}`
+- Fields: `status`, `total`, `done`, `errors`
+- Status flow: `INITIALIZING` → `CRAWLING` → `PROCESSING` → `DONE`/`FAILED`
 
-This ensures type safety and validation at the boundary between generic requests and platform workers.
+**Task Types:**
+
+- `research_keyword`: Search content by keywords
+- `crawl_links`: Scrape specific URLs
+- `research_and_crawl`: Composite task (search + scrape)
+- `dryrun_keyword`: Test keywords without actual crawling
+
+**Supported Platforms:**
+
+- YouTube (`PlatformYouTube`)
+- TikTok (`PlatformTikTok`)
 
 ## Important Constraints
 
-### Technical Constraints
-- **Go Version**: Must use Go 1.23.8 or compatible
-- **RabbitMQ Dependency**: Service cannot function without RabbitMQ connection
-- **Schema Versioning**: All tasks include `schema_version` for backward compatibility
-- **Trace IDs**: Required for distributed tracing and debugging
-
-### Business Constraints
-- **Retry Logic**: Tasks support configurable retry attempts (`attempt`, `max_attempts`)
-- **Time Range Filtering**: All tasks support time-based filtering (e.g., last 7 days)
-- **Platform Availability**: Currently limited to YouTube and TikTok
-
-### Operational Constraints
-- **Deployment**: Kubernetes-only deployment (no standalone mode)
-- **Configuration**: Environment-based config (no config files)
-- **Logging**: JSON-formatted logs in production for log aggregation
-- **Health Checks**: Must respond to `/health`, `/ready`, `/live` endpoints
+- **Redis Database Separation**:
+  - DB 0: Reserved for job mapping và Pub/Sub (không dùng trong Collector)
+  - DB 1: Project state tracking (status, progress)
+- **Event Schema Compliance**:
+  - Phải tuân thủ event schema định nghĩa trong `document/event-drivent.md`
+  - `ProjectCreatedEvent` phải có `user_id` trong payload
+- **Backward Compatibility**:
+  - Legacy `collector.inbound` exchange vẫn được support (deprecated)
+  - Support cả `CrawlRequest` (legacy) và `ProjectCreatedEvent` (new)
+- **Webhook Throttling**:
+  - Removed (workers report once per platform completion)
+  - Chỉ 2-3 webhook calls per project maximum
+- **State TTL**:
+  - Default 7 days (168 hours)
+  - Configurable via `REDIS_STATE_TTL_HOURS`
+- **Fail-Fast Principle**:
+  - RabbitMQ connection: Fail fast nếu không connect được
+  - Redis connection: Fail fast nếu không connect được
+  - Webhook client: Fail fast nếu không initialize được
 
 ## External Dependencies
 
-### Message Queue
-- **RabbitMQ**: Core dependency for task distribution
-  - **Inbound Exchange**: `collector.inbound` (topic)
-  - **Inbound Queue**: `collector.inbound.queue`
-  - **Routing Key**: `crawler.#`
-  - **Internal Exchanges**: `collector.youtube`, `collector.tiktok` (managed by dispatcher)
+**Message Queue:**
 
-### Databases
-- **MongoDB**: Primary persistence layer
-  - Connection via encrypted URI (`MONGODB_ENCODED_URI`)
-  - Optional monitoring enabled via `MONGODB_ENABLE_MONITORING`
-- **PostgreSQL**: Secondary database (future use)
-  - SQLBoiler for type-safe ORM
+- **RabbitMQ**:
+  - Exchange: `smap.events` (topic) - Event-driven architecture
+  - Exchange: `collector.inbound` (topic) - Legacy support
+  - Exchange: `collector.youtube`, `collector.tiktok` - Outbound to workers
+  - Connection: `RABBITMQ_URL` env variable
 
-### Object Storage
-- **MinIO**: Large file storage with claim check pattern
-  - Async upload with configurable workers and queue size
-  - Zstandard compression for efficient storage
-  - Bucket-based organization
+**State Storage:**
 
-### External Services
-- **Discord Webhooks**: Build notifications and error reporting
-  - Report bugs: `DISCORD_REPORT_BUG_ID` + `DISCORD_REPORT_BUG_TOKEN`
-- **JWT Authentication**: Secure API access
-- **Internal API Key**: Service-to-service authentication
+- **Redis**:
+  - Host: `REDIS_STATE_HOST` (default: `localhost:6379`)
+  - DB: `REDIS_STATE_DB` (default: `1`)
+  - Pool size: `REDIS_STATE_POOL_SIZE` (default: `10`)
+  - TTL: `REDIS_STATE_TTL_HOURS` (default: `168` = 7 days)
 
-### Infrastructure
-- **Kubernetes Cluster**: `https://172.16.21.111:6443`
-- **Docker Registry**: `registry.tantai.dev`
-- **Namespace**: `smap`
-- **Deployment**: `smap-collector` with rolling updates
+**External Services:**
+
+- **Project Service**:
+  - Base URL: `PROJECT_SERVICE_URL` (default: `http://localhost:8080`)
+  - Internal Key: `PROJECT_INTERNAL_KEY` (required)
+  - Webhook endpoint: `POST /internal/progress/callback`
+  - Timeout: `PROJECT_TIMEOUT` seconds (default: `10`)
+  - Retry: `WEBHOOK_RETRY_ATTEMPTS` (default: `5`), `WEBHOOK_RETRY_DELAY` seconds (default: `1`)
+
+**Monitoring & Notifications:**
+
+- **Discord Webhook**:
+  - Report bug ID: `DISCORD_REPORT_BUG_ID`
+  - Report bug token: `DISCORD_REPORT_BUG_TOKEN`
+  - Optional: Warn nếu không initialize được
+
+**Future Dependencies:**
+
+- **MongoDB**: For persistence (not yet implemented)
+- **MinIO**: Data storage (referenced in `data.collected` events, managed by workers)

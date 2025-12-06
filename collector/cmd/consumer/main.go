@@ -9,9 +9,11 @@ import (
 
 	"smap-collector/config"
 	"smap-collector/internal/consumer"
+	"smap-collector/internal/state"
 	"smap-collector/pkg/discord"
 	pkgLog "smap-collector/pkg/log"
 	"smap-collector/pkg/rabbitmq"
+	pkgRedis "smap-collector/pkg/redis"
 )
 
 func main() {
@@ -35,22 +37,41 @@ func main() {
 		l.Warnf(ctx, "failed to initialize Discord webhook: %v", err)
 	}
 
+	// Connect to RabbitMQ (fail fast)
 	conn, err := rabbitmq.Dial(cfg.RabbitMQConfig.URL, true)
 	if err != nil {
 		l.Fatalf(ctx, "failed to connect to RabbitMQ: %v", err)
 	}
 	defer conn.Close()
 
+	// Initialize Redis client for state management (fail fast)
+	redisOpts := pkgRedis.NewClientOptions().SetOptions(cfg.Redis).SetDB(cfg.Redis.StateDB)
+	redisClient, err := pkgRedis.Connect(redisOpts)
+	if err != nil {
+		l.Fatalf(ctx, "failed to connect to Redis: %v", err)
+	}
+	defer redisClient.Disconnect()
+
+	if err := redisClient.Ping(ctx); err != nil {
+		l.Fatalf(ctx, "Redis ping failed: %v", err)
+	}
+	l.Infof(ctx, "Redis state client connected: db=%d", cfg.Redis.StateDB)
+
+	// Create consumer server with initialized dependencies
 	srv, err := consumer.New(consumer.Config{
 		Logger:        l,
 		AMQPConn:      conn,
 		Discord:       discordWebhook,
 		ProjectConfig: cfg.Project,
+		RedisClient:   redisClient,
+		StateOptions:  state.Options{TTL: state.DefaultTTL},
 	})
 	if err != nil {
 		l.Fatalf(ctx, "failed to init consumer: %v", err)
 	}
 	defer srv.Close()
+
+	l.Info(ctx, "Starting SMAP Collector Service...")
 
 	if err := srv.Run(ctx); err != nil {
 		l.Fatalf(ctx, "consumer stopped with error: %v", err)

@@ -1,11 +1,11 @@
 package usecase
 
 import (
-	"errors"
-
 	"smap-collector/internal/dispatcher"
 	"smap-collector/internal/dispatcher/delivery/rabbitmq/producer"
 	"smap-collector/internal/models"
+	"smap-collector/internal/state"
+	"smap-collector/internal/webhook"
 	"smap-collector/pkg/log"
 )
 
@@ -13,11 +13,27 @@ type implUseCase struct {
 	l              log.Logger
 	prod           producer.Producer
 	defaultOptions dispatcher.Options
+
+	// Optional dependencies for event-driven architecture
+	stateUC   state.UseCase
+	webhookUC webhook.UseCase
 }
 
-func NewUseCase(l log.Logger, prod producer.Producer, opts dispatcher.Options) (dispatcher.UseCase, error) {
+// NewUseCase creates a new dispatcher usecase (legacy mode without state/webhook).
+func NewUseCase(l log.Logger, prod producer.Producer, opts dispatcher.Options) dispatcher.UseCase {
+	return NewUseCaseWithDeps(l, prod, opts, nil, nil)
+}
+
+// NewUseCaseWithDeps creates a new dispatcher usecase with optional state and webhook dependencies.
+func NewUseCaseWithDeps(
+	l log.Logger,
+	prod producer.Producer,
+	opts dispatcher.Options,
+	stateUC state.UseCase,
+	webhookUC webhook.UseCase,
+) dispatcher.UseCase {
 	if l == nil || prod == nil {
-		return nil, errors.New("logger and producer are required")
+		return nil
 	}
 
 	if opts.DefaultMaxAttempts <= 0 {
@@ -33,9 +49,11 @@ func NewUseCase(l log.Logger, prod producer.Producer, opts dispatcher.Options) (
 		}
 	}
 
-	return implUseCase{
+	return &implUseCase{
 		l:              l,
 		prod:           prod,
 		defaultOptions: opts,
-	}, nil
+		stateUC:        stateUC,
+		webhookUC:      webhookUC,
+	}
 }

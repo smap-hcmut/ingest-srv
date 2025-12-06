@@ -8,12 +8,12 @@ import (
 
 //go:generate mockery --name=UseCase
 type UseCase interface {
-	// Dispatch nhận CrawlRequest, chuẩn hóa thành các CollectorTask (kèm payload typed) và publish tới từng worker queue theo strategy (fan-out khi platform trống).
 	Dispatch(ctx context.Context, req models.CrawlRequest) ([]models.CollectorTask, error)
+	HandleProjectCreatedEvent(ctx context.Context, event models.ProjectCreatedEvent) error
 	Producer
 }
 
-// Producer để usecase gọi publish task (implemented ở delivery layer).
+// Producer is used by the use case layer to publish tasks (implemented in the delivery layer).
 type Producer interface {
 	PublishTikTokTask(ctx context.Context, task models.TikTokCollectorTask) error
 	PublishYouTubeTask(ctx context.Context, task models.YouTubeCollectorTask) error

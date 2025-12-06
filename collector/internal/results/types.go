@@ -20,8 +20,9 @@ type CrawlerContentMeta struct {
 	ID              string  `json:"id"`
 	Platform        string  `json:"platform"`
 	JobID           string  `json:"job_id"`
-	CrawledAt       string  `json:"crawled_at"`   // RFC3339 string
-	PublishedAt     string  `json:"published_at"` // RFC3339 string
+	TaskType        string  `json:"task_type,omitempty"` // "dryrun_keyword" or "research_and_crawl"
+	CrawledAt       string  `json:"crawled_at"`          // RFC3339 string
+	PublishedAt     string  `json:"published_at"`        // RFC3339 string
 	Permalink       string  `json:"permalink"`
 	KeywordSource   string  `json:"keyword_source"`
 	Lang            string  `json:"lang"`

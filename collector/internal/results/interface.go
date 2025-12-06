@@ -13,6 +13,7 @@ type ResultUseCase interface {
 }
 
 // UseCase export cho module results (fan-in + retry).
+// Note: DataCollected event publishing is handled by Crawler services, not Collector.
 type UseCase interface {
 	ResultUseCase
 }
