@@ -48,16 +48,16 @@ Collector Service là middleware giữa Project Service và Crawler Workers, ch�
 
 ### 3.1. Dispatcher Consumer
 
-| Queue                        | Exchange          | Routing Key       | Purpose                    |
-| ---------------------------- | ----------------- | ----------------- | -------------------------- |
-| `collector.inbound.tasks`    | `collector.inbound` | `crawler.*`     | Nhận dry-run tasks         |
-| `collector.project.created`  | `smap.events`     | `project.created` | Nhận project execution events |
+| Queue                       | Exchange            | Routing Key       | Purpose                       |
+| --------------------------- | ------------------- | ----------------- | ----------------------------- |
+| `collector.inbound.tasks`   | `collector.inbound` | `crawler.*`       | Nhận dry-run tasks            |
+| `collector.project.created` | `smap.events`       | `project.created` | Nhận project execution events |
 
 ### 3.2. Results Consumer
 
-| Queue                  | Exchange            | Routing Key | Purpose                    |
-| ---------------------- | ------------------- | ----------- | -------------------------- |
-| `results.inbound.data` | `results.inbound`   | `#`         | Nhận kết quả từ Crawler    |
+| Queue                  | Exchange          | Routing Key | Purpose                 |
+| ---------------------- | ----------------- | ----------- | ----------------------- |
+| `results.inbound.data` | `results.inbound` | `#`         | Nhận kết quả từ Crawler |
 
 ---
 
@@ -76,11 +76,11 @@ const (
 
 ### 4.2. Handling Strategy Matrix
 
-| Task Type            | Source              | Handler                  | Webhook Endpoint              |
-| -------------------- | ------------------- | ------------------------ | ----------------------------- |
-| `dryrun_keyword`     | Project Service     | `handleDryRunResult()`   | `/internal/dryrun/callback`   |
-| `research_and_crawl` | Project Execution   | `handleProjectResult()`  | `/internal/progress/callback` |
-| Unknown              | -                   | `handleDryRunResult()`   | `/internal/dryrun/callback`   |
+| Task Type            | Source            | Handler                 | Webhook Endpoint              |
+| -------------------- | ----------------- | ----------------------- | ----------------------------- |
+| `dryrun_keyword`     | Project Service   | `handleDryRunResult()`  | `/internal/dryrun/callback`   |
+| `research_and_crawl` | Project Execution | `handleProjectResult()` | `/internal/progress/callback` |
+| Unknown              | -                 | `handleDryRunResult()`  | `/internal/dryrun/callback`   |
 
 ---
 
@@ -117,10 +117,10 @@ Project Service          Collector              Crawler              Project Ser
 func (uc implUseCase) handleDryRunResult(ctx context.Context, res models.CrawlerResult) error {
     // 1. Build callback request với content đã transform
     callbackReq, err := uc.buildCallbackRequest(ctx, res)
-    
+
     // 2. Gửi webhook đến Project Service
     err = uc.projectClient.SendDryRunCallback(ctx, callbackReq)
-    
+
     // 3. Project Service sẽ publish qua Redis Pub/Sub đến WebSocket
     return nil
 }
@@ -195,18 +195,18 @@ func (uc implUseCase) handleProjectResult(ctx context.Context, res models.Crawle
     // 1. Extract project_id từ job_id
     // Format: {projectID}-brand-{index} hoặc {projectID}-{competitor}-{index}
     projectID, err := uc.extractProjectID(ctx, res.Payload)
-    
+
     // 2. Update Redis state
     if res.Success {
         uc.stateUC.IncrementDone(ctx, projectID)
     } else {
         uc.stateUC.IncrementErrors(ctx, projectID)
     }
-    
+
     // 3. Get current state
     state, _ := uc.stateUC.GetState(ctx, projectID)
     userID, _ := uc.stateUC.GetUserID(ctx, projectID)
-    
+
     // 4. Send progress webhook (non-fatal if fails)
     progressReq := webhook.ProgressRequest{
         ProjectID: projectID,
@@ -217,24 +217,24 @@ func (uc implUseCase) handleProjectResult(ctx context.Context, res models.Crawle
         Errors:    state.Errors,
     }
     uc.webhookUC.NotifyProgress(ctx, progressReq)
-    
+
     // 5. Check completion
     completed, _ := uc.stateUC.CheckAndUpdateCompletion(ctx, projectID)
     if completed {
         uc.webhookUC.NotifyCompletion(ctx, progressReq)
     }
-    
+
     return nil
 }
 ```
 
 ### 6.3. Job ID Format
 
-| Type       | Format                           | Example                              |
-| ---------- | -------------------------------- | ------------------------------------ |
-| Brand      | `{projectID}-brand-{index}`      | `proj_abc-brand-0`                   |
-| Competitor | `{projectID}-{competitor}-{index}` | `proj_abc-toyota-0`                |
-| Dry-run    | `{uuid}`                         | `550e8400-e29b-41d4-a716-446655440000` |
+| Type       | Format                             | Example                                |
+| ---------- | ---------------------------------- | -------------------------------------- |
+| Brand      | `{projectID}-brand-{index}`        | `proj_abc-brand-0`                     |
+| Competitor | `{projectID}-{competitor}-{index}` | `proj_abc-toyota-0`                    |
+| Dry-run    | `{uuid}`                           | `550e8400-e29b-41d4-a716-446655440000` |
 
 ---
 
@@ -307,10 +307,10 @@ Header: X-Internal-Key: {internal_key}
 
 ### 9.1. Error Types
 
-| Error              | Description                    | Retry? |
-| ------------------ | ------------------------------ | ------ |
-| `ErrInvalidInput`  | Permanent error (4xx)          | No     |
-| `ErrTemporary`     | Temporary error (5xx, network) | Yes    |
+| Error             | Description                    | Retry? |
+| ----------------- | ------------------------------ | ------ |
+| `ErrInvalidInput` | Permanent error (4xx)          | No     |
+| `ErrTemporary`    | Temporary error (5xx, network) | Yes    |
 
 ### 9.2. Webhook Error Handling
 
@@ -359,6 +359,7 @@ CrawlerContent              →    project.Content
 ### 10.2. Timestamp Parsing
 
 Supported formats:
+
 - RFC3339: `2025-12-06T10:00:00Z`
 - RFC3339Nano: `2025-12-06T10:00:00.123456789Z`
 - Without timezone: `2025-12-06T10:00:00.123456`
@@ -381,11 +382,11 @@ type implUseCase struct {
 
 ### 11.2. External Services
 
-| Service         | Protocol  | Purpose                          |
-| --------------- | --------- | -------------------------------- |
-| Project Service | HTTP      | Webhooks (dry-run, progress)     |
-| Redis           | Redis     | State management                 |
-| RabbitMQ        | AMQP      | Message queue                    |
+| Service         | Protocol | Purpose                      |
+| --------------- | -------- | ---------------------------- |
+| Project Service | HTTP     | Webhooks (dry-run, progress) |
+| Redis           | Redis    | State management             |
+| RabbitMQ        | AMQP     | Message queue                |
 
 ---
 

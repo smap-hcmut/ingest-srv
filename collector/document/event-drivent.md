@@ -8,24 +8,24 @@
 
 ## Implementation Status
 
-| Service               | Component                        | Status         | Verified   |
-| --------------------- | -------------------------------- | -------------- | ---------- |
-| **Project Service**   | Exchange Configuration           | ✅ Implemented | 2025-12-05 |
-| **Project Service**   | ProjectCreatedEvent Publisher    | ✅ Implemented | 2025-12-05 |
-| **Project Service**   | Redis State Init                 | ✅ Implemented | 2025-12-05 |
-| **Project Service**   | Progress Webhook Handler         | ✅ Implemented | 2025-12-05 |
-| **Collector Service** | Exchange Configuration           | ✅ Implemented | 2025-12-06 |
-| **Collector Service** | ProjectCreatedEvent Consumer     | ✅ Implemented | 2025-12-06 |
-| **Collector Service** | Redis State Management           | ✅ Implemented | 2025-12-06 |
-| **Collector Service** | Progress Webhook Client          | ✅ Implemented | 2025-12-06 |
-| **Collector Service** | User Mapping Storage             | ✅ Implemented | 2025-12-06 |
-| **Collector Service** | Task Type Differentiation        | ✅ Implemented | 2025-12-06 |
-| **Collector Service** | Dry-Run Result Handler           | ✅ Implemented | 2025-12-06 |
-| **Collector Service** | Project Result Handler           | ✅ Implemented | 2025-12-06 |
-| **Crawler (Worker)**  | TaskType in Result Meta          | ⏳ Pending     | -          |
-| **Crawler (Worker)**  | DataCollectedEvent Publisher     | ⏳ Pending     | -          |
-| Analytics Service     | DataCollectedEvent Consumer      | ⏳ Pending     | -          |
-| WebSocket Service     | Redis Pub/Sub Subscriber         | ⏳ Pending     | -          |
+| Service               | Component                     | Status         | Verified   |
+| --------------------- | ----------------------------- | -------------- | ---------- |
+| **Project Service**   | Exchange Configuration        | ✅ Implemented | 2025-12-05 |
+| **Project Service**   | ProjectCreatedEvent Publisher | ✅ Implemented | 2025-12-05 |
+| **Project Service**   | Redis State Init              | ✅ Implemented | 2025-12-05 |
+| **Project Service**   | Progress Webhook Handler      | ✅ Implemented | 2025-12-05 |
+| **Collector Service** | Exchange Configuration        | ✅ Implemented | 2025-12-06 |
+| **Collector Service** | ProjectCreatedEvent Consumer  | ✅ Implemented | 2025-12-06 |
+| **Collector Service** | Redis State Management        | ✅ Implemented | 2025-12-06 |
+| **Collector Service** | Progress Webhook Client       | ✅ Implemented | 2025-12-06 |
+| **Collector Service** | User Mapping Storage          | ✅ Implemented | 2025-12-06 |
+| **Collector Service** | Task Type Differentiation     | ✅ Implemented | 2025-12-06 |
+| **Collector Service** | Dry-Run Result Handler        | ✅ Implemented | 2025-12-06 |
+| **Collector Service** | Project Result Handler        | ✅ Implemented | 2025-12-06 |
+| **Crawler (Worker)**  | TaskType in Result Meta       | ⏳ Pending     | -          |
+| **Crawler (Worker)**  | DataCollectedEvent Publisher  | ⏳ Pending     | -          |
+| Analytics Service     | DataCollectedEvent Consumer   | ⏳ Pending     | -          |
+| WebSocket Service     | Redis Pub/Sub Subscriber      | ⏳ Pending     | -          |
 
 **Collector Service Compliance:** Verified via `openspec/changes/review-event-driven-compliance/`
 
@@ -49,7 +49,7 @@ type CrawlerContentMeta struct {
 // internal/results/usecase/result.go
 func (uc implUseCase) HandleResult(ctx context.Context, res models.CrawlerResult) error {
     taskType := uc.extractTaskType(ctx, res.Payload)
-    
+
     switch taskType {
     case "dryrun_keyword":
         return uc.handleDryRunResult(ctx, res)      // → /internal/dryrun/callback
@@ -62,6 +62,7 @@ func (uc implUseCase) HandleResult(ctx context.Context, res models.CrawlerResult
 ```
 
 **Files Changed:**
+
 - `internal/results/types.go` - Added `TaskType` field
 - `internal/results/usecase/new.go` - Added `stateUC`, `webhookUC` dependencies
 - `internal/results/usecase/result.go` - Added routing logic and handlers

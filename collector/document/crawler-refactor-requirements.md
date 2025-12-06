@@ -11,6 +11,7 @@
 ### 1.1. Bối cảnh
 
 Collector Service đã được cập nhật để phân biệt giữa:
+
 - **Dry-run results** → Gửi về `/internal/dryrun/callback`
 - **Project execution results** → Update Redis state + gửi về `/internal/progress/callback`
 
@@ -18,12 +19,12 @@ Collector Service đã được cập nhật để phân biệt giữa:
 
 ### 1.2. Tóm tắt Thay đổi
 
-| Priority | Component                    | Change Type      | Effort   |
-| -------- | ---------------------------- | ---------------- | -------- |
-| **P0**   | Result Meta - TaskType       | Required         | Low      |
-| **P1**   | DataCollected Event          | Required         | Medium   |
-| **P2**   | MinIO Batch Upload           | Recommended      | Medium   |
-| **P3**   | Error Reporting Enhancement  | Nice-to-have     | Low      |
+| Priority | Component                   | Change Type  | Effort |
+| -------- | --------------------------- | ------------ | ------ |
+| **P0**   | Result Meta - TaskType      | Required     | Low    |
+| **P1**   | DataCollected Event         | Required     | Medium |
+| **P2**   | MinIO Batch Upload          | Recommended  | Medium |
+| **P3**   | Error Reporting Enhancement | Nice-to-have | Low    |
 
 ---
 
@@ -81,12 +82,12 @@ Thêm `task_type` vào `meta` của mỗi content item:
 
 ### 2.3. Task Type Values
 
-| Value                | Description                              | Routing                        |
-| -------------------- | ---------------------------------------- | ------------------------------ |
-| `dryrun_keyword`     | Dry-run test keywords                    | → `/internal/dryrun/callback`  |
-| `research_and_crawl` | Project execution (brand/competitor)     | → Redis + `/internal/progress/callback` |
-| `research_keyword`   | Research only (không crawl content)      | → `/internal/dryrun/callback`  |
-| `crawl_links`        | Crawl specific links                     | → `/internal/dryrun/callback`  |
+| Value                | Description                          | Routing                                 |
+| -------------------- | ------------------------------------ | --------------------------------------- |
+| `dryrun_keyword`     | Dry-run test keywords                | → `/internal/dryrun/callback`           |
+| `research_and_crawl` | Project execution (brand/competitor) | → Redis + `/internal/progress/callback` |
+| `research_keyword`   | Research only (không crawl content)  | → `/internal/dryrun/callback`           |
+| `crawl_links`        | Crawl specific links                 | → `/internal/dryrun/callback`           |
 
 ### 2.4. Implementation Guide
 
@@ -99,11 +100,11 @@ class CrawlerResult:
         self.job_id = job_id
         self.platform = platform
         self.content_items = []
-    
+
     def add_content(self, content_data: dict):
         content_data["meta"]["task_type"] = self.task_type
         self.content_items.append(content_data)
-    
+
     def to_message(self) -> dict:
         return {
             "success": True,
@@ -128,6 +129,7 @@ type ContentMeta struct {
 ### 2.5. Backward Compatibility
 
 Nếu `task_type` không có hoặc rỗng, Collector sẽ default về `handleDryRunResult()`. Tuy nhiên, điều này sẽ gây ra:
+
 - Project execution results không update Redis state
 - Progress không được track đúng
 - User không nhận được real-time progress updates
@@ -141,6 +143,7 @@ Nếu `task_type` không có hoặc rỗng, Collector sẽ default về `handleD
 ### 3.1. Bối cảnh
 
 Theo architecture document, Crawler (không phải Collector) chịu trách nhiệm:
+
 1. Upload batch data lên MinIO
 2. Publish `data.collected` event với `minio_path`
 
@@ -175,9 +178,10 @@ Queue: analytics.data.collected (Analytics Service sẽ consume)
 ### 3.4. Implementation Steps
 
 1. **MinIO Client Setup**
+
    ```python
    from minio import Minio
-   
+
    minio_client = Minio(
        endpoint=os.getenv("MINIO_ENDPOINT"),
        access_key=os.getenv("MINIO_ACCESS_KEY"),
@@ -187,11 +191,12 @@ Queue: analytics.data.collected (Analytics Service sẽ consume)
    ```
 
 2. **Batch Upload Logic**
+
    ```python
    def upload_batch(project_id: str, platform: str, batch_index: int, content_items: list):
        bucket = "crawl-results"
        object_name = f"{project_id}/{platform}/batch_{batch_index:03d}.json"
-       
+
        data = json.dumps(content_items).encode('utf-8')
        minio_client.put_object(
            bucket_name=bucket,
@@ -200,13 +205,13 @@ Queue: analytics.data.collected (Analytics Service sẽ consume)
            length=len(data),
            content_type="application/json"
        )
-       
+
        return f"{bucket}/{object_name}"
    ```
 
 3. **Publish Event**
    ```python
-   def publish_data_collected(project_id: str, job_id: str, platform: str, 
+   def publish_data_collected(project_id: str, job_id: str, platform: str,
                                minio_path: str, content_count: int,
                                batch_index: int, total_batches: int):
        event = {
@@ -222,7 +227,7 @@ Queue: analytics.data.collected (Analytics Service sẽ consume)
                "total_batches": total_batches
            }
        }
-       
+
        channel.basic_publish(
            exchange="smap.events",
            routing_key="data.collected",
@@ -236,10 +241,10 @@ Queue: analytics.data.collected (Analytics Service sẽ consume)
 
 ### 3.5. Batch Size Recommendation
 
-| Platform | Recommended Batch Size | Reason                           |
-| -------- | ---------------------- | -------------------------------- |
-| TikTok   | 50 items               | Smaller content, faster crawl    |
-| YouTube  | 20 items               | Larger content with comments     |
+| Platform | Recommended Batch Size | Reason                        |
+| -------- | ---------------------- | ----------------------------- |
+| TikTok   | 50 items               | Smaller content, faster crawl |
+| YouTube  | 20 items               | Larger content with comments  |
 
 ---
 
@@ -252,6 +257,7 @@ Crawler → RabbitMQ (full content) → Collector → Project Service
 ```
 
 **Vấn đề:**
+
 - Message size lớn khi có nhiều content
 - Queue có thể bị nghẽn
 - Memory pressure trên Collector
@@ -263,6 +269,7 @@ Crawler → MinIO (batch upload) → RabbitMQ (minio_path only) → Analytics
 ```
 
 **Lợi ích:**
+
 - Message size nhỏ (~200 bytes vs ~50KB)
 - Không nghẽn queue
 - Analytics có thể parallel fetch từ MinIO
@@ -335,14 +342,14 @@ crawl-results/
 
 ### 5.3. Error Codes
 
-| Code              | Description                    | Retryable |
-| ----------------- | ------------------------------ | --------- |
-| `RATE_LIMITED`    | Platform rate limit            | Yes       |
-| `AUTH_FAILED`     | Authentication failed          | No        |
-| `CONTENT_REMOVED` | Content no longer available    | No        |
-| `NETWORK_ERROR`   | Network connectivity issue     | Yes       |
-| `PARSE_ERROR`     | Failed to parse response       | No        |
-| `TIMEOUT`         | Request timeout                | Yes       |
+| Code              | Description                 | Retryable |
+| ----------------- | --------------------------- | --------- |
+| `RATE_LIMITED`    | Platform rate limit         | Yes       |
+| `AUTH_FAILED`     | Authentication failed       | No        |
+| `CONTENT_REMOVED` | Content no longer available | No        |
+| `NETWORK_ERROR`   | Network connectivity issue  | Yes       |
+| `PARSE_ERROR`     | Failed to parse response    | No        |
+| `TIMEOUT`         | Request timeout             | Yes       |
 
 ---
 
@@ -417,6 +424,7 @@ BATCH_SIZE_YOUTUBE=20
 ### 8.2. RabbitMQ Permissions
 
 Crawler cần quyền publish đến:
+
 - Exchange: `results.inbound` (existing)
 - Exchange: `smap.events` (new - for data.collected)
 
@@ -426,12 +434,12 @@ Crawler cần quyền publish đến:
 
 ### 9.1. Metrics to Track
 
-| Metric                        | Description                    | Alert Threshold |
-| ----------------------------- | ------------------------------ | --------------- |
-| `crawler_result_task_type`    | Count by task_type             | -               |
-| `crawler_minio_upload_time`   | Upload latency                 | > 5s            |
-| `crawler_event_publish_error` | Event publish failures         | > 0             |
-| `crawler_batch_size`          | Items per batch                | -               |
+| Metric                        | Description            | Alert Threshold |
+| ----------------------------- | ---------------------- | --------------- |
+| `crawler_result_task_type`    | Count by task_type     | -               |
+| `crawler_minio_upload_time`   | Upload latency         | > 5s            |
+| `crawler_event_publish_error` | Event publish failures | > 0             |
+| `crawler_batch_size`          | Items per batch        | -               |
 
 ### 9.2. Log Format
 

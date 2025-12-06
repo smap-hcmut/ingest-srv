@@ -65,3 +65,4 @@ build-image.sh
 # OpenSpec
 AGENTS.md
 .agent/
+.cursor/
