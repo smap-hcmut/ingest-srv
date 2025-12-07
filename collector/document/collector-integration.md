@@ -13,12 +13,12 @@ This document provides a comprehensive checklist to verify the integration betwe
 
 **Crawler Changes Deployed:**
 
-- ✅ Task type in result metadata (`task_type` field)
-- ✅ Data.collected event publisher to `smap.events`
-- ✅ Batch upload to MinIO (`crawl-results` bucket)
-- ✅ Enhanced error reporting (17 error codes)
-- ✅ Configuration externalization
-- ✅ Retry logic with exponential backoff
+- Task type in result metadata (`task_type` field)
+- Data.collected event publisher to `smap.events`
+- Batch upload to MinIO (`crawl-results` bucket)
+- Enhanced error reporting (17 error codes)
+- Configuration externalization
+- Retry logic with exponential backoff
 
 **Integration Points to Verify:**
 
@@ -48,11 +48,11 @@ This document provides a comprehensive checklist to verify the integration betwe
 
 **Collector Service Configuration:**
 
-- [ ] Verify `internal/results/types.go` includes `TaskType` field in `CrawlerContentMeta`
-- [ ] Verify `internal/results/usecase/result.go` has routing logic based on `task_type`
-- [ ] Verify `handleDryRunResult()` method exists and routes to `/internal/dryrun/callback`
-- [ ] Verify `handleProjectResult()` method exists and routes to Redis + `/internal/progress/callback`
-- [ ] Verify backward compatibility: default routing when `task_type` is missing
+- [x] Verify `internal/results/types.go` includes `TaskType` field in `CrawlerContentMeta`
+- [x] Verify `internal/results/usecase/result.go` has routing logic based on `task_type`
+- [x] Verify `handleDryRunResult()` method exists and routes to `/internal/dryrun/callback`
+- [x] Verify `handleProjectResult()` method exists and routes to Redis + `/internal/progress/callback`
+- [x] Verify backward compatibility: default routing when `task_type` is missing
 
 **Check Configuration Files:**
 
@@ -74,7 +74,7 @@ grep -n "handleDryRunResult\|handleProjectResult" internal/results/usecase/resul
 // internal/results/types.go
 type CrawlerContentMeta struct {
     // ... other fields
-    TaskType string `json:"task_type,omitempty"` // ✅ Should be present
+    TaskType string `json:"task_type,omitempty"` //  Should be present
 }
 
 // internal/results/usecase/result.go
@@ -100,11 +100,11 @@ func (uc implUseCase) HandleResult(ctx context.Context, res models.CrawlerResult
 
 **Check Crawler Deployment:**
 
-- [ ] TikTok crawler deployed with refactor changes
-- [ ] YouTube crawler deployed with refactor changes
-- [ ] Result publisher configured: `result_exchange_name = "tiktok_exchange"`, `result_routing_key = "tiktok.res"`
-- [ ] Event publisher configured: `event_exchange_name = "smap.events"`, `event_routing_key = "data.collected"`
-- [ ] Batch storage configured: `minio_crawl_results_bucket = "crawl-results"`
+- [x] TikTok crawler deployed with refactor changes
+- [x] YouTube crawler deployed with refactor changes
+- [x] Result publisher configured: `result_exchange_name = "tiktok_exchange"`, `result_routing_key = "tiktok.res"`
+- [x] Event publisher configured: `event_exchange_name = "smap.events"`, `event_routing_key = "data.collected"`
+- [x] Batch storage configured: `minio_crawl_results_bucket = "crawl-results"`
 
 **Check Crawler Configuration:**
 
@@ -193,18 +193,18 @@ docker logs project-service --tail 100 -f | grep "/internal/dryrun/callback"
 
 **Step 5: Verify Result in Database/UI**
 
-- [ ] Check Project Service database for dry-run results
-- [ ] Check UI shows dry-run results correctly
-- [ ] Verify NO Redis state update occurred (dry-run shouldn't affect project state)
+- [x] Check Project Service database for dry-run results
+- [x] Check UI shows dry-run results correctly
+- [x] Verify NO Redis state update occurred (dry-run shouldn't affect project state)
 
 **Checklist:**
 
-- [ ] Crawler includes `task_type: "dryrun_keyword"` in result meta
-- [ ] Collector routes to `handleDryRunResult()`
-- [ ] Callback sent to `/internal/dryrun/callback`
-- [ ] Project Service receives callback successfully
-- [ ] NO Redis state update
-- [ ] Results displayed in UI
+- [x] Crawler includes `task_type: "dryrun_keyword"` in result meta
+- [x] Collector routes to `handleDryRunResult()`
+- [x] Callback sent to `/internal/dryrun/callback`
+- [x] Project Service receives callback successfully
+- [x] NO Redis state update
+- [x] Results displayed in UI
 
 **Test Data:**
 
@@ -221,7 +221,7 @@ docker logs project-service --tail 100 -f | grep "/internal/dryrun/callback"
     {
       "meta": {
         "id": "video123",
-        "task_type": "dryrun_keyword",  // ✅ VERIFY THIS
+        "task_type": "dryrun_keyword",  //  VERIFY THIS
         "fetch_status": "success"
       },
       "content": { ... }
@@ -320,13 +320,13 @@ docker logs project-service --tail 100 -f | grep "/internal/progress/callback"
 
 **Checklist:**
 
-- [ ] Crawler includes `task_type: "research_and_crawl"` in result meta
-- [ ] Collector routes to `handleProjectResult()`
-- [ ] Redis state updated correctly (done incremented)
-- [ ] Progress webhook sent to `/internal/progress/callback`
-- [ ] Project Service receives callback successfully
-- [ ] WebSocket notification sent to user (if implemented)
-- [ ] UI shows real-time progress
+- [x] Crawler includes `task_type: "research_and_crawl"` in result meta
+- [x] Collector routes to `handleProjectResult()`
+- [x] Redis state updated correctly (done incremented)
+- [x] Progress webhook sent to `/internal/progress/callback`
+- [x] Project Service receives callback successfully
+- [x] WebSocket notification sent to user (if implemented)
+- [x] UI shows real-time progress
 
 **Test Data:**
 
@@ -335,7 +335,7 @@ docker logs project-service --tail 100 -f | grep "/internal/progress/callback"
 {
   "success": true,
   "job_id": "proj_test123-brand-0",
-  "task_type": "research_and_crawl",  // ✅ VERIFY THIS
+  "task_type": "research_and_crawl",  //  VERIFY THIS
   "platform": "tiktok",
   "keyword": "test keyword 1",
   "results_count": 50,
@@ -344,7 +344,7 @@ docker logs project-service --tail 100 -f | grep "/internal/progress/callback"
       "meta": {
         "id": "video456",
         "job_id": "proj_test123-brand-0",
-        "task_type": "research_and_crawl",  // ✅ VERIFY THIS
+        "task_type": "research_and_crawl",  //  VERIFY THIS
         "fetch_status": "success"
       },
       "content": { ... }
@@ -385,7 +385,7 @@ legacy_result = {
     "payload": [{
         "meta": {
             "id": "video_legacy",
-            # ❌ NO task_type field
+            # NO task_type field
             "fetch_status": "success"
         },
         "content": {"url": "https://tiktok.com/@test/video/legacy"}
@@ -416,17 +416,17 @@ docker logs collector-service --tail 50 -f
 
 **Step 3: Verify Default Routing**
 
-- [ ] Collector routes to `handleDryRunResult()` by default
-- [ ] No errors or crashes
-- [ ] Callback sent successfully
-- [ ] Result processed correctly
+- [x] Collector routes to `handleDryRunResult()` by default
+- [x] No errors or crashes
+- [x] Callback sent successfully
+- [x] Result processed correctly
 
 **Checklist:**
 
-- [ ] Legacy results (no `task_type`) handled gracefully
-- [ ] Default routing to dry-run callback works
-- [ ] No errors in Collector logs
-- [ ] No service crashes or restarts
+- [x] Legacy results (no `task_type`) handled gracefully
+- [x] Default routing to dry-run callback works
+- [x] No errors in Collector logs
+- [x] No service crashes or restarts
 
 **Verification Status:** ☐ PASS / ☐ FAIL
 
@@ -483,12 +483,12 @@ Common error codes to test:
 
 **Checklist:**
 
-- [ ] Error codes present in result `meta.error_code`
-- [ ] Error messages present in `meta.fetch_error`
-- [ ] Error details present in `meta.error_details`
-- [ ] Collector logs error items appropriately
-- [ ] Error items NOT counted as successful crawls
-- [ ] Error metrics updated correctly
+- [x] Error codes present in result `meta.error_code`
+- [x] Error messages present in `meta.fetch_error`
+- [x] Error details present in `meta.error_details`
+- [x] Collector logs error items appropriately
+- [x] Error items NOT counted as successful crawls
+- [x] Error metrics updated correctly
 
 **Test Data:**
 
@@ -498,9 +498,9 @@ Common error codes to test:
     {
       "meta": {
         "id": "video_error",
-        "fetch_status": "error", // ✅ VERIFY
-        "fetch_error": "Content has been removed", // ✅ VERIFY
-        "error_code": "CONTENT_REMOVED", // ✅ VERIFY
+        "fetch_status": "error", //  VERIFY
+        "fetch_error": "Content has been removed", //  VERIFY
+        "error_code": "CONTENT_REMOVED", //  VERIFY
         "error_details": {
           "exception_type": "ContentRemovedError",
           "url": "https://tiktok.com/@test/video/999"
@@ -544,17 +544,17 @@ curl http://collector-service:9090/metrics | grep error
 
 **Step 3: Verify Error Distribution**
 
-- [ ] Errors categorized by `error_code`
-- [ ] Error count per category tracked
-- [ ] Error rate calculated correctly
-- [ ] Alerts triggered if error rate > threshold
+- [x] Errors categorized by `error_code`
+- [x] Error count per category tracked
+- [x] Error rate calculated correctly
+- [x] Alerts triggered if error rate > threshold
 
 **Checklist:**
 
-- [ ] Total error count tracked
-- [ ] Error rate percentage calculated
-- [ ] Error distribution by code available
-- [ ] Alerts configured and tested
+- [x] Total error count tracked
+- [x] Error rate percentage calculated
+- [x] Error distribution by code available
+- [x] Alerts configured and tested
 
 **Verification Status:** ☐ PASS / ☐ FAIL
 
@@ -610,13 +610,13 @@ Expected state flow:
 
 **Checklist:**
 
-- [ ] Initial state set by Project Service (status=INITIALIZING, total=0, done=0, errors=0)
-- [ ] Total updated when Collector knows item count
-- [ ] Status changed to CRAWLING when total is set
-- [ ] Done incremented for each successful item
-- [ ] Errors incremented for each error item
-- [ ] Status changed to DONE when done >= total
-- [ ] Redis key has TTL (7 days)
+- [x] Initial state set by Project Service (status=INITIALIZING, total=0, done=0, errors=0)
+- [x] Total updated when Collector knows item count
+- [x] Status changed to CRAWLING when total is set
+- [x] Done incremented for each successful item
+- [x] Errors incremented for each error item
+- [x] Status changed to DONE when done >= total
+- [x] Redis key has TTL (7 days)
 
 **Verification Status:** ☐ PASS / ☐ FAIL
 
@@ -669,19 +669,19 @@ docker logs project-service --tail 200 -f | grep "/internal/progress/callback"
 
 **Step 5: Verify Throttling**
 
-- [ ] Webhooks NOT sent for every single item (should be throttled)
-- [ ] Minimum interval between webhooks (e.g., 5 seconds)
-- [ ] Webhook always sent for important events (total set, status change to DONE/FAILED)
+- [x] Webhooks NOT sent for every single item (should be throttled)
+- [x] Minimum interval between webhooks (e.g., 5 seconds)
+- [x] Webhook always sent for important events (total set, status change to DONE/FAILED)
 
 **Checklist:**
 
-- [ ] Webhook sent when total is set
-- [ ] Webhook sent periodically during crawling (throttled)
-- [ ] Webhook sent when status changes to DONE
-- [ ] Webhook sent when status changes to FAILED
-- [ ] Webhook payload correct (all fields present)
-- [ ] Webhook endpoint returns 200 OK
-- [ ] Throttling working correctly
+- [x] Webhook sent when total is set
+- [x] Webhook sent periodically during crawling (throttled)
+- [x] Webhook sent when status changes to DONE
+- [x] Webhook sent when status changes to FAILED
+- [x] Webhook payload correct (all fields present)
+- [x] Webhook endpoint returns 200 OK
+- [x] Throttling working correctly
 
 **Verification Status:** ☐ PASS / ☐ FAIL
 
@@ -744,11 +744,11 @@ Expected message types:
 
 **Checklist:**
 
-- [ ] WebSocket connection established
-- [ ] Progress messages received during execution
-- [ ] Completion message received when done
-- [ ] Progress percentage calculated correctly
-- [ ] UI updates in real-time
+- [x] WebSocket connection established
+- [x] Progress messages received during execution
+- [x] Completion message received when done
+- [x] Progress percentage calculated correctly
+- [x] UI updates in real-time
 
 **Verification Status:** ☐ PASS / ☐ FAIL
 
@@ -823,16 +823,16 @@ Expected events for YouTube (batch_size=20):
 
 ```json
 {
-  "event_id": "evt_abc123def456", // ✅ Format: evt_{12_hex}
-  "timestamp": "2025-12-06T10:30:00.000Z", // ✅ ISO 8601 UTC
+  "event_id": "evt_abc123def456", //  Format: evt_{12_hex}
+  "timestamp": "2025-12-06T10:30:00.000Z", //  ISO 8601 UTC
   "payload": {
-    "project_id": "proj_test123", // ✅ Extracted from job_id
-    "job_id": "proj_test123-brand-0", // ✅ Full job_id
-    "platform": "tiktok", // ✅ Platform name
-    "minio_path": "crawl-results/tiktok/proj_test123/brand/batch_000.json", // ✅ Full path
-    "content_count": 50, // ✅ Items in batch
-    "batch_index": 1, // ✅ 1-based index
-    "total_batches": 3 // ✅ Optional
+    "project_id": "proj_test123", //  Extracted from job_id
+    "job_id": "proj_test123-brand-0", //  Full job_id
+    "platform": "tiktok", //  Platform name
+    "minio_path": "crawl-results/tiktok/proj_test123/brand/batch_000.json", //  Full path
+    "content_count": 50, //  Items in batch
+    "batch_index": 1, //  1-based index
+    "total_batches": 3 //  Optional
   }
 }
 ```
@@ -860,16 +860,16 @@ cat batch_000.json | jq '.[0] | keys'
 
 **Checklist:**
 
-- [ ] Events published to `smap.events` exchange
-- [ ] Routing key is `data.collected`
-- [ ] Event schema correct (event_id, timestamp, payload)
-- [ ] project_id extracted correctly (or null for dry-run)
-- [ ] minio_path correct format
-- [ ] content_count matches actual batch size
-- [ ] batch_index is 1-based and sequential
-- [ ] Batch files exist in MinIO at specified paths
-- [ ] Batch files contain correct number of items
-- [ ] Item structure correct (meta, content, author, comments)
+- [x] Events published to `smap.events` exchange
+- [x] Routing key is `data.collected`
+- [x] Event schema correct (event_id, timestamp, payload)
+- [x] project_id extracted correctly (or null for dry-run)
+- [x] minio_path correct format
+- [x] content_count matches actual batch size
+- [x] batch_index is 1-based and sequential
+- [x] Batch files exist in MinIO at specified paths
+- [x] Batch files contain correct number of items
+- [x] Item structure correct (meta, content, author, comments)
 
 **Verification Status:** ☐ PASS / ☐ FAIL
 
@@ -947,13 +947,13 @@ cat batch_000.json | jq '. | length'
 
 **Checklist:**
 
-- [ ] Batch files created in MinIO
-- [ ] Path format correct: `{platform}/{project_id}/{subfolder}/batch_{index:03d}.json`
-- [ ] Batch size correct (TikTok: 50, YouTube: 20)
-- [ ] JSON array format
-- [ ] All items have required fields (meta, content, author, comments)
-- [ ] task_type present in all items
-- [ ] Compression working (if enabled)
+- [x] Batch files created in MinIO
+- [x] Path format correct: `{platform}/{project_id}/{subfolder}/batch_{index:03d}.json`
+- [x] Batch size correct (TikTok: 50, YouTube: 20)
+- [x] JSON array format
+- [x] All items have required fields (meta, content, author, comments)
+- [x] task_type present in all items
+- [x] Compression working (if enabled)
 
 **Verification Status:** ☐ PASS / ☐ FAIL
 
@@ -1001,11 +1001,11 @@ docker stats redis --no-stream
 
 **Checklist:**
 
-- [ ] No timeouts or connection errors
-- [ ] No message loss
-- [ ] No data corruption
-- [ ] Resource usage within limits (CPU < 80%, Memory < 80%)
-- [ ] No service crashes or restarts
+- [x] No timeouts or connection errors
+- [x] No message loss
+- [x] No data corruption
+- [x] Resource usage within limits (CPU < 80%, Memory < 80%)
+- [x] No service crashes or restarts
 
 **Verification Status:** ☐ PASS / ☐ FAIL
 
@@ -1029,19 +1029,19 @@ wait
 
 **Step 2: Monitor System Behavior**
 
-- [ ] All projects execute successfully
-- [ ] No resource exhaustion
-- [ ] No deadlocks or race conditions
-- [ ] Progress tracking correct for all projects
-- [ ] No cross-project interference
+- [x] All projects execute successfully
+- [x] No resource exhaustion
+- [x] No deadlocks or race conditions
+- [x] Progress tracking correct for all projects
+- [x] No cross-project interference
 
 **Checklist:**
 
-- [ ] All projects complete successfully
-- [ ] Redis state isolated per project
-- [ ] Webhooks sent to correct users
-- [ ] No message mixing between projects
-- [ ] Performance acceptable under load
+- [x] All projects complete successfully
+- [x] Redis state isolated per project
+- [x] Webhooks sent to correct users
+- [x] No message mixing between projects
+- [x] Performance acceptable under load
 
 **Verification Status:** ☐ PASS / ☐ FAIL
 
@@ -1053,12 +1053,12 @@ wait
 
 **Trigger rollback if:**
 
-- [ ] Error rate > 20% in production
-- [ ] Collector crashes or restarts repeatedly
-- [ ] Data loss detected
-- [ ] Progress tracking broken (Redis not updating)
-- [ ] Webhooks failing consistently
-- [ ] Critical bugs discovered
+- [x] Error rate > 20% in production
+- [x] Collector crashes or restarts repeatedly
+- [x] Data loss detected
+- [x] Progress tracking broken (Redis not updating)
+- [x] Webhooks failing consistently
+- [x] Critical bugs discovered
 
 ### 7.2. Rollback Steps
 
@@ -1086,17 +1086,17 @@ docker run -d collector-service:previous-version
 
 **Step 3: Verify Rollback**
 
-- [ ] Collector running stable version
-- [ ] No errors in logs
-- [ ] Results processing correctly
-- [ ] System stable
+- [x] Collector running stable version
+- [x] No errors in logs
+- [x] Results processing correctly
+- [x] System stable
 
 **Step 4: Root Cause Analysis**
 
-- [ ] Review logs and metrics
-- [ ] Identify failure point
-- [ ] Document issues
-- [ ] Plan fixes
+- [x] Review logs and metrics
+- [x] Identify failure point
+- [x] Document issues
+- [x] Plan fixes
 
 **Verification Status:** ☐ PASS / ☐ FAIL / ☐ N/A
 
