@@ -20,22 +20,13 @@ func NewClientOptions() ClientOptions {
 }
 
 func (co ClientOptions) SetOptions(opts config.RedisConfig) ClientOptions {
-	if opts.RedisStandAlone {
-		co.clo.Addr = opts.RedisAddr[0]
-		co.clo.MinIdleConns = opts.MinIdleConns
-		co.clo.PoolSize = opts.PoolSize
-		co.clo.PoolTimeout = time.Duration(opts.PoolTimeout) * time.Second
-		co.clo.Password = opts.Password
-		co.clo.DB = opts.DB
-		return co
-	}
-	co.csclo = &redis.ClusterOptions{
-		Addrs:        opts.RedisAddr,
-		MinIdleConns: opts.MinIdleConns,
-		PoolSize:     opts.PoolSize,
-		PoolTimeout:  time.Duration(opts.PoolTimeout) * time.Second,
-		Password:     opts.Password,
-	}
+	// Only standalone mode is supported
+	co.clo.Addr = opts.Host
+	co.clo.MinIdleConns = opts.MinIdleConns
+	co.clo.PoolSize = opts.PoolSize
+	co.clo.PoolTimeout = time.Duration(opts.PoolTimeout) * time.Second
+	co.clo.Password = opts.Password
+	co.clo.DB = opts.DB
 	return co
 }
 

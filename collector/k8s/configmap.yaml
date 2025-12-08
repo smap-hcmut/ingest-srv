@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: smap-collector-config
+  namespace: smap
+  labels:
+    app: smap-collector-consumer
+data:
+  # Logger Configuration
+  LOGGER_LEVEL: "info"
+  LOGGER_MODE: "production"
+  LOGGER_ENCODING: "json"
+
+  # Redis Configuration (Standalone mode only)
+  REDIS_HOST: "redis-service:6379"
+  REDIS_DB: "0"
+  REDIS_STATE_DB: "1"
+  REDIS_MIN_IDLE_CONNS: "10"
+  REDIS_POOL_SIZE: "100"
+  REDIS_POOL_TIMEOUT: "30"
+
+  # Project Service Configuration (same namespace)
+  PROJECT_SERVICE_URL: "http://smap-project-api"
+  PROJECT_TIMEOUT: "10"
+  WEBHOOK_RETRY_ATTEMPTS: "5"
+  WEBHOOK_RETRY_DELAY: "1"
