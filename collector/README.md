@@ -180,24 +180,81 @@ The service now supports event-driven choreography with the Project Service. See
 }
 ```
 
-#### Redis State Management
+#### Redis State Management (Two-Phase)
 
-The service updates project state in Redis (DB 1) with key schema `smap:proj:{projectID}`:
+The service updates project state in Redis (DB 1) with key schema `smap:proj:{projectID}`.
 
-| Field    | Type   | Description                                      |
-| -------- | ------ | ------------------------------------------------ |
-| `status` | String | INITIALIZING, CRAWLING, PROCESSING, DONE, FAILED |
-| `total`  | Int    | Total items to process                           |
-| `done`   | Int    | Items completed                                  |
-| `errors` | Int    | Items failed                                     |
+**Two-Phase Pipeline:**
 
-#### Progress Webhook
+```
+Phase 1: CRAWL                    Phase 2: ANALYZE
+┌─────────────────────┐           ┌─────────────────────┐
+│ crawl_total: 100    │           │ analyze_total: 98   │
+│ crawl_done: 98      │  ──────►  │ analyze_done: 45    │
+│ crawl_errors: 2     │           │ analyze_errors: 1   │
+└─────────────────────┘           └─────────────────────┘
+Crawler → Collector               Analytics → Collector
+```
+
+| Field            | Type   | Description                             |
+| ---------------- | ------ | --------------------------------------- |
+| `status`         | String | INITIALIZING, PROCESSING, DONE, FAILED  |
+| `crawl_total`    | Int    | Total crawl tasks                       |
+| `crawl_done`     | Int    | Crawl tasks completed                   |
+| `crawl_errors`   | Int    | Crawl tasks failed                      |
+| `analyze_total`  | Int    | Total analyze tasks (auto-set on crawl) |
+| `analyze_done`   | Int    | Analyze tasks completed                 |
+| `analyze_errors` | Int    | Analyze tasks failed                    |
+
+**Completion Logic:**
+
+- Crawl complete: `crawl_done + crawl_errors >= crawl_total`
+- Analyze complete: `analyze_done + analyze_errors >= analyze_total`
+- Project complete: Both phases complete
+
+#### Progress Webhook (Two-Phase Format)
 
 The service calls Project Service webhook to notify progress:
 
 ```
 POST /internal/progress/callback
 Header: X-Internal-Key: {internal_key}
+```
+
+```json
+{
+  "project_id": "proj_xyz",
+  "user_id": "user_123",
+  "status": "PROCESSING",
+  "crawl": {
+    "total": 100,
+    "done": 80,
+    "errors": 2,
+    "progress_percent": 82.0
+  },
+  "analyze": {
+    "total": 78,
+    "done": 45,
+    "errors": 1,
+    "progress_percent": 59.0
+  },
+  "overall_progress_percent": 70.5
+}
+```
+
+#### Analyze Result Handler
+
+The service consumes analyze results from Analytics Service:
+
+```json
+{
+  "project_id": "proj_xyz",
+  "job_id": "proj_xyz-analyze-0",
+  "task_type": "analyze_result",
+  "batch_size": 50,
+  "success_count": 48,
+  "error_count": 2
+}
 ```
 
 ### RabbitMQ Connection (Legacy Inbound)

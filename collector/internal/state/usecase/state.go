@@ -48,8 +48,12 @@ func (uc *implUseCase) InitState(ctx context.Context, projectID string) error {
 	return nil
 }
 
-// UpdateTotal cập nhật tổng số items và chuyển status sang CRAWLING.
-func (uc *implUseCase) UpdateTotal(ctx context.Context, projectID string, total int64) error {
+// ============================================================================
+// Crawl Phase Methods
+// ============================================================================
+
+// SetCrawlTotal set tổng số items cần crawl và chuyển status sang PROCESSING.
+func (uc *implUseCase) SetCrawlTotal(ctx context.Context, projectID string, total int64) error {
 	if projectID == "" {
 		return state.ErrInvalidProjectID
 	}
@@ -59,57 +63,134 @@ func (uc *implUseCase) UpdateTotal(ctx context.Context, projectID string, total 
 
 	key := state.BuildStateKey(projectID)
 
-	// Update total and status in one operation
+	// Update crawl_total and status in one operation
 	fields := map[string]any{
-		state.FieldTotal:  total,
-		state.FieldStatus: string(models.ProjectStatusCrawling),
+		state.FieldCrawlTotal: total,
+		state.FieldStatus:     string(models.ProjectStatusProcessing),
 	}
 
 	if err := uc.repo.SetFields(ctx, key, fields); err != nil {
-		uc.l.Errorf(ctx, "Failed to update total: project_id=%s, total=%d, error=%v",
+		uc.l.Errorf(ctx, "Failed to set crawl total: project_id=%s, total=%d, error=%v",
 			projectID, total, err)
 		return err
 	}
 
-	uc.l.Infof(ctx, "Updated total: project_id=%s, total=%d, status=CRAWLING", projectID, total)
+	uc.l.Infof(ctx, "Set crawl total: project_id=%s, crawl_total=%d, status=PROCESSING", projectID, total)
 	return nil
 }
 
-// IncrementDone tăng counter done lên 1.
-func (uc *implUseCase) IncrementDone(ctx context.Context, projectID string) error {
+// IncrementCrawlDoneBy tăng counter crawl_done lên N.
+func (uc *implUseCase) IncrementCrawlDoneBy(ctx context.Context, projectID string, count int64) error {
 	if projectID == "" {
 		return state.ErrInvalidProjectID
+	}
+	if count <= 0 {
+		return state.ErrInvalidCount
 	}
 
 	key := state.BuildStateKey(projectID)
 
-	newValue, err := uc.repo.IncrementField(ctx, key, state.FieldDone, 1)
+	newValue, err := uc.repo.IncrementField(ctx, key, state.FieldCrawlDone, count)
 	if err != nil {
-		uc.l.Errorf(ctx, "Failed to increment done: project_id=%s, error=%v", projectID, err)
+		uc.l.Errorf(ctx, "Failed to increment crawl_done: project_id=%s, count=%d, error=%v", projectID, count, err)
 		return err
 	}
 
-	uc.l.Debugf(ctx, "Incremented done: project_id=%s, new_value=%d", projectID, newValue)
+	uc.l.Debugf(ctx, "Incremented crawl_done: project_id=%s, count=%d, new_value=%d", projectID, count, newValue)
 	return nil
 }
 
-// IncrementErrors tăng counter errors lên 1.
-func (uc *implUseCase) IncrementErrors(ctx context.Context, projectID string) error {
+// IncrementCrawlErrorsBy tăng counter crawl_errors lên N.
+func (uc *implUseCase) IncrementCrawlErrorsBy(ctx context.Context, projectID string, count int64) error {
 	if projectID == "" {
 		return state.ErrInvalidProjectID
+	}
+	if count <= 0 {
+		return state.ErrInvalidCount
 	}
 
 	key := state.BuildStateKey(projectID)
 
-	newValue, err := uc.repo.IncrementField(ctx, key, state.FieldErrors, 1)
+	newValue, err := uc.repo.IncrementField(ctx, key, state.FieldCrawlErrors, count)
 	if err != nil {
-		uc.l.Errorf(ctx, "Failed to increment errors: project_id=%s, error=%v", projectID, err)
+		uc.l.Errorf(ctx, "Failed to increment crawl_errors: project_id=%s, count=%d, error=%v", projectID, count, err)
 		return err
 	}
 
-	uc.l.Debugf(ctx, "Incremented errors: project_id=%s, new_value=%d", projectID, newValue)
+	uc.l.Debugf(ctx, "Incremented crawl_errors: project_id=%s, count=%d, new_value=%d", projectID, count, newValue)
 	return nil
 }
+
+// ============================================================================
+// Analyze Phase Methods
+// ============================================================================
+
+// IncrementAnalyzeTotalBy tăng counter analyze_total lên N.
+func (uc *implUseCase) IncrementAnalyzeTotalBy(ctx context.Context, projectID string, count int64) error {
+	if projectID == "" {
+		return state.ErrInvalidProjectID
+	}
+	if count <= 0 {
+		return state.ErrInvalidCount
+	}
+
+	key := state.BuildStateKey(projectID)
+
+	newValue, err := uc.repo.IncrementField(ctx, key, state.FieldAnalyzeTotal, count)
+	if err != nil {
+		uc.l.Errorf(ctx, "Failed to increment analyze_total: project_id=%s, count=%d, error=%v", projectID, count, err)
+		return err
+	}
+
+	uc.l.Debugf(ctx, "Incremented analyze_total: project_id=%s, count=%d, new_value=%d", projectID, count, newValue)
+	return nil
+}
+
+// IncrementAnalyzeDoneBy tăng counter analyze_done lên N.
+func (uc *implUseCase) IncrementAnalyzeDoneBy(ctx context.Context, projectID string, count int64) error {
+	if projectID == "" {
+		return state.ErrInvalidProjectID
+	}
+	if count <= 0 {
+		return state.ErrInvalidCount
+	}
+
+	key := state.BuildStateKey(projectID)
+
+	newValue, err := uc.repo.IncrementField(ctx, key, state.FieldAnalyzeDone, count)
+	if err != nil {
+		uc.l.Errorf(ctx, "Failed to increment analyze_done: project_id=%s, count=%d, error=%v", projectID, count, err)
+		return err
+	}
+
+	uc.l.Debugf(ctx, "Incremented analyze_done: project_id=%s, count=%d, new_value=%d", projectID, count, newValue)
+	return nil
+}
+
+// IncrementAnalyzeErrorsBy tăng counter analyze_errors lên N.
+func (uc *implUseCase) IncrementAnalyzeErrorsBy(ctx context.Context, projectID string, count int64) error {
+	if projectID == "" {
+		return state.ErrInvalidProjectID
+	}
+	if count <= 0 {
+		return state.ErrInvalidCount
+	}
+
+	key := state.BuildStateKey(projectID)
+
+	newValue, err := uc.repo.IncrementField(ctx, key, state.FieldAnalyzeErrors, count)
+	if err != nil {
+		uc.l.Errorf(ctx, "Failed to increment analyze_errors: project_id=%s, count=%d, error=%v", projectID, count, err)
+		return err
+	}
+
+	uc.l.Debugf(ctx, "Incremented analyze_errors: project_id=%s, count=%d, new_value=%d", projectID, count, newValue)
+	return nil
+}
+
+// ============================================================================
+// Status & State Methods
+// ============================================================================
 
 // UpdateStatus cập nhật status của project.
 func (uc *implUseCase) UpdateStatus(ctx context.Context, projectID string, status models.ProjectStatus) error {
@@ -153,8 +234,8 @@ func (uc *implUseCase) GetState(ctx context.Context, projectID string) (*models.
 	return s, nil
 }
 
-// CheckAndUpdateCompletion kiểm tra và update status nếu complete.
-func (uc *implUseCase) CheckAndUpdateCompletion(ctx context.Context, projectID string) (bool, error) {
+// CheckCompletion kiểm tra và update status nếu cả crawl và analyze đều complete.
+func (uc *implUseCase) CheckCompletion(ctx context.Context, projectID string) (bool, error) {
 	if projectID == "" {
 		return false, state.ErrInvalidProjectID
 	}
@@ -165,7 +246,7 @@ func (uc *implUseCase) CheckAndUpdateCompletion(ctx context.Context, projectID s
 		return false, err
 	}
 
-	// Check if complete: done + errors >= total && total > 0
+	// Check if both phases complete
 	if s.IsComplete() {
 		// Update status to DONE
 		if err := uc.UpdateStatus(ctx, projectID, models.ProjectStatusDone); err != nil {
@@ -173,13 +254,19 @@ func (uc *implUseCase) CheckAndUpdateCompletion(ctx context.Context, projectID s
 			return false, ErrUpdateCompletionFailed
 		}
 
-		uc.l.Infof(ctx, "Project completed: project_id=%s, total=%d, done=%d, errors=%d",
-			projectID, s.Total, s.Done, s.Errors)
+		uc.l.Infof(ctx, "Project completed: project_id=%s, crawl=[%d/%d/%d], analyze=[%d/%d/%d]",
+			projectID,
+			s.CrawlDone, s.CrawlErrors, s.CrawlTotal,
+			s.AnalyzeDone, s.AnalyzeErrors, s.AnalyzeTotal)
 		return true, nil
 	}
 
 	return false, nil
 }
+
+// ============================================================================
+// User Mapping Methods
+// ============================================================================
 
 // StoreUserMapping lưu mapping project_id -> user_id.
 func (uc *implUseCase) StoreUserMapping(ctx context.Context, projectID, userID string) error {

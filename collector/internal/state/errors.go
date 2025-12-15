@@ -7,6 +7,7 @@ var (
 	ErrInvalidProjectID    = errors.New("invalid project ID")
 	ErrInvalidStatus       = errors.New("invalid project status")
 	ErrInvalidTotal        = errors.New("invalid total value")
+	ErrInvalidCount        = errors.New("invalid count value (must be > 0)")
 	ErrRedisConnection     = errors.New("redis connection error")
 	ErrRedisOperation      = errors.New("redis operation error")
 	ErrUserMappingNotFound = errors.New("user mapping not found")
