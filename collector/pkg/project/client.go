@@ -52,7 +52,7 @@ func (c *httpClient) doSend(ctx context.Context, req CallbackRequest, attempt in
 
 	// Add headers
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", c.internalKey)
+	httpReq.Header.Set("X-Internal-Key", c.internalKey)
 
 	// Send request
 	resp, err := c.client.Do(httpReq)
