@@ -101,3 +101,14 @@ type CrawlerCommentUser struct {
 	Name      string  `json:"name"`
 	AvatarURL *string `json:"avatar_url,omitempty"`
 }
+
+// AnalyzeResultPayload represents the payload from Analytics Service
+// when an analyze batch completes.
+type AnalyzeResultPayload struct {
+	ProjectID    string `json:"project_id"`
+	JobID        string `json:"job_id"`
+	TaskType     string `json:"task_type"` // "analyze_result"
+	BatchSize    int    `json:"batch_size"`
+	SuccessCount int    `json:"success_count"`
+	ErrorCount   int    `json:"error_count"`
+}

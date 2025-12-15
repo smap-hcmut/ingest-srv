@@ -32,14 +32,34 @@ func (m *mockProjectClientForRouting) SendProgressCallback(ctx context.Context, 
 }
 
 type mockStateUseCaseForRouting struct {
-	incrementDoneCalled    bool
-	incrementDoneProjectID string
-	incrementDoneErr       error
+	// Crawl phase
+	incrementCrawlDoneCalled    bool
+	incrementCrawlDoneProjectID string
+	incrementCrawlDoneCount     int64
+	incrementCrawlDoneErr       error
 
-	incrementErrorsCalled    bool
-	incrementErrorsProjectID string
-	incrementErrorsErr       error
+	incrementCrawlErrorsCalled    bool
+	incrementCrawlErrorsProjectID string
+	incrementCrawlErrorsCount     int64
+	incrementCrawlErrorsErr       error
 
+	// Analyze phase
+	incrementAnalyzeTotalCalled    bool
+	incrementAnalyzeTotalProjectID string
+	incrementAnalyzeTotalCount     int64
+	incrementAnalyzeTotalErr       error
+
+	incrementAnalyzeDoneCalled    bool
+	incrementAnalyzeDoneProjectID string
+	incrementAnalyzeDoneCount     int64
+	incrementAnalyzeDoneErr       error
+
+	incrementAnalyzeErrorsCalled    bool
+	incrementAnalyzeErrorsProjectID string
+	incrementAnalyzeErrorsCount     int64
+	incrementAnalyzeErrorsErr       error
+
+	// State
 	getStateCalled    bool
 	getStateProjectID string
 	getStateResult    *models.ProjectState
@@ -60,20 +80,43 @@ func (m *mockStateUseCaseForRouting) InitState(ctx context.Context, projectID st
 	return nil
 }
 
-func (m *mockStateUseCaseForRouting) UpdateTotal(ctx context.Context, projectID string, total int64) error {
+func (m *mockStateUseCaseForRouting) SetCrawlTotal(ctx context.Context, projectID string, total int64) error {
 	return nil
 }
 
-func (m *mockStateUseCaseForRouting) IncrementDone(ctx context.Context, projectID string) error {
-	m.incrementDoneCalled = true
-	m.incrementDoneProjectID = projectID
-	return m.incrementDoneErr
+func (m *mockStateUseCaseForRouting) IncrementCrawlDoneBy(ctx context.Context, projectID string, count int64) error {
+	m.incrementCrawlDoneCalled = true
+	m.incrementCrawlDoneProjectID = projectID
+	m.incrementCrawlDoneCount = count
+	return m.incrementCrawlDoneErr
 }
 
-func (m *mockStateUseCaseForRouting) IncrementErrors(ctx context.Context, projectID string) error {
-	m.incrementErrorsCalled = true
-	m.incrementErrorsProjectID = projectID
-	return m.incrementErrorsErr
+func (m *mockStateUseCaseForRouting) IncrementCrawlErrorsBy(ctx context.Context, projectID string, count int64) error {
+	m.incrementCrawlErrorsCalled = true
+	m.incrementCrawlErrorsProjectID = projectID
+	m.incrementCrawlErrorsCount = count
+	return m.incrementCrawlErrorsErr
+}
+
+func (m *mockStateUseCaseForRouting) IncrementAnalyzeTotalBy(ctx context.Context, projectID string, count int64) error {
+	m.incrementAnalyzeTotalCalled = true
+	m.incrementAnalyzeTotalProjectID = projectID
+	m.incrementAnalyzeTotalCount = count
+	return m.incrementAnalyzeTotalErr
+}
+
+func (m *mockStateUseCaseForRouting) IncrementAnalyzeDoneBy(ctx context.Context, projectID string, count int64) error {
+	m.incrementAnalyzeDoneCalled = true
+	m.incrementAnalyzeDoneProjectID = projectID
+	m.incrementAnalyzeDoneCount = count
+	return m.incrementAnalyzeDoneErr
+}
+
+func (m *mockStateUseCaseForRouting) IncrementAnalyzeErrorsBy(ctx context.Context, projectID string, count int64) error {
+	m.incrementAnalyzeErrorsCalled = true
+	m.incrementAnalyzeErrorsProjectID = projectID
+	m.incrementAnalyzeErrorsCount = count
+	return m.incrementAnalyzeErrorsErr
 }
 
 func (m *mockStateUseCaseForRouting) UpdateStatus(ctx context.Context, projectID string, status models.ProjectStatus) error {
@@ -86,7 +129,7 @@ func (m *mockStateUseCaseForRouting) GetState(ctx context.Context, projectID str
 	return m.getStateResult, m.getStateErr
 }
 
-func (m *mockStateUseCaseForRouting) CheckAndUpdateCompletion(ctx context.Context, projectID string) (bool, error) {
+func (m *mockStateUseCaseForRouting) CheckCompletion(ctx context.Context, projectID string) (bool, error) {
 	m.checkCompletionCalled = true
 	m.checkCompletionProjectID = projectID
 	return m.checkCompletionResult, m.checkCompletionErr
@@ -232,7 +275,7 @@ func TestHandleResult_RoutesDryRunCorrectly(t *testing.T) {
 	assert.Equal(t, "job123", mockProject.sendDryRunCallbackReq.JobID)
 	assert.Equal(t, "tiktok", mockProject.sendDryRunCallbackReq.Platform)
 	// State and webhook should NOT be called for dry-run
-	assert.False(t, mockState.incrementDoneCalled, "IncrementDone should NOT be called for dry-run")
+	assert.False(t, mockState.incrementCrawlDoneCalled, "IncrementCrawlDoneBy should NOT be called for dry-run")
 	assert.False(t, mockWebhook.notifyProgressCalled, "NotifyProgress should NOT be called for dry-run")
 }
 
@@ -243,10 +286,13 @@ func TestHandleResult_RoutesProjectExecutionCorrectly(t *testing.T) {
 	mockProject := &mockProjectClientForRouting{}
 	mockState := &mockStateUseCaseForRouting{
 		getStateResult: &models.ProjectState{
-			Status: models.ProjectStatusCrawling,
-			Total:  100,
-			Done:   1,
-			Errors: 0,
+			Status:        models.ProjectStatusProcessing,
+			CrawlTotal:    100,
+			CrawlDone:     1,
+			CrawlErrors:   0,
+			AnalyzeTotal:  1,
+			AnalyzeDone:   0,
+			AnalyzeErrors: 0,
 		},
 		getUserIDResult:       "user456",
 		checkCompletionResult: false,
@@ -270,8 +316,9 @@ func TestHandleResult_RoutesProjectExecutionCorrectly(t *testing.T) {
 
 	require.NoError(t, err)
 	// Verify project execution flow was called
-	assert.True(t, mockState.incrementDoneCalled, "IncrementDone should be called")
-	assert.Equal(t, "proj123", mockState.incrementDoneProjectID)
+	assert.True(t, mockState.incrementCrawlDoneCalled, "IncrementCrawlDoneBy should be called")
+	assert.Equal(t, "proj123", mockState.incrementCrawlDoneProjectID)
+	assert.True(t, mockState.incrementAnalyzeTotalCalled, "IncrementAnalyzeTotalBy should be called for successful crawl")
 	assert.True(t, mockWebhook.notifyProgressCalled, "NotifyProgress should be called")
 	assert.Equal(t, "proj123", mockWebhook.notifyProgressReq.ProjectID)
 	// Dry-run callback should NOT be called
@@ -305,7 +352,7 @@ func TestHandleResult_BackwardCompatibility(t *testing.T) {
 	require.NoError(t, err)
 	// Should default to dry-run handler
 	assert.True(t, mockProject.sendDryRunCallbackCalled, "SendDryRunCallback should be called for backward compatibility")
-	assert.False(t, mockState.incrementDoneCalled, "IncrementDone should NOT be called")
+	assert.False(t, mockState.incrementCrawlDoneCalled, "IncrementCrawlDoneBy should NOT be called")
 }
 
 // TestExtractProjectID_WithBrandSuffix tests extracting project ID from job_id with -brand- suffix
@@ -355,10 +402,13 @@ func TestHandleResult_ProjectExecutionWithErrors(t *testing.T) {
 	mockProject := &mockProjectClientForRouting{}
 	mockState := &mockStateUseCaseForRouting{
 		getStateResult: &models.ProjectState{
-			Status: models.ProjectStatusCrawling,
-			Total:  100,
-			Done:   0,
-			Errors: 1,
+			Status:        models.ProjectStatusProcessing,
+			CrawlTotal:    100,
+			CrawlDone:     0,
+			CrawlErrors:   1,
+			AnalyzeTotal:  0,
+			AnalyzeDone:   0,
+			AnalyzeErrors: 0,
 		},
 		getUserIDResult:       "user456",
 		checkCompletionResult: false,
@@ -382,7 +432,257 @@ func TestHandleResult_ProjectExecutionWithErrors(t *testing.T) {
 
 	require.NoError(t, err)
 	// Verify error counter was incremented
-	assert.True(t, mockState.incrementErrorsCalled, "IncrementErrors should be called for failed result")
-	assert.Equal(t, "proj123", mockState.incrementErrorsProjectID)
-	assert.False(t, mockState.incrementDoneCalled, "IncrementDone should NOT be called for failed result")
+	assert.True(t, mockState.incrementCrawlErrorsCalled, "IncrementCrawlErrorsBy should be called for failed result")
+	assert.Equal(t, "proj123", mockState.incrementCrawlErrorsProjectID)
+	assert.False(t, mockState.incrementCrawlDoneCalled, "IncrementCrawlDoneBy should NOT be called for failed result")
+	assert.False(t, mockState.incrementAnalyzeTotalCalled, "IncrementAnalyzeTotalBy should NOT be called for failed result")
+}
+
+// ============================================================================
+// Analyze Result Tests
+// ============================================================================
+
+// createAnalyzeResultPayload creates an analyze result payload for testing
+func createAnalyzeResultPayload(projectID, jobID string, successCount, errorCount int) results.AnalyzeResultPayload {
+	return results.AnalyzeResultPayload{
+		ProjectID:    projectID,
+		JobID:        jobID,
+		TaskType:     "analyze_result",
+		BatchSize:    successCount + errorCount,
+		SuccessCount: successCount,
+		ErrorCount:   errorCount,
+	}
+}
+
+// TestExtractTaskType_AnalyzeResult tests extracting analyze_result task type
+func TestExtractTaskType_AnalyzeResult(t *testing.T) {
+	ctx := context.Background()
+	uc := implUseCase{l: &mockLogger{}}
+
+	payload := createAnalyzeResultPayload("proj123", "proj123-analyze-0", 48, 2)
+
+	taskType := uc.extractTaskType(ctx, payload)
+
+	assert.Equal(t, "analyze_result", taskType)
+}
+
+// TestHandleResult_RoutesAnalyzeResultCorrectly tests that analyze_result routes to handleAnalyzeResult
+func TestHandleResult_RoutesAnalyzeResultCorrectly(t *testing.T) {
+	ctx := context.Background()
+
+	mockProject := &mockProjectClientForRouting{}
+	mockState := &mockStateUseCaseForRouting{
+		getStateResult: &models.ProjectState{
+			Status:        models.ProjectStatusProcessing,
+			CrawlTotal:    100,
+			CrawlDone:     100,
+			CrawlErrors:   0,
+			AnalyzeTotal:  100,
+			AnalyzeDone:   50,
+			AnalyzeErrors: 2,
+		},
+		getUserIDResult:       "user456",
+		checkCompletionResult: false,
+	}
+	mockWebhook := &mockWebhookUseCaseForRouting{}
+
+	uc := implUseCase{
+		l:             &mockLogger{},
+		projectClient: mockProject,
+		stateUC:       mockState,
+		webhookUC:     mockWebhook,
+	}
+
+	payload := createAnalyzeResultPayload("proj123", "proj123-analyze-0", 48, 2)
+	result := models.CrawlerResult{
+		Success: true,
+		Payload: payload,
+	}
+
+	err := uc.HandleResult(ctx, result)
+
+	require.NoError(t, err)
+	// Verify analyze counters were updated
+	assert.True(t, mockState.incrementAnalyzeDoneCalled, "IncrementAnalyzeDoneBy should be called")
+	assert.Equal(t, "proj123", mockState.incrementAnalyzeDoneProjectID)
+	assert.Equal(t, int64(48), mockState.incrementAnalyzeDoneCount)
+
+	assert.True(t, mockState.incrementAnalyzeErrorsCalled, "IncrementAnalyzeErrorsBy should be called")
+	assert.Equal(t, "proj123", mockState.incrementAnalyzeErrorsProjectID)
+	assert.Equal(t, int64(2), mockState.incrementAnalyzeErrorsCount)
+
+	// Verify progress webhook was called
+	assert.True(t, mockWebhook.notifyProgressCalled, "NotifyProgress should be called")
+	assert.Equal(t, "proj123", mockWebhook.notifyProgressReq.ProjectID)
+
+	// Crawl counters should NOT be updated
+	assert.False(t, mockState.incrementCrawlDoneCalled, "IncrementCrawlDoneBy should NOT be called for analyze result")
+	assert.False(t, mockState.incrementCrawlErrorsCalled, "IncrementCrawlErrorsBy should NOT be called for analyze result")
+}
+
+// TestHandleAnalyzeResult_OnlySuccessCount tests analyze result with only success count
+func TestHandleAnalyzeResult_OnlySuccessCount(t *testing.T) {
+	ctx := context.Background()
+
+	mockState := &mockStateUseCaseForRouting{
+		getStateResult: &models.ProjectState{
+			Status:        models.ProjectStatusProcessing,
+			CrawlTotal:    100,
+			CrawlDone:     100,
+			CrawlErrors:   0,
+			AnalyzeTotal:  100,
+			AnalyzeDone:   50,
+			AnalyzeErrors: 0,
+		},
+		getUserIDResult:       "user456",
+		checkCompletionResult: false,
+	}
+	mockWebhook := &mockWebhookUseCaseForRouting{}
+
+	uc := implUseCase{
+		l:             &mockLogger{},
+		projectClient: &mockProjectClientForRouting{},
+		stateUC:       mockState,
+		webhookUC:     mockWebhook,
+	}
+
+	payload := createAnalyzeResultPayload("proj123", "proj123-analyze-0", 50, 0)
+	result := models.CrawlerResult{
+		Success: true,
+		Payload: payload,
+	}
+
+	err := uc.HandleResult(ctx, result)
+
+	require.NoError(t, err)
+	assert.True(t, mockState.incrementAnalyzeDoneCalled, "IncrementAnalyzeDoneBy should be called")
+	assert.Equal(t, int64(50), mockState.incrementAnalyzeDoneCount)
+	assert.False(t, mockState.incrementAnalyzeErrorsCalled, "IncrementAnalyzeErrorsBy should NOT be called when error_count=0")
+}
+
+// TestHandleAnalyzeResult_OnlyErrorCount tests analyze result with only error count
+func TestHandleAnalyzeResult_OnlyErrorCount(t *testing.T) {
+	ctx := context.Background()
+
+	mockState := &mockStateUseCaseForRouting{
+		getStateResult: &models.ProjectState{
+			Status:        models.ProjectStatusProcessing,
+			CrawlTotal:    100,
+			CrawlDone:     100,
+			CrawlErrors:   0,
+			AnalyzeTotal:  100,
+			AnalyzeDone:   0,
+			AnalyzeErrors: 5,
+		},
+		getUserIDResult:       "user456",
+		checkCompletionResult: false,
+	}
+	mockWebhook := &mockWebhookUseCaseForRouting{}
+
+	uc := implUseCase{
+		l:             &mockLogger{},
+		projectClient: &mockProjectClientForRouting{},
+		stateUC:       mockState,
+		webhookUC:     mockWebhook,
+	}
+
+	payload := createAnalyzeResultPayload("proj123", "proj123-analyze-0", 0, 5)
+	result := models.CrawlerResult{
+		Success: true,
+		Payload: payload,
+	}
+
+	err := uc.HandleResult(ctx, result)
+
+	require.NoError(t, err)
+	assert.False(t, mockState.incrementAnalyzeDoneCalled, "IncrementAnalyzeDoneBy should NOT be called when success_count=0")
+	assert.True(t, mockState.incrementAnalyzeErrorsCalled, "IncrementAnalyzeErrorsBy should be called")
+	assert.Equal(t, int64(5), mockState.incrementAnalyzeErrorsCount)
+}
+
+// TestHandleAnalyzeResult_ProjectCompletion tests that completion is detected when both phases are done
+func TestHandleAnalyzeResult_ProjectCompletion(t *testing.T) {
+	ctx := context.Background()
+
+	mockState := &mockStateUseCaseForRouting{
+		getStateResult: &models.ProjectState{
+			Status:        models.ProjectStatusProcessing,
+			CrawlTotal:    100,
+			CrawlDone:     100,
+			CrawlErrors:   0,
+			AnalyzeTotal:  100,
+			AnalyzeDone:   100,
+			AnalyzeErrors: 0,
+		},
+		getUserIDResult:       "user456",
+		checkCompletionResult: true, // Project is complete
+	}
+	mockWebhook := &mockWebhookUseCaseForRouting{}
+
+	uc := implUseCase{
+		l:             &mockLogger{},
+		projectClient: &mockProjectClientForRouting{},
+		stateUC:       mockState,
+		webhookUC:     mockWebhook,
+	}
+
+	payload := createAnalyzeResultPayload("proj123", "proj123-analyze-final", 10, 0)
+	result := models.CrawlerResult{
+		Success: true,
+		Payload: payload,
+	}
+
+	err := uc.HandleResult(ctx, result)
+
+	require.NoError(t, err)
+	// Verify completion was checked and notification sent
+	assert.True(t, mockState.checkCompletionCalled, "CheckCompletion should be called")
+	assert.True(t, mockWebhook.notifyCompletionCalled, "NotifyCompletion should be called when project is complete")
+}
+
+// TestHandleProjectResult_BatchIncrement tests that batch items are counted correctly
+func TestHandleProjectResult_BatchIncrement(t *testing.T) {
+	ctx := context.Background()
+
+	mockState := &mockStateUseCaseForRouting{
+		getStateResult: &models.ProjectState{
+			Status:        models.ProjectStatusProcessing,
+			CrawlTotal:    100,
+			CrawlDone:     3,
+			CrawlErrors:   0,
+			AnalyzeTotal:  3,
+			AnalyzeDone:   0,
+			AnalyzeErrors: 0,
+		},
+		getUserIDResult:       "user456",
+		checkCompletionResult: false,
+	}
+	mockWebhook := &mockWebhookUseCaseForRouting{}
+
+	uc := implUseCase{
+		l:             &mockLogger{},
+		projectClient: &mockProjectClientForRouting{},
+		stateUC:       mockState,
+		webhookUC:     mockWebhook,
+	}
+
+	// Create payload with 3 items (batch)
+	payload := []results.CrawlerContent{
+		{Meta: results.CrawlerContentMeta{ID: "v1", Platform: "tiktok", JobID: "proj123-brand-0", TaskType: "research_and_crawl", CrawledAt: "2024-01-15T10:00:00Z", PublishedAt: "2024-01-14T10:00:00Z"}, Interaction: results.CrawlerContentInteraction{UpdatedAt: "2024-01-15T10:00:00Z"}},
+		{Meta: results.CrawlerContentMeta{ID: "v2", Platform: "tiktok", JobID: "proj123-brand-0", TaskType: "research_and_crawl", CrawledAt: "2024-01-15T10:00:00Z", PublishedAt: "2024-01-14T10:00:00Z"}, Interaction: results.CrawlerContentInteraction{UpdatedAt: "2024-01-15T10:00:00Z"}},
+		{Meta: results.CrawlerContentMeta{ID: "v3", Platform: "tiktok", JobID: "proj123-brand-0", TaskType: "research_and_crawl", CrawledAt: "2024-01-15T10:00:00Z", PublishedAt: "2024-01-14T10:00:00Z"}, Interaction: results.CrawlerContentInteraction{UpdatedAt: "2024-01-15T10:00:00Z"}},
+	}
+	result := models.CrawlerResult{
+		Success: true,
+		Payload: payload,
+	}
+
+	err := uc.HandleResult(ctx, result)
+
+	require.NoError(t, err)
+	// Verify batch count was used
+	assert.True(t, mockState.incrementCrawlDoneCalled, "IncrementCrawlDoneBy should be called")
+	assert.Equal(t, int64(3), mockState.incrementCrawlDoneCount, "Should increment by batch size (3)")
+	assert.True(t, mockState.incrementAnalyzeTotalCalled, "IncrementAnalyzeTotalBy should be called")
+	assert.Equal(t, int64(3), mockState.incrementAnalyzeTotalCount, "Should increment analyze_total by batch size (3)")
 }

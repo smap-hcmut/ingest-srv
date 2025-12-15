@@ -253,7 +253,6 @@ func TestProjectStatus_IsTerminal(t *testing.T) {
 		{ProjectStatusDone, true},
 		{ProjectStatusFailed, true},
 		{ProjectStatusInitializing, false},
-		{ProjectStatusCrawling, false},
 		{ProjectStatusProcessing, false},
 	}
 
@@ -266,7 +265,7 @@ func TestProjectStatus_IsTerminal(t *testing.T) {
 	}
 }
 
-func TestProjectState_IsComplete(t *testing.T) {
+func TestProjectState_IsCrawlComplete(t *testing.T) {
 	tests := []struct {
 		name     string
 		state    ProjectState
@@ -274,22 +273,95 @@ func TestProjectState_IsComplete(t *testing.T) {
 	}{
 		{
 			name:     "complete - all done",
-			state:    ProjectState{Total: 10, Done: 10, Errors: 0},
+			state:    ProjectState{CrawlTotal: 10, CrawlDone: 10, CrawlErrors: 0},
 			expected: true,
 		},
 		{
 			name:     "complete - done + errors >= total",
-			state:    ProjectState{Total: 10, Done: 8, Errors: 2},
+			state:    ProjectState{CrawlTotal: 10, CrawlDone: 8, CrawlErrors: 2},
 			expected: true,
 		},
 		{
 			name:     "incomplete",
-			state:    ProjectState{Total: 10, Done: 5, Errors: 1},
+			state:    ProjectState{CrawlTotal: 10, CrawlDone: 5, CrawlErrors: 1},
 			expected: false,
 		},
 		{
 			name:     "zero total",
-			state:    ProjectState{Total: 0, Done: 0, Errors: 0},
+			state:    ProjectState{CrawlTotal: 0, CrawlDone: 0, CrawlErrors: 0},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.state.IsCrawlComplete() != tt.expected {
+				t.Errorf("expected %v, got %v", tt.expected, tt.state.IsCrawlComplete())
+			}
+		})
+	}
+}
+
+func TestProjectState_IsAnalyzeComplete(t *testing.T) {
+	tests := []struct {
+		name     string
+		state    ProjectState
+		expected bool
+	}{
+		{
+			name:     "complete - all done",
+			state:    ProjectState{AnalyzeTotal: 10, AnalyzeDone: 10, AnalyzeErrors: 0},
+			expected: true,
+		},
+		{
+			name:     "complete - done + errors >= total",
+			state:    ProjectState{AnalyzeTotal: 10, AnalyzeDone: 8, AnalyzeErrors: 2},
+			expected: true,
+		},
+		{
+			name:     "incomplete",
+			state:    ProjectState{AnalyzeTotal: 10, AnalyzeDone: 5, AnalyzeErrors: 1},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.state.IsAnalyzeComplete() != tt.expected {
+				t.Errorf("expected %v, got %v", tt.expected, tt.state.IsAnalyzeComplete())
+			}
+		})
+	}
+}
+
+func TestProjectState_IsComplete(t *testing.T) {
+	tests := []struct {
+		name     string
+		state    ProjectState
+		expected bool
+	}{
+		{
+			name: "complete - both phases done",
+			state: ProjectState{
+				CrawlTotal: 10, CrawlDone: 10, CrawlErrors: 0,
+				AnalyzeTotal: 10, AnalyzeDone: 10, AnalyzeErrors: 0,
+			},
+			expected: true,
+		},
+		{
+			name: "incomplete - crawl done but analyze not",
+			state: ProjectState{
+				CrawlTotal: 10, CrawlDone: 10, CrawlErrors: 0,
+				AnalyzeTotal: 10, AnalyzeDone: 5, AnalyzeErrors: 0,
+			},
+			expected: false,
+		},
+		{
+			name: "incomplete - neither done",
+			state: ProjectState{
+				CrawlTotal: 10, CrawlDone: 5, CrawlErrors: 0,
+				AnalyzeTotal: 5, AnalyzeDone: 2, AnalyzeErrors: 0,
+			},
 			expected: false,
 		},
 	}
@@ -298,6 +370,51 @@ func TestProjectState_IsComplete(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.state.IsComplete() != tt.expected {
 				t.Errorf("expected %v, got %v", tt.expected, tt.state.IsComplete())
+			}
+		})
+	}
+}
+
+func TestProjectState_ProgressPercent(t *testing.T) {
+	tests := []struct {
+		name            string
+		state           ProjectState
+		expectedCrawl   float64
+		expectedAnalyze float64
+		expectedOverall float64
+	}{
+		{
+			name: "50% crawl, 25% analyze",
+			state: ProjectState{
+				CrawlTotal: 100, CrawlDone: 50, CrawlErrors: 0,
+				AnalyzeTotal: 100, AnalyzeDone: 25, AnalyzeErrors: 0,
+			},
+			expectedCrawl:   50.0,
+			expectedAnalyze: 25.0,
+			expectedOverall: 37.5,
+		},
+		{
+			name: "zero totals",
+			state: ProjectState{
+				CrawlTotal: 0, CrawlDone: 0, CrawlErrors: 0,
+				AnalyzeTotal: 0, AnalyzeDone: 0, AnalyzeErrors: 0,
+			},
+			expectedCrawl:   0.0,
+			expectedAnalyze: 0.0,
+			expectedOverall: 0.0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.state.CrawlProgressPercent() != tt.expectedCrawl {
+				t.Errorf("crawl: expected %v, got %v", tt.expectedCrawl, tt.state.CrawlProgressPercent())
+			}
+			if tt.state.AnalyzeProgressPercent() != tt.expectedAnalyze {
+				t.Errorf("analyze: expected %v, got %v", tt.expectedAnalyze, tt.state.AnalyzeProgressPercent())
+			}
+			if tt.state.OverallProgressPercent() != tt.expectedOverall {
+				t.Errorf("overall: expected %v, got %v", tt.expectedOverall, tt.state.OverallProgressPercent())
 			}
 		})
 	}

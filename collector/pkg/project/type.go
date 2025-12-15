@@ -120,13 +120,22 @@ type Error struct {
 	Keyword string `json:"keyword,omitempty"`
 }
 
+// PhaseProgressCallback represents progress of a single phase (crawl or analyze).
+type PhaseProgressCallback struct {
+	Total           int64   `json:"total"`
+	Done            int64   `json:"done"`
+	Errors          int64   `json:"errors"`
+	ProgressPercent float64 `json:"progress_percent"`
+}
+
 // ProgressCallbackRequest represents the progress webhook callback payload.
 // Gửi tới POST /internal/progress/callback
+// Two-phase format: crawl + analyze progress
 type ProgressCallbackRequest struct {
-	ProjectID string `json:"project_id"`
-	UserID    string `json:"user_id"`
-	Status    string `json:"status"` // INITIALIZING, CRAWLING, PROCESSING, DONE, FAILED
-	Total     int64  `json:"total"`
-	Done      int64  `json:"done"`
-	Errors    int64  `json:"errors"`
+	ProjectID              string                `json:"project_id"`
+	UserID                 string                `json:"user_id"`
+	Status                 string                `json:"status"` // INITIALIZING, PROCESSING, DONE, FAILED
+	Crawl                  PhaseProgressCallback `json:"crawl"`
+	Analyze                PhaseProgressCallback `json:"analyze"`
+	OverallProgressPercent float64               `json:"overall_progress_percent"`
 }

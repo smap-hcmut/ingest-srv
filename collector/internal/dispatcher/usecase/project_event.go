@@ -36,10 +36,10 @@ func (uc implUseCase) HandleProjectCreatedEvent(ctx context.Context, event model
 	uc.l.Infof(ctx, "dispatcher.usecase.project_event.HandleProjectCreatedEvent: transformed to %d requests, total tasks=%d",
 		len(requests), totalTasks)
 
-	// Update total in Redis state and notify (if state usecase is available)
+	// Set crawl total in Redis state and notify (if state usecase is available)
 	if uc.stateUC != nil {
-		if err := uc.stateUC.UpdateTotal(ctx, projectID, int64(totalTasks)); err != nil {
-			uc.l.Warnf(ctx, "dispatcher.usecase.project_event.HandleProjectCreatedEvent: failed to update total: %v", err)
+		if err := uc.stateUC.SetCrawlTotal(ctx, projectID, int64(totalTasks)); err != nil {
+			uc.l.Warnf(ctx, "dispatcher.usecase.project_event.HandleProjectCreatedEvent: failed to set crawl total: %v", err)
 		}
 
 		// Notify progress after setting total
@@ -57,13 +57,12 @@ func (uc implUseCase) HandleProjectCreatedEvent(ctx context.Context, event model
 		tasks, err := uc.Dispatch(ctx, req)
 		if err != nil {
 			uc.l.Errorf(ctx, "dispatcher.usecase.project_event.HandleProjectCreatedEvent: failed to dispatch job_id=%s: %v", req.JobID, err)
-			errorCount += len(uc.selectPlatforms())
+			platformCount := int64(len(uc.selectPlatforms()))
+			errorCount += int(platformCount)
 
-			// Update error count in state
+			// Update crawl error count in state
 			if uc.stateUC != nil {
-				for range uc.selectPlatforms() {
-					_ = uc.stateUC.IncrementErrors(ctx, projectID)
-				}
+				_ = uc.stateUC.IncrementCrawlErrorsBy(ctx, projectID, platformCount)
 			}
 			continue
 		}
@@ -92,14 +91,24 @@ func (uc implUseCase) notifyProgress(ctx context.Context, projectID, userID stri
 	}
 }
 
-// buildProgressRequest builds a webhook progress request from state.
+// buildProgressRequest builds a webhook progress request from state with two-phase format.
 func (uc implUseCase) buildProgressRequest(projectID, userID string, state *models.ProjectState) webhook.ProgressRequest {
 	return webhook.ProgressRequest{
 		ProjectID: projectID,
 		UserID:    userID,
 		Status:    string(state.Status),
-		Total:     state.Total,
-		Done:      state.Done,
-		Errors:    state.Errors,
+		Crawl: webhook.PhaseProgress{
+			Total:           state.CrawlTotal,
+			Done:            state.CrawlDone,
+			Errors:          state.CrawlErrors,
+			ProgressPercent: state.CrawlProgressPercent(),
+		},
+		Analyze: webhook.PhaseProgress{
+			Total:           state.AnalyzeTotal,
+			Done:            state.AnalyzeDone,
+			Errors:          state.AnalyzeErrors,
+			ProgressPercent: state.AnalyzeProgressPercent(),
+		},
+		OverallProgressPercent: state.OverallProgressPercent(),
 	}
 }

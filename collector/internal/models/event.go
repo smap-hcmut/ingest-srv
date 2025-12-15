@@ -77,7 +77,6 @@ type ProjectStatus string
 
 const (
 	ProjectStatusInitializing ProjectStatus = "INITIALIZING"
-	ProjectStatusCrawling     ProjectStatus = "CRAWLING"
 	ProjectStatusProcessing   ProjectStatus = "PROCESSING"
 	ProjectStatusDone         ProjectStatus = "DONE"
 	ProjectStatusFailed       ProjectStatus = "FAILED"
@@ -90,9 +89,7 @@ func (s ProjectStatus) IsTerminal() bool {
 
 // IsActive kiểm tra status có phải là trạng thái đang chạy không.
 func (s ProjectStatus) IsActive() bool {
-	return s == ProjectStatusInitializing ||
-		s == ProjectStatusCrawling ||
-		s == ProjectStatusProcessing
+	return s == ProjectStatusInitializing || s == ProjectStatusProcessing
 }
 
 // String trả về string representation của status.
@@ -101,32 +98,68 @@ func (s ProjectStatus) String() string {
 }
 
 // ProjectState chứa trạng thái execution của project trong Redis.
+// Two-phase state: crawl phase + analyze phase.
 type ProjectState struct {
 	Status ProjectStatus `json:"status"`
-	Total  int64         `json:"total"`
-	Done   int64         `json:"done"`
-	Errors int64         `json:"errors"`
+
+	// Crawl phase counters
+	CrawlTotal  int64 `json:"crawl_total"`
+	CrawlDone   int64 `json:"crawl_done"`
+	CrawlErrors int64 `json:"crawl_errors"`
+
+	// Analyze phase counters
+	AnalyzeTotal  int64 `json:"analyze_total"`
+	AnalyzeDone   int64 `json:"analyze_done"`
+	AnalyzeErrors int64 `json:"analyze_errors"`
 }
 
-// IsComplete kiểm tra project đã hoàn thành chưa (done + errors >= total).
+// IsCrawlComplete kiểm tra crawl phase đã hoàn thành chưa.
+func (s *ProjectState) IsCrawlComplete() bool {
+	return s.CrawlTotal > 0 && (s.CrawlDone+s.CrawlErrors) >= s.CrawlTotal
+}
+
+// IsAnalyzeComplete kiểm tra analyze phase đã hoàn thành chưa.
+func (s *ProjectState) IsAnalyzeComplete() bool {
+	return s.AnalyzeTotal > 0 && (s.AnalyzeDone+s.AnalyzeErrors) >= s.AnalyzeTotal
+}
+
+// IsComplete kiểm tra project đã hoàn thành chưa (cả crawl và analyze).
 func (s *ProjectState) IsComplete() bool {
-	return s.Total > 0 && (s.Done+s.Errors) >= s.Total
+	return s.IsCrawlComplete() && s.IsAnalyzeComplete()
 }
 
-// ProgressPercent tính phần trăm tiến độ.
-func (s *ProjectState) ProgressPercent() float64 {
-	if s.Total <= 0 {
+// CrawlProgressPercent tính phần trăm tiến độ crawl phase.
+func (s *ProjectState) CrawlProgressPercent() float64 {
+	if s.CrawlTotal <= 0 {
 		return 0
 	}
-	return float64(s.Done) / float64(s.Total) * 100
+	return float64(s.CrawlDone+s.CrawlErrors) / float64(s.CrawlTotal) * 100
+}
+
+// AnalyzeProgressPercent tính phần trăm tiến độ analyze phase.
+func (s *ProjectState) AnalyzeProgressPercent() float64 {
+	if s.AnalyzeTotal <= 0 {
+		return 0
+	}
+	return float64(s.AnalyzeDone+s.AnalyzeErrors) / float64(s.AnalyzeTotal) * 100
+}
+
+// OverallProgressPercent tính phần trăm tiến độ tổng thể (trung bình 2 phases).
+func (s *ProjectState) OverallProgressPercent() float64 {
+	crawlProgress := s.CrawlProgressPercent()
+	analyzeProgress := s.AnalyzeProgressPercent()
+	return (crawlProgress + analyzeProgress) / 2
 }
 
 // NewProjectState tạo ProjectState mới với status INITIALIZING.
 func NewProjectState() ProjectState {
 	return ProjectState{
-		Status: ProjectStatusInitializing,
-		Total:  0,
-		Done:   0,
-		Errors: 0,
+		Status:        ProjectStatusInitializing,
+		CrawlTotal:    0,
+		CrawlDone:     0,
+		CrawlErrors:   0,
+		AnalyzeTotal:  0,
+		AnalyzeDone:   0,
+		AnalyzeErrors: 0,
 	}
 }

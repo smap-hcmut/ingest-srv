@@ -131,7 +131,7 @@ func TestInitState(t *testing.T) {
 	})
 
 	t.Run("error - state already exists and active", func(t *testing.T) {
-		activeState := &models.ProjectState{Status: models.ProjectStatusCrawling}
+		activeState := &models.ProjectState{Status: models.ProjectStatusProcessing}
 		mockRepo := &mockStateRepository{
 			existsFunc: func(ctx context.Context, key string) (bool, error) {
 				return true, nil
@@ -150,7 +150,7 @@ func TestInitState(t *testing.T) {
 	})
 }
 
-func TestUpdateTotal(t *testing.T) {
+func TestSetCrawlTotal(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("success", func(t *testing.T) {
@@ -162,7 +162,7 @@ func TestUpdateTotal(t *testing.T) {
 
 		uc := NewUseCase(&mockLogger{}, mockRepo, state.Options{TTL: time.Hour})
 
-		err := uc.UpdateTotal(ctx, "proj_1", 100)
+		err := uc.SetCrawlTotal(ctx, "proj_1", 100)
 		if err != nil {
 			t.Errorf("expected no error, got %v", err)
 		}
@@ -172,7 +172,7 @@ func TestUpdateTotal(t *testing.T) {
 		mockRepo := &mockStateRepository{}
 		uc := NewUseCase(&mockLogger{}, mockRepo, state.Options{TTL: time.Hour})
 
-		err := uc.UpdateTotal(ctx, "", 100)
+		err := uc.SetCrawlTotal(ctx, "", 100)
 		if err != state.ErrInvalidProjectID {
 			t.Errorf("expected ErrInvalidProjectID, got %v", err)
 		}
@@ -182,14 +182,53 @@ func TestUpdateTotal(t *testing.T) {
 		mockRepo := &mockStateRepository{}
 		uc := NewUseCase(&mockLogger{}, mockRepo, state.Options{TTL: time.Hour})
 
-		err := uc.UpdateTotal(ctx, "proj_1", -1)
+		err := uc.SetCrawlTotal(ctx, "proj_1", -1)
 		if err != state.ErrInvalidTotal {
 			t.Errorf("expected ErrInvalidTotal, got %v", err)
 		}
 	})
 }
 
-func TestIncrementDone(t *testing.T) {
+func TestIncrementCrawlDoneBy(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("success", func(t *testing.T) {
+		mockRepo := &mockStateRepository{
+			incrementFieldFunc: func(ctx context.Context, key, field string, delta int64) (int64, error) {
+				return 50, nil
+			},
+		}
+
+		uc := NewUseCase(&mockLogger{}, mockRepo, state.Options{TTL: time.Hour})
+
+		err := uc.IncrementCrawlDoneBy(ctx, "proj_1", 10)
+		if err != nil {
+			t.Errorf("expected no error, got %v", err)
+		}
+	})
+
+	t.Run("error - empty project ID", func(t *testing.T) {
+		mockRepo := &mockStateRepository{}
+		uc := NewUseCase(&mockLogger{}, mockRepo, state.Options{TTL: time.Hour})
+
+		err := uc.IncrementCrawlDoneBy(ctx, "", 10)
+		if err != state.ErrInvalidProjectID {
+			t.Errorf("expected ErrInvalidProjectID, got %v", err)
+		}
+	})
+
+	t.Run("error - invalid count", func(t *testing.T) {
+		mockRepo := &mockStateRepository{}
+		uc := NewUseCase(&mockLogger{}, mockRepo, state.Options{TTL: time.Hour})
+
+		err := uc.IncrementCrawlDoneBy(ctx, "proj_1", 0)
+		if err != state.ErrInvalidCount {
+			t.Errorf("expected ErrInvalidCount, got %v", err)
+		}
+	})
+}
+
+func TestIncrementCrawlErrorsBy(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("success", func(t *testing.T) {
@@ -201,36 +240,64 @@ func TestIncrementDone(t *testing.T) {
 
 		uc := NewUseCase(&mockLogger{}, mockRepo, state.Options{TTL: time.Hour})
 
-		err := uc.IncrementDone(ctx, "proj_1")
+		err := uc.IncrementCrawlErrorsBy(ctx, "proj_1", 2)
 		if err != nil {
 			t.Errorf("expected no error, got %v", err)
 		}
 	})
-
-	t.Run("error - empty project ID", func(t *testing.T) {
-		mockRepo := &mockStateRepository{}
-		uc := NewUseCase(&mockLogger{}, mockRepo, state.Options{TTL: time.Hour})
-
-		err := uc.IncrementDone(ctx, "")
-		if err != state.ErrInvalidProjectID {
-			t.Errorf("expected ErrInvalidProjectID, got %v", err)
-		}
-	})
 }
 
-func TestIncrementErrors(t *testing.T) {
+func TestIncrementAnalyzeTotalBy(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("success", func(t *testing.T) {
 		mockRepo := &mockStateRepository{
 			incrementFieldFunc: func(ctx context.Context, key, field string, delta int64) (int64, error) {
-				return 2, nil
+				return 100, nil
 			},
 		}
 
 		uc := NewUseCase(&mockLogger{}, mockRepo, state.Options{TTL: time.Hour})
 
-		err := uc.IncrementErrors(ctx, "proj_1")
+		err := uc.IncrementAnalyzeTotalBy(ctx, "proj_1", 50)
+		if err != nil {
+			t.Errorf("expected no error, got %v", err)
+		}
+	})
+}
+
+func TestIncrementAnalyzeDoneBy(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("success", func(t *testing.T) {
+		mockRepo := &mockStateRepository{
+			incrementFieldFunc: func(ctx context.Context, key, field string, delta int64) (int64, error) {
+				return 30, nil
+			},
+		}
+
+		uc := NewUseCase(&mockLogger{}, mockRepo, state.Options{TTL: time.Hour})
+
+		err := uc.IncrementAnalyzeDoneBy(ctx, "proj_1", 10)
+		if err != nil {
+			t.Errorf("expected no error, got %v", err)
+		}
+	})
+}
+
+func TestIncrementAnalyzeErrorsBy(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("success", func(t *testing.T) {
+		mockRepo := &mockStateRepository{
+			incrementFieldFunc: func(ctx context.Context, key, field string, delta int64) (int64, error) {
+				return 3, nil
+			},
+		}
+
+		uc := NewUseCase(&mockLogger{}, mockRepo, state.Options{TTL: time.Hour})
+
+		err := uc.IncrementAnalyzeErrorsBy(ctx, "proj_1", 1)
 		if err != nil {
 			t.Errorf("expected no error, got %v", err)
 		}
@@ -242,10 +309,13 @@ func TestGetState(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		expectedState := &models.ProjectState{
-			Status: models.ProjectStatusCrawling,
-			Total:  100,
-			Done:   50,
-			Errors: 2,
+			Status:        models.ProjectStatusProcessing,
+			CrawlTotal:    100,
+			CrawlDone:     50,
+			CrawlErrors:   2,
+			AnalyzeTotal:  48,
+			AnalyzeDone:   20,
+			AnalyzeErrors: 1,
 		}
 		mockRepo := &mockStateRepository{
 			getStateFunc: func(ctx context.Context, key string) (*models.ProjectState, error) {
@@ -259,7 +329,7 @@ func TestGetState(t *testing.T) {
 		if err != nil {
 			t.Errorf("expected no error, got %v", err)
 		}
-		if result.Total != 100 || result.Done != 50 {
+		if result.CrawlTotal != 100 || result.CrawlDone != 50 {
 			t.Errorf("unexpected state: %+v", result)
 		}
 	})
@@ -280,15 +350,18 @@ func TestGetState(t *testing.T) {
 	})
 }
 
-func TestCheckAndUpdateCompletion(t *testing.T) {
+func TestCheckCompletion(t *testing.T) {
 	ctx := context.Background()
 
-	t.Run("complete - updates status", func(t *testing.T) {
+	t.Run("complete - both phases done", func(t *testing.T) {
 		completeState := &models.ProjectState{
-			Status: models.ProjectStatusCrawling,
-			Total:  10,
-			Done:   10,
-			Errors: 0,
+			Status:        models.ProjectStatusProcessing,
+			CrawlTotal:    10,
+			CrawlDone:     10,
+			CrawlErrors:   0,
+			AnalyzeTotal:  10,
+			AnalyzeDone:   10,
+			AnalyzeErrors: 0,
 		}
 		mockRepo := &mockStateRepository{
 			getStateFunc: func(ctx context.Context, key string) (*models.ProjectState, error) {
@@ -301,7 +374,7 @@ func TestCheckAndUpdateCompletion(t *testing.T) {
 
 		uc := NewUseCase(&mockLogger{}, mockRepo, state.Options{TTL: time.Hour})
 
-		completed, err := uc.CheckAndUpdateCompletion(ctx, "proj_1")
+		completed, err := uc.CheckCompletion(ctx, "proj_1")
 		if err != nil {
 			t.Errorf("expected no error, got %v", err)
 		}
@@ -310,12 +383,15 @@ func TestCheckAndUpdateCompletion(t *testing.T) {
 		}
 	})
 
-	t.Run("not complete", func(t *testing.T) {
+	t.Run("not complete - crawl done but analyze not", func(t *testing.T) {
 		incompleteState := &models.ProjectState{
-			Status: models.ProjectStatusCrawling,
-			Total:  10,
-			Done:   5,
-			Errors: 0,
+			Status:        models.ProjectStatusProcessing,
+			CrawlTotal:    10,
+			CrawlDone:     10,
+			CrawlErrors:   0,
+			AnalyzeTotal:  10,
+			AnalyzeDone:   5,
+			AnalyzeErrors: 0,
 		}
 		mockRepo := &mockStateRepository{
 			getStateFunc: func(ctx context.Context, key string) (*models.ProjectState, error) {
@@ -325,7 +401,34 @@ func TestCheckAndUpdateCompletion(t *testing.T) {
 
 		uc := NewUseCase(&mockLogger{}, mockRepo, state.Options{TTL: time.Hour})
 
-		completed, err := uc.CheckAndUpdateCompletion(ctx, "proj_1")
+		completed, err := uc.CheckCompletion(ctx, "proj_1")
+		if err != nil {
+			t.Errorf("expected no error, got %v", err)
+		}
+		if completed {
+			t.Error("expected completed to be false")
+		}
+	})
+
+	t.Run("not complete - neither phase done", func(t *testing.T) {
+		incompleteState := &models.ProjectState{
+			Status:        models.ProjectStatusProcessing,
+			CrawlTotal:    10,
+			CrawlDone:     5,
+			CrawlErrors:   0,
+			AnalyzeTotal:  5,
+			AnalyzeDone:   2,
+			AnalyzeErrors: 0,
+		}
+		mockRepo := &mockStateRepository{
+			getStateFunc: func(ctx context.Context, key string) (*models.ProjectState, error) {
+				return incompleteState, nil
+			},
+		}
+
+		uc := NewUseCase(&mockLogger{}, mockRepo, state.Options{TTL: time.Hour})
+
+		completed, err := uc.CheckCompletion(ctx, "proj_1")
 		if err != nil {
 			t.Errorf("expected no error, got %v", err)
 		}

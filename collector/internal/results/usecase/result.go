@@ -14,6 +14,9 @@ import (
 	"smap-collector/pkg/project"
 )
 
+// TaskTypeAnalyzeResult is the task type for analyze results from Analytics Service
+const TaskTypeAnalyzeResult = "analyze_result"
+
 func (uc implUseCase) HandleResult(ctx context.Context, res models.CrawlerResult) error {
 	uc.l.Infof(ctx, "results.usecase.result.HandleResult: handling crawler result: success=%v", res.Success)
 
@@ -26,6 +29,8 @@ func (uc implUseCase) HandleResult(ctx context.Context, res models.CrawlerResult
 		return uc.handleDryRunResult(ctx, res)
 	case string(models.TaskTypeResearchAndCrawl):
 		return uc.handleProjectResult(ctx, res)
+	case TaskTypeAnalyzeResult:
+		return uc.handleAnalyzeResult(ctx, res)
 	default:
 		// Default to dry-run for backward compatibility
 		uc.l.Warnf(ctx, "results.usecase.result.HandleResult: unknown task_type '%s', defaulting to dry-run handler", taskType)
@@ -34,6 +39,7 @@ func (uc implUseCase) HandleResult(ctx context.Context, res models.CrawlerResult
 }
 
 // extractTaskType extracts task_type from crawler result payload
+// Supports both crawler content array format and analyze result format
 func (uc implUseCase) extractTaskType(ctx context.Context, payload any) string {
 	if payload == nil {
 		uc.l.Warnf(ctx, "results.usecase.result.extractTaskType: payload is nil")
@@ -46,6 +52,14 @@ func (uc implUseCase) extractTaskType(ctx context.Context, payload any) string {
 		return ""
 	}
 
+	// Try to parse as AnalyzeResultPayload first (single object with task_type field)
+	var analyzePayload results.AnalyzeResultPayload
+	if err := json.Unmarshal(jsonData, &analyzePayload); err == nil && analyzePayload.TaskType == TaskTypeAnalyzeResult {
+		uc.l.Infof(ctx, "results.usecase.result.extractTaskType: extracted task_type from analyze payload: %s", analyzePayload.TaskType)
+		return analyzePayload.TaskType
+	}
+
+	// Try to parse as crawler content array
 	var crawlerContentArray []results.CrawlerContent
 	if err := json.Unmarshal(jsonData, &crawlerContentArray); err != nil {
 		uc.l.Warnf(ctx, "results.usecase.result.extractTaskType: failed to unmarshal payload: %v", err)
@@ -85,6 +99,7 @@ func (uc implUseCase) handleDryRunResult(ctx context.Context, res models.Crawler
 }
 
 // handleProjectResult handles project execution results by updating state and sending progress webhook
+// Two-phase state: updates crawl counters and auto-increments analyze_total for successful crawls
 func (uc implUseCase) handleProjectResult(ctx context.Context, res models.CrawlerResult) error {
 	uc.l.Infof(ctx, "results.usecase.result.handleProjectResult: handling project execution result")
 
@@ -95,15 +110,28 @@ func (uc implUseCase) handleProjectResult(ctx context.Context, res models.Crawle
 		return fmt.Errorf("%w: %v", results.ErrInvalidInput, err)
 	}
 
-	// Update state based on result success/failure
+	// Count items in batch (for batch increment)
+	itemCount := uc.countBatchItems(ctx, res.Payload)
+	if itemCount == 0 {
+		itemCount = 1 // Default to 1 if can't determine batch size
+	}
+
+	// Update crawl state based on result success/failure
 	if res.Success {
-		if err := uc.stateUC.IncrementDone(ctx, projectID); err != nil {
-			uc.l.Errorf(ctx, "results.usecase.result.handleProjectResult: failed to increment done counter: project_id=%s, error=%v", projectID, err)
+		// Increment crawl_done
+		if err := uc.stateUC.IncrementCrawlDoneBy(ctx, projectID, int64(itemCount)); err != nil {
+			uc.l.Errorf(ctx, "results.usecase.result.handleProjectResult: failed to increment crawl_done: project_id=%s, count=%d, error=%v", projectID, itemCount, err)
+			return fmt.Errorf("%w: %v", results.ErrTemporary, err)
+		}
+		// Auto-increment analyze_total (each successful crawl = 1 item to analyze)
+		if err := uc.stateUC.IncrementAnalyzeTotalBy(ctx, projectID, int64(itemCount)); err != nil {
+			uc.l.Errorf(ctx, "results.usecase.result.handleProjectResult: failed to increment analyze_total: project_id=%s, count=%d, error=%v", projectID, itemCount, err)
 			return fmt.Errorf("%w: %v", results.ErrTemporary, err)
 		}
 	} else {
-		if err := uc.stateUC.IncrementErrors(ctx, projectID); err != nil {
-			uc.l.Errorf(ctx, "results.usecase.result.handleProjectResult: failed to increment errors counter: project_id=%s, error=%v", projectID, err)
+		// Increment crawl_errors
+		if err := uc.stateUC.IncrementCrawlErrorsBy(ctx, projectID, int64(itemCount)); err != nil {
+			uc.l.Errorf(ctx, "results.usecase.result.handleProjectResult: failed to increment crawl_errors: project_id=%s, count=%d, error=%v", projectID, itemCount, err)
 			return fmt.Errorf("%w: %v", results.ErrTemporary, err)
 		}
 	}
@@ -122,23 +150,16 @@ func (uc implUseCase) handleProjectResult(ctx context.Context, res models.Crawle
 		userID = ""
 	}
 
-	// Send progress webhook
-	progressReq := webhook.ProgressRequest{
-		ProjectID: projectID,
-		UserID:    userID,
-		Status:    string(state.Status),
-		Total:     state.Total,
-		Done:      state.Done,
-		Errors:    state.Errors,
-	}
+	// Send progress webhook with two-phase format
+	progressReq := uc.buildTwoPhaseProgressRequest(projectID, userID, state)
 
 	if err := uc.webhookUC.NotifyProgress(ctx, progressReq); err != nil {
 		uc.l.Warnf(ctx, "results.usecase.result.handleProjectResult: failed to send progress webhook (non-fatal): project_id=%s, error=%v", projectID, err)
 		// Don't return error - progress webhook failure is non-fatal
 	}
 
-	// Check if project is complete
-	completed, err := uc.stateUC.CheckAndUpdateCompletion(ctx, projectID)
+	// Check if project is complete (both crawl and analyze phases)
+	completed, err := uc.stateUC.CheckCompletion(ctx, projectID)
 	if err != nil {
 		uc.l.Warnf(ctx, "results.usecase.result.handleProjectResult: failed to check completion: project_id=%s, error=%v", projectID, err)
 	} else if completed {
@@ -150,6 +171,144 @@ func (uc implUseCase) handleProjectResult(ctx context.Context, res models.Crawle
 	}
 
 	return nil
+}
+
+// countBatchItems counts the number of items in a crawler result payload
+func (uc implUseCase) countBatchItems(ctx context.Context, payload any) int {
+	if payload == nil {
+		return 0
+	}
+
+	jsonData, err := json.Marshal(payload)
+	if err != nil {
+		uc.l.Warnf(ctx, "results.usecase.result.countBatchItems: failed to marshal payload: %v", err)
+		return 0
+	}
+
+	var crawlerContentArray []results.CrawlerContent
+	if err := json.Unmarshal(jsonData, &crawlerContentArray); err != nil {
+		uc.l.Warnf(ctx, "results.usecase.result.countBatchItems: failed to unmarshal payload: %v", err)
+		return 0
+	}
+
+	return len(crawlerContentArray)
+}
+
+// buildTwoPhaseProgressRequest builds a webhook.ProgressRequest with two-phase state
+func (uc implUseCase) buildTwoPhaseProgressRequest(projectID, userID string, state *models.ProjectState) webhook.ProgressRequest {
+	return webhook.ProgressRequest{
+		ProjectID: projectID,
+		UserID:    userID,
+		Status:    string(state.Status),
+		Crawl: webhook.PhaseProgress{
+			Total:           state.CrawlTotal,
+			Done:            state.CrawlDone,
+			Errors:          state.CrawlErrors,
+			ProgressPercent: state.CrawlProgressPercent(),
+		},
+		Analyze: webhook.PhaseProgress{
+			Total:           state.AnalyzeTotal,
+			Done:            state.AnalyzeDone,
+			Errors:          state.AnalyzeErrors,
+			ProgressPercent: state.AnalyzeProgressPercent(),
+		},
+		OverallProgressPercent: state.OverallProgressPercent(),
+	}
+}
+
+// handleAnalyzeResult handles analyze results from Analytics Service
+// Updates analyze counters and checks for project completion
+func (uc implUseCase) handleAnalyzeResult(ctx context.Context, res models.CrawlerResult) error {
+	uc.l.Infof(ctx, "results.usecase.result.handleAnalyzeResult: handling analyze result")
+
+	// Extract analyze payload
+	payload, err := uc.extractAnalyzePayload(ctx, res.Payload)
+	if err != nil {
+		uc.l.Errorf(ctx, "results.usecase.result.handleAnalyzeResult: failed to extract analyze payload: %v", err)
+		return fmt.Errorf("%w: %v", results.ErrInvalidInput, err)
+	}
+
+	projectID := payload.ProjectID
+	if projectID == "" {
+		uc.l.Errorf(ctx, "results.usecase.result.handleAnalyzeResult: project_id is empty")
+		return results.ErrInvalidInput
+	}
+
+	uc.l.Infof(ctx, "results.usecase.result.handleAnalyzeResult: processing analyze result: project_id=%s, job_id=%s, success=%d, errors=%d",
+		projectID, payload.JobID, payload.SuccessCount, payload.ErrorCount)
+
+	// Update analyze counters
+	if payload.SuccessCount > 0 {
+		if err := uc.stateUC.IncrementAnalyzeDoneBy(ctx, projectID, int64(payload.SuccessCount)); err != nil {
+			uc.l.Errorf(ctx, "results.usecase.result.handleAnalyzeResult: failed to increment analyze_done: project_id=%s, count=%d, error=%v",
+				projectID, payload.SuccessCount, err)
+			return fmt.Errorf("%w: %v", results.ErrTemporary, err)
+		}
+	}
+
+	if payload.ErrorCount > 0 {
+		if err := uc.stateUC.IncrementAnalyzeErrorsBy(ctx, projectID, int64(payload.ErrorCount)); err != nil {
+			uc.l.Errorf(ctx, "results.usecase.result.handleAnalyzeResult: failed to increment analyze_errors: project_id=%s, count=%d, error=%v",
+				projectID, payload.ErrorCount, err)
+			return fmt.Errorf("%w: %v", results.ErrTemporary, err)
+		}
+	}
+
+	// Get current state for progress notification
+	state, err := uc.stateUC.GetState(ctx, projectID)
+	if err != nil {
+		uc.l.Errorf(ctx, "results.usecase.result.handleAnalyzeResult: failed to get state: project_id=%s, error=%v", projectID, err)
+		return fmt.Errorf("%w: %v", results.ErrTemporary, err)
+	}
+
+	// Get user_id for webhook
+	userID, err := uc.stateUC.GetUserID(ctx, projectID)
+	if err != nil {
+		uc.l.Warnf(ctx, "results.usecase.result.handleAnalyzeResult: failed to get user_id, using empty: project_id=%s, error=%v", projectID, err)
+		userID = ""
+	}
+
+	// Send progress webhook with two-phase format
+	progressReq := uc.buildTwoPhaseProgressRequest(projectID, userID, state)
+
+	if err := uc.webhookUC.NotifyProgress(ctx, progressReq); err != nil {
+		uc.l.Warnf(ctx, "results.usecase.result.handleAnalyzeResult: failed to send progress webhook (non-fatal): project_id=%s, error=%v", projectID, err)
+	}
+
+	// Check if project is complete (both crawl and analyze phases)
+	completed, err := uc.stateUC.CheckCompletion(ctx, projectID)
+	if err != nil {
+		uc.l.Warnf(ctx, "results.usecase.result.handleAnalyzeResult: failed to check completion: project_id=%s, error=%v", projectID, err)
+	} else if completed {
+		uc.l.Infof(ctx, "results.usecase.result.handleAnalyzeResult: project completed: project_id=%s", projectID)
+		// Send completion notification
+		if err := uc.webhookUC.NotifyCompletion(ctx, progressReq); err != nil {
+			uc.l.Warnf(ctx, "results.usecase.result.handleAnalyzeResult: failed to send completion webhook: project_id=%s, error=%v", projectID, err)
+		}
+	}
+
+	return nil
+}
+
+// extractAnalyzePayload extracts AnalyzeResultPayload from the result payload
+func (uc implUseCase) extractAnalyzePayload(ctx context.Context, payload any) (*results.AnalyzeResultPayload, error) {
+	if payload == nil {
+		return nil, results.ErrInvalidInput
+	}
+
+	jsonData, err := json.Marshal(payload)
+	if err != nil {
+		uc.l.Errorf(ctx, "results.usecase.result.extractAnalyzePayload: failed to marshal payload: %v", err)
+		return nil, results.ErrInvalidInput
+	}
+
+	var analyzePayload results.AnalyzeResultPayload
+	if err := json.Unmarshal(jsonData, &analyzePayload); err != nil {
+		uc.l.Errorf(ctx, "results.usecase.result.extractAnalyzePayload: failed to unmarshal payload: %v", err)
+		return nil, results.ErrInvalidInput
+	}
+
+	return &analyzePayload, nil
 }
 
 // extractProjectID extracts project_id from job_id in payload

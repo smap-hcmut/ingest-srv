@@ -1,6 +1,6 @@
 # **Tài liệu mô tả chi tiết hành vi Collector Service SMAP**
 
-**Cập nhật:** 2025-12-06
+**Cập nhật:** 2025-12-15 (Two-Phase State)
 
 ---
 
@@ -80,6 +80,7 @@ const (
 | -------------------- | ----------------- | ----------------------- | ----------------------------- |
 | `dryrun_keyword`     | Project Service   | `handleDryRunResult()`  | `/internal/dryrun/callback`   |
 | `research_and_crawl` | Project Execution | `handleProjectResult()` | `/internal/progress/callback` |
+| `analyze_result`     | Analytics Service | `handleAnalyzeResult()` | `/internal/progress/callback` |
 | Không xác định       | -                 | `handleDryRunResult()`  | `/internal/dryrun/callback`   |
 
 ---
@@ -142,59 +143,94 @@ func (uc implUseCase) handleDryRunResult(ctx context.Context, res models.Crawler
 
 ## 6. Luồng chi tiết: Project Execution
 
-### 6.1. Sơ đồ luồng
+### 6.1. Sơ đồ luồng (Two-Phase)
 
 ```mermaid
 sequenceDiagram
     participant PS as Project Service
     participant COL as Collector
     participant CR as Crawler
+    participant AN as Analytics
     participant RED as Redis
 
-    PS->>COL: POST /projects/:id/execute\n(khởi tạo trạng thái Redis)
     PS->>COL: phát project.created
     COL->>RED: Lưu user mapping
-    COL->>RED: Tính tổng số task\nUpdateTotal()
+    COL->>RED: SetCrawlTotal()
     COL->>CR: Gửi task cho crawler
-    CR-->>COL: Crawler thực thi
-    COL->>RED: handleProjectResult()\nIncrementDone()/IncrementErrors()
-    COL->>RED: NotifyProgress()
-    RED-->>COL:
-    COL->>RED: Kiểm tra/đánh dấu hoàn thành
+
+    Note over CR,COL: Phase 1: CRAWL
+    CR-->>COL: Crawler trả kết quả
+    COL->>RED: IncrementCrawlDoneBy(N)
+    COL->>RED: IncrementAnalyzeTotalBy(N)
+    COL->>PS: NotifyProgress (two-phase)
+
+    Note over AN,COL: Phase 2: ANALYZE
+    AN-->>COL: analyze_result
+    COL->>RED: IncrementAnalyzeDoneBy(N)
+    COL->>PS: NotifyProgress (two-phase)
+
+    COL->>RED: CheckCompletion()
+    COL->>PS: NotifyCompletion (khi cả 2 phase xong)
 ```
 
-### 6.2. Hàm xử lý kết quả Project
+### 6.2. Hàm xử lý kết quả Project (Two-Phase)
 
 ```go
 func (uc implUseCase) handleProjectResult(ctx context.Context, res models.CrawlerResult) error {
     // 1. Lấy project_id từ job_id
-    // Định dạng: {projectID}-brand-{index} hoặc {projectID}-{competitor}-{index}
     projectID, err := uc.extractProjectID(ctx, res.Payload)
 
-    // 2. Cập nhật trạng thái trong Redis
+    // 2. Đếm số items trong batch
+    itemCount := uc.countBatchItems(ctx, res.Payload)
+
+    // 3. Cập nhật crawl counters trong Redis
     if res.Success {
-        uc.stateUC.IncrementDone(ctx, projectID)
+        uc.stateUC.IncrementCrawlDoneBy(ctx, projectID, itemCount)
+        // Auto-increment analyze_total cho mỗi crawl thành công
+        uc.stateUC.IncrementAnalyzeTotalBy(ctx, projectID, itemCount)
     } else {
-        uc.stateUC.IncrementErrors(ctx, projectID)
+        uc.stateUC.IncrementCrawlErrorsBy(ctx, projectID, itemCount)
     }
 
-    // 3. Lấy trạng thái hiện tại
+    // 4. Lấy trạng thái và gửi webhook với two-phase format
     state, _ := uc.stateUC.GetState(ctx, projectID)
     userID, _ := uc.stateUC.GetUserID(ctx, projectID)
-
-    // 4. Gửi webhook progress (không nguy hiểm nếu gặp lỗi)
-    progressReq := webhook.ProgressRequest{
-        ProjectID: projectID,
-        UserID:    userID,
-        Status:    string(state.Status),
-        Total:     state.Total,
-        Done:      state.Done,
-        Errors:    state.Errors,
-    }
+    progressReq := uc.buildTwoPhaseProgressRequest(projectID, userID, state)
     uc.webhookUC.NotifyProgress(ctx, progressReq)
 
-    // 5. Kiểm tra hoàn thành
-    completed, _ := uc.stateUC.CheckAndUpdateCompletion(ctx, projectID)
+    // 5. Kiểm tra hoàn thành (cả crawl và analyze)
+    completed, _ := uc.stateUC.CheckCompletion(ctx, projectID)
+    if completed {
+        uc.webhookUC.NotifyCompletion(ctx, progressReq)
+    }
+
+    return nil
+}
+```
+
+### 6.3. Hàm xử lý kết quả Analyze
+
+```go
+func (uc implUseCase) handleAnalyzeResult(ctx context.Context, res models.CrawlerResult) error {
+    // 1. Extract analyze payload
+    payload, _ := uc.extractAnalyzePayload(ctx, res.Payload)
+    projectID := payload.ProjectID
+
+    // 2. Cập nhật analyze counters
+    if payload.SuccessCount > 0 {
+        uc.stateUC.IncrementAnalyzeDoneBy(ctx, projectID, payload.SuccessCount)
+    }
+    if payload.ErrorCount > 0 {
+        uc.stateUC.IncrementAnalyzeErrorsBy(ctx, projectID, payload.ErrorCount)
+    }
+
+    // 3. Gửi progress webhook và kiểm tra hoàn thành
+    state, _ := uc.stateUC.GetState(ctx, projectID)
+    userID, _ := uc.stateUC.GetUserID(ctx, projectID)
+    progressReq := uc.buildTwoPhaseProgressRequest(projectID, userID, state)
+    uc.webhookUC.NotifyProgress(ctx, progressReq)
+
+    completed, _ := uc.stateUC.CheckCompletion(ctx, projectID)
     if completed {
         uc.webhookUC.NotifyCompletion(ctx, progressReq)
     }
@@ -213,31 +249,64 @@ func (uc implUseCase) handleProjectResult(ctx context.Context, res models.Crawle
 
 ---
 
-## 7. Quản lý trạng thái Redis
+## 7. Quản lý trạng thái Redis (Two-Phase State)
 
 ### 7.1. Định dạng key
 
 ```
 smap:proj:{projectID}           # Trạng thái thực thi project (Hash)
-smap:proj:{projectID}:user      # Ánh xạ user (String)
+smap:user:{projectID}           # Ánh xạ user (String)
 ```
 
-### 7.2. Các trường trạng thái
+### 7.2. Các trường trạng thái (Two-Phase)
 
-| Trường   | Kiểu   | Mô tả                                            |
-| -------- | ------ | ------------------------------------------------ |
-| `status` | String | INITIALIZING, CRAWLING, PROCESSING, DONE, FAILED |
-| `total`  | Int64  | Tổng số task cần xử lý                           |
-| `done`   | Int64  | Số task đã hoàn thành                            |
-| `errors` | Int64  | Số task bị lỗi                                   |
+| Trường           | Kiểu   | Mô tả                                  |
+| ---------------- | ------ | -------------------------------------- |
+| `status`         | String | INITIALIZING, PROCESSING, DONE, FAILED |
+| `crawl_total`    | Int64  | Tổng số task crawl cần xử lý           |
+| `crawl_done`     | Int64  | Số task crawl đã hoàn thành            |
+| `crawl_errors`   | Int64  | Số task crawl bị lỗi                   |
+| `analyze_total`  | Int64  | Tổng số task analyze cần xử lý         |
+| `analyze_done`   | Int64  | Số task analyze đã hoàn thành          |
+| `analyze_errors` | Int64  | Số task analyze bị lỗi                 |
 
-### 7.3. Chuyển trạng thái (state transition)
+### 7.3. Two-Phase Pipeline
 
 ```
-INITIALIZING → CRAWLING (khi set total)
-CRAWLING → DONE (khi done + errors >= total)
-CRAWLING → FAILED (khi gặp lỗi không thể phục hồi)
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           TWO-PHASE PIPELINE                                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  Phase 1: CRAWL                      Phase 2: ANALYZE                       │
+│  ┌─────────────────────────┐         ┌─────────────────────────┐            │
+│  │ crawl_total: 100        │         │ analyze_total: 98       │            │
+│  │ crawl_done: 98          │  ───►   │ analyze_done: 45        │            │
+│  │ crawl_errors: 2         │         │ analyze_errors: 1       │            │
+│  └─────────────────────────┘         └─────────────────────────┘            │
+│                                                                             │
+│  Crawler → Collector                 Analytics → Collector                  │
+│  (research_and_crawl)                (analyze_result)                       │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
+
+### 7.4. Chuyển trạng thái (state transition)
+
+```
+INITIALIZING → PROCESSING (khi set crawl_total)
+PROCESSING → DONE (khi crawl complete AND analyze complete)
+PROCESSING → FAILED (khi gặp lỗi không thể phục hồi)
+
+Crawl complete: crawl_done + crawl_errors >= crawl_total
+Analyze complete: analyze_done + analyze_errors >= analyze_total
+```
+
+### 7.5. Auto-increment analyze_total
+
+Khi crawl thành công, `analyze_total` tự động tăng:
+
+- Mỗi item crawl thành công = 1 item cần analyze
+- `IncrementCrawlDoneBy(N)` → `IncrementAnalyzeTotalBy(N)`
 
 ---
 
@@ -260,7 +329,7 @@ Header: Authorization: {internal_key}
 }
 ```
 
-### 8.2. Callback Progress
+### 8.2. Callback Progress (Two-Phase Format)
 
 ```
 POST /internal/progress/callback
@@ -269,10 +338,20 @@ Header: X-Internal-Key: {internal_key}
 {
   "project_id": "uuid",
   "user_id": "uuid",
-  "status": "CRAWLING" | "DONE" | "FAILED",
-  "total": 100,
-  "done": 50,
-  "errors": 2
+  "status": "PROCESSING" | "DONE" | "FAILED",
+  "crawl": {
+    "total": 100,
+    "done": 80,
+    "errors": 2,
+    "progress_percent": 82.0
+  },
+  "analyze": {
+    "total": 78,
+    "done": 45,
+    "errors": 1,
+    "progress_percent": 59.0
+  },
+  "overall_progress_percent": 70.5
 }
 ```
 

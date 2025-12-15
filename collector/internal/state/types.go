@@ -14,12 +14,19 @@ const (
 	DefaultTTL = 7 * 24 * time.Hour
 )
 
-// Redis hash field names
+// Redis hash field names - Two-phase state structure
 const (
 	FieldStatus = "status"
-	FieldTotal  = "total"
-	FieldDone   = "done"
-	FieldErrors = "errors"
+
+	// Crawl phase fields
+	FieldCrawlTotal  = "crawl_total"
+	FieldCrawlDone   = "crawl_done"
+	FieldCrawlErrors = "crawl_errors"
+
+	// Analyze phase fields
+	FieldAnalyzeTotal  = "analyze_total"
+	FieldAnalyzeDone   = "analyze_done"
+	FieldAnalyzeErrors = "analyze_errors"
 )
 
 // BuildStateKey tạo Redis key cho project state.
