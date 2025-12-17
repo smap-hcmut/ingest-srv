@@ -26,9 +26,10 @@ func main() {
 	}
 
 	l := pkgLog.Init(pkgLog.ZapConfig{
-		Level:    cfg.Logger.Level,
-		Mode:     cfg.Logger.Mode,
-		Encoding: cfg.Logger.Encoding,
+		Level:        cfg.Logger.Level,
+		Mode:         cfg.Logger.Mode,
+		Encoding:     cfg.Logger.Encoding,
+		ColorEnabled: cfg.Logger.ColorEnabled,
 	})
 
 	// Initialize Discord webhook for error reporting

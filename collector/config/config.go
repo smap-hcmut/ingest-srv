@@ -49,9 +49,10 @@ type CrawlLimitsConfig struct {
 
 // LoggerConfig is the configuration for the logger.
 type LoggerConfig struct {
-	Level    string `env:"LOGGER_LEVEL" envDefault:"debug"`
-	Mode     string `env:"LOGGER_MODE" envDefault:"debug"`
-	Encoding string `env:"LOGGER_ENCODING" envDefault:"console"`
+	Level        string `env:"LOGGER_LEVEL" envDefault:"debug"`
+	Mode         string `env:"LOGGER_MODE" envDefault:"debug"`
+	Encoding     string `env:"LOGGER_ENCODING" envDefault:"console"`
+	ColorEnabled bool   `env:"LOGGER_COLOR_ENABLED" envDefault:"true"`
 }
 
 // DiscordConfig is the configuration for Discord webhooks.

@@ -10,6 +10,7 @@ data:
   LOGGER_LEVEL: "info"
   LOGGER_MODE: "production"
   LOGGER_ENCODING: "json"
+  LOGGER_COLOR_ENABLED: "false"
 
   # Redis Configuration (Standalone mode only)
   REDIS_HOST: "redis-service:6379"

@@ -9,9 +9,10 @@ import (
 )
 
 type ZapConfig struct {
-	Level    string
-	Mode     string
-	Encoding string
+	Level        string
+	Mode         string
+	Encoding     string
+	ColorEnabled bool
 }
 
 type zapLogger struct {
@@ -59,20 +60,25 @@ func (l *zapLogger) init() {
 		encoderCfg = zap.NewDevelopmentEncoderConfig()
 	}
 
-	var encoder zapcore.Encoder
 	encoderCfg.LevelKey = "LEVEL"
 	encoderCfg.CallerKey = "CALLER"
 	encoderCfg.TimeKey = "TIME"
 	encoderCfg.NameKey = "NAME"
 	encoderCfg.MessageKey = "MESSAGE"
+	encoderCfg.EncodeTime = zapcore.ISO8601TimeEncoder
 
+	// Enable colored output when ColorEnabled is true and using console encoding
+	if l.cfg.ColorEnabled && l.cfg.Encoding == "console" {
+		encoderCfg.EncodeLevel = zapcore.CapitalColorLevelEncoder
+	}
+
+	var encoder zapcore.Encoder
 	if l.cfg.Encoding == "console" {
 		encoder = zapcore.NewConsoleEncoder(encoderCfg)
 	} else {
 		encoder = zapcore.NewJSONEncoder(encoderCfg)
 	}
 
-	encoderCfg.EncodeTime = zapcore.ISO8601TimeEncoder
 	core := zapcore.NewCore(encoder, logWriter, zap.NewAtomicLevelAt(logLevel))
 	logger := zap.New(core, zap.AddCaller(), zap.AddCallerSkip(1))
 
