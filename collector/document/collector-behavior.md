@@ -249,7 +249,7 @@ func (uc implUseCase) handleAnalyzeResult(ctx context.Context, res models.Crawle
 
 ---
 
-## 7. Quản lý trạng thái Redis (Two-Phase State)
+## 7. Quản lý trạng thái Redis (Hybrid State)
 
 ### 7.1. Định dạng key
 
@@ -258,34 +258,46 @@ smap:proj:{projectID}           # Trạng thái thực thi project (Hash)
 smap:user:{projectID}           # Ánh xạ user (String)
 ```
 
-### 7.2. Các trường trạng thái (Two-Phase)
+### 7.2. Các trường trạng thái (Hybrid State)
 
-| Trường           | Kiểu   | Mô tả                                  |
-| ---------------- | ------ | -------------------------------------- |
-| `status`         | String | INITIALIZING, PROCESSING, DONE, FAILED |
-| `crawl_total`    | Int64  | Tổng số task crawl cần xử lý           |
-| `crawl_done`     | Int64  | Số task crawl đã hoàn thành            |
-| `crawl_errors`   | Int64  | Số task crawl bị lỗi                   |
-| `analyze_total`  | Int64  | Tổng số task analyze cần xử lý         |
-| `analyze_done`   | Int64  | Số task analyze đã hoàn thành          |
-| `analyze_errors` | Int64  | Số task analyze bị lỗi                 |
+| Trường           | Kiểu   | Mô tả                                        |
+| ---------------- | ------ | -------------------------------------------- |
+| `status`         | String | INITIALIZING, PROCESSING, DONE, FAILED       |
+| `tasks_total`    | Int64  | Tổng số task crawl (keywords × platforms)    |
+| `tasks_done`     | Int64  | Số task crawl đã hoàn thành                  |
+| `tasks_errors`   | Int64  | Số task crawl bị lỗi                         |
+| `items_expected` | Int64  | Số items dự kiến (tasks × limit_per_keyword) |
+| `items_actual`   | Int64  | Số items crawl thành công                    |
+| `items_errors`   | Int64  | Số items crawl thất bại                      |
+| `analyze_total`  | Int64  | Tổng số task analyze cần xử lý               |
+| `analyze_done`   | Int64  | Số task analyze đã hoàn thành                |
+| `analyze_errors` | Int64  | Số task analyze bị lỗi                       |
+| `crawl_total`    | Int64  | (Legacy) Tổng số task crawl                  |
+| `crawl_done`     | Int64  | (Legacy) Số task crawl đã hoàn thành         |
+| `crawl_errors`   | Int64  | (Legacy) Số task crawl bị lỗi                |
 
-### 7.3. Two-Phase Pipeline
+### 7.3. Hybrid State Pipeline
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                           TWO-PHASE PIPELINE                                │
+│                           HYBRID STATE PIPELINE                             │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  Phase 1: CRAWL                      Phase 2: ANALYZE                       │
-│  ┌─────────────────────────┐         ┌─────────────────────────┐            │
-│  │ crawl_total: 100        │         │ analyze_total: 98       │            │
-│  │ crawl_done: 98          │  ───►   │ analyze_done: 45        │            │
-│  │ crawl_errors: 2         │         │ analyze_errors: 1       │            │
-│  └─────────────────────────┘         └─────────────────────────┘            │
+│  Phase 1: CRAWL                           Phase 2: ANALYZE                  │
+│  ┌─────────────────────────────────┐      ┌─────────────────────────┐       │
+│  │ Task-Level (completion check):  │      │ analyze_total: 450      │       │
+│  │   tasks_total: 10               │      │ analyze_done: 200       │       │
+│  │   tasks_done: 10                │ ───► │ analyze_errors: 5       │       │
+│  │   tasks_errors: 0               │      └─────────────────────────┘       │
+│  │                                 │                                        │
+│  │ Item-Level (progress display):  │                                        │
+│  │   items_expected: 500           │                                        │
+│  │   items_actual: 450             │                                        │
+│  │   items_errors: 50              │                                        │
+│  └─────────────────────────────────┘                                        │
 │                                                                             │
-│  Crawler → Collector                 Analytics → Collector                  │
-│  (research_and_crawl)                (analyze_result)                       │
+│  Crawler → Collector                      Analytics → Collector             │
+│  (research_and_crawl)                     (analyze_result)                  │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -293,11 +305,11 @@ smap:user:{projectID}           # Ánh xạ user (String)
 ### 7.4. Chuyển trạng thái (state transition)
 
 ```
-INITIALIZING → PROCESSING (khi set crawl_total)
+INITIALIZING → PROCESSING (khi set tasks_total)
 PROCESSING → DONE (khi crawl complete AND analyze complete)
 PROCESSING → FAILED (khi gặp lỗi không thể phục hồi)
 
-Crawl complete: crawl_done + crawl_errors >= crawl_total
+Crawl complete: tasks_done + tasks_errors >= tasks_total (task-level)
 Analyze complete: analyze_done + analyze_errors >= analyze_total
 ```
 
@@ -306,7 +318,14 @@ Analyze complete: analyze_done + analyze_errors >= analyze_total
 Khi crawl thành công, `analyze_total` tự động tăng:
 
 - Mỗi item crawl thành công = 1 item cần analyze
-- `IncrementCrawlDoneBy(N)` → `IncrementAnalyzeTotalBy(N)`
+- `IncrementItemsActualBy(N)` → `IncrementAnalyzeTotalBy(N)`
+
+### 7.6. Progress Display
+
+- **Crawl Progress**: Sử dụng item-level cho hiển thị chính xác hơn
+  - `(items_actual + items_errors) / items_expected * 100`
+  - Fallback về task-level nếu items không được track
+- **Overall Progress**: `(crawl_progress + analyze_progress) / 2`
 
 ---
 
@@ -329,7 +348,7 @@ Header: Authorization: {internal_key}
 }
 ```
 
-### 8.2. Callback Progress (Two-Phase Format)
+### 8.2. Callback Progress (Hybrid Format)
 
 ```
 POST /internal/progress/callback
@@ -339,19 +358,31 @@ Header: X-Internal-Key: {internal_key}
   "project_id": "uuid",
   "user_id": "uuid",
   "status": "PROCESSING" | "DONE" | "FAILED",
+  "tasks": {
+    "total": 10,
+    "done": 8,
+    "errors": 0,
+    "percent": 80.0
+  },
+  "items": {
+    "expected": 500,
+    "actual": 400,
+    "errors": 20,
+    "percent": 84.0
+  },
   "crawl": {
-    "total": 100,
-    "done": 80,
-    "errors": 2,
-    "progress_percent": 82.0
+    "total": 10,
+    "done": 8,
+    "errors": 0,
+    "progress_percent": 84.0
   },
   "analyze": {
-    "total": 78,
-    "done": 45,
-    "errors": 1,
-    "progress_percent": 59.0
+    "total": 400,
+    "done": 200,
+    "errors": 5,
+    "progress_percent": 51.25
   },
-  "overall_progress_percent": 70.5
+  "overall_progress_percent": 67.625
 }
 ```
 

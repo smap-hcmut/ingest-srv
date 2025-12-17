@@ -59,12 +59,13 @@ func main() {
 
 	// Create consumer server with initialized dependencies
 	srv, err := consumer.New(consumer.Config{
-		Logger:        l,
-		AMQPConn:      conn,
-		Discord:       discordWebhook,
-		ProjectConfig: cfg.Project,
-		RedisClient:   redisClient,
-		StateOptions:  state.Options{TTL: state.DefaultTTL},
+		Logger:            l,
+		AMQPConn:          conn,
+		Discord:           discordWebhook,
+		ProjectConfig:     cfg.Project,
+		RedisClient:       redisClient,
+		StateOptions:      state.Options{TTL: state.DefaultTTL},
+		CrawlLimitsConfig: cfg.CrawlLimits,
 	})
 	if err != nil {
 		l.Fatalf(ctx, "failed to init consumer: %v", err)

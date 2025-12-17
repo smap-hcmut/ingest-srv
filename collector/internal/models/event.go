@@ -98,23 +98,42 @@ func (s ProjectStatus) String() string {
 }
 
 // ProjectState chứa trạng thái execution của project trong Redis.
-// Two-phase state: crawl phase + analyze phase.
+// Hybrid state: track cả task-level (completion) và item-level (progress).
 type ProjectState struct {
 	Status ProjectStatus `json:"status"`
 
-	// Crawl phase counters
-	CrawlTotal  int64 `json:"crawl_total"`
-	CrawlDone   int64 `json:"crawl_done"`
-	CrawlErrors int64 `json:"crawl_errors"`
+	// Task-level tracking (for completion check)
+	// Mỗi response từ Crawler = 1 task
+	TasksTotal  int64 `json:"tasks_total"`  // Số tasks dispatch (keywords × platforms)
+	TasksDone   int64 `json:"tasks_done"`   // Số tasks hoàn thành
+	TasksErrors int64 `json:"tasks_errors"` // Số tasks failed
 
-	// Analyze phase counters
+	// Item-level tracking (for progress display)
+	// Số items thực tế crawl được từ platform
+	ItemsExpected int64 `json:"items_expected"` // tasks × limit_per_keyword
+	ItemsActual   int64 `json:"items_actual"`   // Số items crawl thành công
+	ItemsErrors   int64 `json:"items_errors"`   // Số items crawl thất bại
+
+	// Analyze phase counters (unchanged)
 	AnalyzeTotal  int64 `json:"analyze_total"`
 	AnalyzeDone   int64 `json:"analyze_done"`
 	AnalyzeErrors int64 `json:"analyze_errors"`
+
+	// Legacy fields (for backward compatibility)
+	// Deprecated: Use TasksTotal, TasksDone, TasksErrors instead
+	CrawlTotal  int64 `json:"crawl_total"`
+	CrawlDone   int64 `json:"crawl_done"`
+	CrawlErrors int64 `json:"crawl_errors"`
 }
 
 // IsCrawlComplete kiểm tra crawl phase đã hoàn thành chưa.
+// Dựa trên TASK-level để đảm bảo tất cả tasks đã được xử lý.
 func (s *ProjectState) IsCrawlComplete() bool {
+	// Prefer task-level if available
+	if s.TasksTotal > 0 {
+		return (s.TasksDone + s.TasksErrors) >= s.TasksTotal
+	}
+	// Fallback to legacy crawl fields
 	return s.CrawlTotal > 0 && (s.CrawlDone+s.CrawlErrors) >= s.CrawlTotal
 }
 
@@ -129,11 +148,38 @@ func (s *ProjectState) IsComplete() bool {
 }
 
 // CrawlProgressPercent tính phần trăm tiến độ crawl phase.
+// Dựa trên ITEM-level để hiển thị chính xác hơn cho user.
+// Fallback về task-level nếu items không được track.
 func (s *ProjectState) CrawlProgressPercent() float64 {
-	if s.CrawlTotal <= 0 {
+	// Prefer item-level for more accurate progress
+	if s.ItemsExpected > 0 {
+		return float64(s.ItemsActual+s.ItemsErrors) / float64(s.ItemsExpected) * 100
+	}
+	// Fallback to task-level
+	if s.TasksTotal > 0 {
+		return float64(s.TasksDone+s.TasksErrors) / float64(s.TasksTotal) * 100
+	}
+	// Legacy fallback
+	if s.CrawlTotal > 0 {
+		return float64(s.CrawlDone+s.CrawlErrors) / float64(s.CrawlTotal) * 100
+	}
+	return 0
+}
+
+// TasksProgressPercent tính phần trăm tiến độ dựa trên task-level.
+func (s *ProjectState) TasksProgressPercent() float64 {
+	if s.TasksTotal <= 0 {
 		return 0
 	}
-	return float64(s.CrawlDone+s.CrawlErrors) / float64(s.CrawlTotal) * 100
+	return float64(s.TasksDone+s.TasksErrors) / float64(s.TasksTotal) * 100
+}
+
+// ItemsProgressPercent tính phần trăm tiến độ dựa trên item-level.
+func (s *ProjectState) ItemsProgressPercent() float64 {
+	if s.ItemsExpected <= 0 {
+		return 0
+	}
+	return float64(s.ItemsActual+s.ItemsErrors) / float64(s.ItemsExpected) * 100
 }
 
 // AnalyzeProgressPercent tính phần trăm tiến độ analyze phase.
@@ -144,7 +190,8 @@ func (s *ProjectState) AnalyzeProgressPercent() float64 {
 	return float64(s.AnalyzeDone+s.AnalyzeErrors) / float64(s.AnalyzeTotal) * 100
 }
 
-// OverallProgressPercent tính phần trăm tiến độ tổng thể (trung bình 2 phases).
+// OverallProgressPercent tính phần trăm tiến độ tổng thể.
+// Sử dụng item-level cho crawl progress nếu có, fallback về task-level.
 func (s *ProjectState) OverallProgressPercent() float64 {
 	crawlProgress := s.CrawlProgressPercent()
 	analyzeProgress := s.AnalyzeProgressPercent()
@@ -155,11 +202,18 @@ func (s *ProjectState) OverallProgressPercent() float64 {
 func NewProjectState() ProjectState {
 	return ProjectState{
 		Status:        ProjectStatusInitializing,
-		CrawlTotal:    0,
-		CrawlDone:     0,
-		CrawlErrors:   0,
+		TasksTotal:    0,
+		TasksDone:     0,
+		TasksErrors:   0,
+		ItemsExpected: 0,
+		ItemsActual:   0,
+		ItemsErrors:   0,
 		AnalyzeTotal:  0,
 		AnalyzeDone:   0,
 		AnalyzeErrors: 0,
+		// Legacy fields
+		CrawlTotal:  0,
+		CrawlDone:   0,
+		CrawlErrors: 0,
 	}
 }

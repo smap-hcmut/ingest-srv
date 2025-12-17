@@ -1,6 +1,7 @@
 package usecase
 
 import (
+	"smap-collector/config"
 	"smap-collector/internal/dispatcher"
 	"smap-collector/internal/dispatcher/delivery/rabbitmq/producer"
 	"smap-collector/internal/models"
@@ -17,11 +18,14 @@ type implUseCase struct {
 	// Optional dependencies for event-driven architecture
 	stateUC   state.UseCase
 	webhookUC webhook.UseCase
+
+	// Crawl limits configuration (for config-driven limits)
+	crawlLimitsCfg config.CrawlLimitsConfig
 }
 
 // NewUseCase creates a new dispatcher usecase (legacy mode without state/webhook).
 func NewUseCase(l log.Logger, prod producer.Producer, opts dispatcher.Options) dispatcher.UseCase {
-	return NewUseCaseWithDeps(l, prod, opts, nil, nil)
+	return NewUseCaseWithDeps(l, prod, opts, nil, nil, config.CrawlLimitsConfig{})
 }
 
 // NewUseCaseWithDeps creates a new dispatcher usecase with optional state and webhook dependencies.
@@ -31,6 +35,7 @@ func NewUseCaseWithDeps(
 	opts dispatcher.Options,
 	stateUC state.UseCase,
 	webhookUC webhook.UseCase,
+	crawlLimitsCfg config.CrawlLimitsConfig,
 ) dispatcher.UseCase {
 	if l == nil || prod == nil {
 		return nil
@@ -49,11 +54,29 @@ func NewUseCaseWithDeps(
 		}
 	}
 
+	// Set default crawl limits if not provided
+	if crawlLimitsCfg.DefaultLimitPerKeyword == 0 {
+		crawlLimitsCfg.DefaultLimitPerKeyword = 50
+	}
+	if crawlLimitsCfg.DefaultMaxComments == 0 {
+		crawlLimitsCfg.DefaultMaxComments = 100
+	}
+	if crawlLimitsCfg.DefaultMaxAttempts == 0 {
+		crawlLimitsCfg.DefaultMaxAttempts = 3
+	}
+	if crawlLimitsCfg.DryRunLimitPerKeyword == 0 {
+		crawlLimitsCfg.DryRunLimitPerKeyword = 3
+	}
+	if crawlLimitsCfg.DryRunMaxComments == 0 {
+		crawlLimitsCfg.DryRunMaxComments = 5
+	}
+
 	return &implUseCase{
 		l:              l,
 		prod:           prod,
 		defaultOptions: opts,
 		stateUC:        stateUC,
 		webhookUC:      webhookUC,
+		crawlLimitsCfg: crawlLimitsCfg,
 	}
 }

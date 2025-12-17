@@ -34,7 +34,7 @@ func (srv *Server) Run(ctx context.Context) error {
 	stateRepo := stateRedis.NewRedisRepository(srv.l, srv.cfg.RedisClient)
 	stateUC := stateUsecase.NewUseCase(srv.l, stateRepo, srv.cfg.StateOptions)
 	webhookUC := webhookUsecase.NewUseCase(srv.l, projectClient)
-	dispatcherUC := dispatcherUsecase.NewUseCaseWithDeps(srv.l, prod, srv.cfg.DispatcherOptions, stateUC, webhookUC)
+	dispatcherUC := dispatcherUsecase.NewUseCaseWithDeps(srv.l, prod, srv.cfg.DispatcherOptions, stateUC, webhookUC, srv.cfg.CrawlLimitsConfig)
 	resultsUC := resultsUsecase.NewUseCase(srv.l, projectClient, stateUC, webhookUC)
 	dispatchC := dispatcherConsumer.NewConsumer(srv.l, srv.conn, dispatcherUC)
 	resultsC := resultsConsumer.NewConsumer(srv.l, srv.conn, resultsUC)

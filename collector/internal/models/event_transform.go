@@ -2,6 +2,7 @@ package models
 
 import (
 	"fmt"
+	"smap-collector/config"
 	"time"
 
 	"github.com/google/uuid"
@@ -87,6 +88,7 @@ type TransformOptions struct {
 }
 
 // DefaultTransformOptions trả về options mặc định.
+// Deprecated: Use NewTransformOptionsFromConfig() instead để tránh hardcode.
 func DefaultTransformOptions() TransformOptions {
 	return TransformOptions{
 		MaxAttempts:     3,
@@ -94,6 +96,54 @@ func DefaultTransformOptions() TransformOptions {
 		IncludeComments: true,
 		MaxComments:     100,
 		DownloadMedia:   false,
+	}
+}
+
+// NewTransformOptionsFromConfig tạo TransformOptions từ config.
+// Thay thế DefaultTransformOptions() để tránh hardcode values.
+// Áp dụng hard limits để đảm bảo không vượt quá giới hạn an toàn.
+func NewTransformOptionsFromConfig(cfg config.CrawlLimitsConfig) TransformOptions {
+	limitPerKeyword := cfg.DefaultLimitPerKeyword
+	maxComments := cfg.DefaultMaxComments
+
+	// Apply hard limits (safety caps)
+	if limitPerKeyword > cfg.MaxLimitPerKeyword {
+		limitPerKeyword = cfg.MaxLimitPerKeyword
+	}
+	if maxComments > cfg.MaxMaxComments {
+		maxComments = cfg.MaxMaxComments
+	}
+
+	return TransformOptions{
+		MaxAttempts:     cfg.DefaultMaxAttempts,
+		LimitPerKeyword: limitPerKeyword,
+		IncludeComments: cfg.IncludeComments,
+		MaxComments:     maxComments,
+		DownloadMedia:   cfg.DownloadMedia,
+	}
+}
+
+// NewDryRunOptionsFromConfig tạo TransformOptions cho dry-run từ config.
+// Dry-run sử dụng limits thấp hơn để test nhanh.
+// DownloadMedia luôn false trong dry-run để tiết kiệm resources.
+func NewDryRunOptionsFromConfig(cfg config.CrawlLimitsConfig) TransformOptions {
+	limitPerKeyword := cfg.DryRunLimitPerKeyword
+	maxComments := cfg.DryRunMaxComments
+
+	// Apply hard limits (safety caps)
+	if limitPerKeyword > cfg.MaxLimitPerKeyword {
+		limitPerKeyword = cfg.MaxLimitPerKeyword
+	}
+	if maxComments > cfg.MaxMaxComments {
+		maxComments = cfg.MaxMaxComments
+	}
+
+	return TransformOptions{
+		MaxAttempts:     cfg.DefaultMaxAttempts,
+		LimitPerKeyword: limitPerKeyword,
+		IncludeComments: cfg.IncludeComments,
+		MaxComments:     maxComments,
+		DownloadMedia:   false, // Never download media in dry-run
 	}
 }
 

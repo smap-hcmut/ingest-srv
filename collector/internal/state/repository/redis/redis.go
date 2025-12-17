@@ -9,7 +9,7 @@ import (
 	"smap-collector/internal/state"
 )
 
-// InitState khởi tạo state mới trong Redis với two-phase counters.
+// InitState khởi tạo state mới trong Redis với hybrid counters.
 func (r *redisRepository) InitState(ctx context.Context, key string, s models.ProjectState, ttl time.Duration) error {
 	// Set status
 	if err := r.client.HSet(ctx, key, state.FieldStatus, string(s.Status)); err != nil {
@@ -17,17 +17,31 @@ func (r *redisRepository) InitState(ctx context.Context, key string, s models.Pr
 		return ErrHSetFailed
 	}
 
-	// Set crawl phase fields
-	if err := r.client.HSet(ctx, key, state.FieldCrawlTotal, s.CrawlTotal); err != nil {
-		r.l.Errorf(ctx, "internal.state.repository.redis.InitState: HSet crawl_total error: %v", err)
+	// Set task-level fields (for completion check)
+	if err := r.client.HSet(ctx, key, state.FieldTasksTotal, s.TasksTotal); err != nil {
+		r.l.Errorf(ctx, "internal.state.repository.redis.InitState: HSet tasks_total error: %v", err)
 		return ErrHSetFailed
 	}
-	if err := r.client.HSet(ctx, key, state.FieldCrawlDone, s.CrawlDone); err != nil {
-		r.l.Errorf(ctx, "internal.state.repository.redis.InitState: HSet crawl_done error: %v", err)
+	if err := r.client.HSet(ctx, key, state.FieldTasksDone, s.TasksDone); err != nil {
+		r.l.Errorf(ctx, "internal.state.repository.redis.InitState: HSet tasks_done error: %v", err)
 		return ErrHSetFailed
 	}
-	if err := r.client.HSet(ctx, key, state.FieldCrawlErrors, s.CrawlErrors); err != nil {
-		r.l.Errorf(ctx, "internal.state.repository.redis.InitState: HSet crawl_errors error: %v", err)
+	if err := r.client.HSet(ctx, key, state.FieldTasksErrors, s.TasksErrors); err != nil {
+		r.l.Errorf(ctx, "internal.state.repository.redis.InitState: HSet tasks_errors error: %v", err)
+		return ErrHSetFailed
+	}
+
+	// Set item-level fields (for progress display)
+	if err := r.client.HSet(ctx, key, state.FieldItemsExpected, s.ItemsExpected); err != nil {
+		r.l.Errorf(ctx, "internal.state.repository.redis.InitState: HSet items_expected error: %v", err)
+		return ErrHSetFailed
+	}
+	if err := r.client.HSet(ctx, key, state.FieldItemsActual, s.ItemsActual); err != nil {
+		r.l.Errorf(ctx, "internal.state.repository.redis.InitState: HSet items_actual error: %v", err)
+		return ErrHSetFailed
+	}
+	if err := r.client.HSet(ctx, key, state.FieldItemsErrors, s.ItemsErrors); err != nil {
+		r.l.Errorf(ctx, "internal.state.repository.redis.InitState: HSet items_errors error: %v", err)
 		return ErrHSetFailed
 	}
 
@@ -45,6 +59,20 @@ func (r *redisRepository) InitState(ctx context.Context, key string, s models.Pr
 		return ErrHSetFailed
 	}
 
+	// Set legacy crawl phase fields (for backward compatibility)
+	if err := r.client.HSet(ctx, key, state.FieldCrawlTotal, s.CrawlTotal); err != nil {
+		r.l.Errorf(ctx, "internal.state.repository.redis.InitState: HSet crawl_total error: %v", err)
+		return ErrHSetFailed
+	}
+	if err := r.client.HSet(ctx, key, state.FieldCrawlDone, s.CrawlDone); err != nil {
+		r.l.Errorf(ctx, "internal.state.repository.redis.InitState: HSet crawl_done error: %v", err)
+		return ErrHSetFailed
+	}
+	if err := r.client.HSet(ctx, key, state.FieldCrawlErrors, s.CrawlErrors); err != nil {
+		r.l.Errorf(ctx, "internal.state.repository.redis.InitState: HSet crawl_errors error: %v", err)
+		return ErrHSetFailed
+	}
+
 	if err := r.client.Expire(ctx, key, int(ttl.Seconds())); err != nil {
 		r.l.Errorf(ctx, "internal.state.repository.redis.InitState: Expire error: %v", err)
 		return ErrExpireFailed
@@ -53,7 +81,7 @@ func (r *redisRepository) InitState(ctx context.Context, key string, s models.Pr
 	return nil
 }
 
-// GetState lấy state từ Redis với two-phase counters.
+// GetState lấy state từ Redis với hybrid counters.
 func (r *redisRepository) GetState(ctx context.Context, key string) (*models.ProjectState, error) {
 	data, err := r.client.HGetAll(ctx, key)
 	if err != nil {
@@ -69,15 +97,26 @@ func (r *redisRepository) GetState(ctx context.Context, key string) (*models.Pro
 		Status: models.ProjectStatus(data[state.FieldStatus]),
 	}
 
-	// Parse crawl phase fields
-	if crawlTotal, err := strconv.ParseInt(data[state.FieldCrawlTotal], 10, 64); err == nil {
-		s.CrawlTotal = crawlTotal
+	// Parse task-level fields (for completion check)
+	if tasksTotal, err := strconv.ParseInt(data[state.FieldTasksTotal], 10, 64); err == nil {
+		s.TasksTotal = tasksTotal
 	}
-	if crawlDone, err := strconv.ParseInt(data[state.FieldCrawlDone], 10, 64); err == nil {
-		s.CrawlDone = crawlDone
+	if tasksDone, err := strconv.ParseInt(data[state.FieldTasksDone], 10, 64); err == nil {
+		s.TasksDone = tasksDone
 	}
-	if crawlErrors, err := strconv.ParseInt(data[state.FieldCrawlErrors], 10, 64); err == nil {
-		s.CrawlErrors = crawlErrors
+	if tasksErrors, err := strconv.ParseInt(data[state.FieldTasksErrors], 10, 64); err == nil {
+		s.TasksErrors = tasksErrors
+	}
+
+	// Parse item-level fields (for progress display)
+	if itemsExpected, err := strconv.ParseInt(data[state.FieldItemsExpected], 10, 64); err == nil {
+		s.ItemsExpected = itemsExpected
+	}
+	if itemsActual, err := strconv.ParseInt(data[state.FieldItemsActual], 10, 64); err == nil {
+		s.ItemsActual = itemsActual
+	}
+	if itemsErrors, err := strconv.ParseInt(data[state.FieldItemsErrors], 10, 64); err == nil {
+		s.ItemsErrors = itemsErrors
 	}
 
 	// Parse analyze phase fields
@@ -89,6 +128,17 @@ func (r *redisRepository) GetState(ctx context.Context, key string) (*models.Pro
 	}
 	if analyzeErrors, err := strconv.ParseInt(data[state.FieldAnalyzeErrors], 10, 64); err == nil {
 		s.AnalyzeErrors = analyzeErrors
+	}
+
+	// Parse legacy crawl phase fields (for backward compatibility)
+	if crawlTotal, err := strconv.ParseInt(data[state.FieldCrawlTotal], 10, 64); err == nil {
+		s.CrawlTotal = crawlTotal
+	}
+	if crawlDone, err := strconv.ParseInt(data[state.FieldCrawlDone], 10, 64); err == nil {
+		s.CrawlDone = crawlDone
+	}
+	if crawlErrors, err := strconv.ParseInt(data[state.FieldCrawlErrors], 10, 64); err == nil {
+		s.CrawlErrors = crawlErrors
 	}
 
 	return s, nil

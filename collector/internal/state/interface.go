@@ -13,19 +13,49 @@ type UseCase interface {
 	InitState(ctx context.Context, projectID string) error
 
 	// ============================================================================
-	// Crawl Phase Methods
+	// Task-Level Methods (for completion check)
+	// ============================================================================
+
+	// SetTasksTotal set tổng số tasks và items expected, chuyển status sang PROCESSING.
+	// tasksTotal = số tasks dispatch (keywords × platforms)
+	// itemsExpected = tasksTotal × limitPerKeyword
+	SetTasksTotal(ctx context.Context, projectID string, tasksTotal, itemsExpected int64) error
+
+	// IncrementTasksDone tăng counter tasks_done lên 1.
+	// Được gọi khi nhận response thành công từ Crawler.
+	IncrementTasksDone(ctx context.Context, projectID string) error
+
+	// IncrementTasksErrors tăng counter tasks_errors lên 1.
+	// Được gọi khi nhận response thất bại từ Crawler.
+	IncrementTasksErrors(ctx context.Context, projectID string) error
+
+	// ============================================================================
+	// Item-Level Methods (for progress display)
+	// ============================================================================
+
+	// IncrementItemsActualBy tăng counter items_actual lên N.
+	// Được gọi với stats.successful từ Crawler response.
+	IncrementItemsActualBy(ctx context.Context, projectID string, count int64) error
+
+	// IncrementItemsErrorsBy tăng counter items_errors lên N.
+	// Được gọi với stats.failed từ Crawler response.
+	IncrementItemsErrorsBy(ctx context.Context, projectID string, count int64) error
+
+	// ============================================================================
+	// Legacy Crawl Phase Methods (for backward compatibility)
+	// Deprecated: Use task-level and item-level methods instead
 	// ============================================================================
 
 	// SetCrawlTotal set tổng số items cần crawl và chuyển status sang PROCESSING.
-	// Được gọi khi Collector xác định được tổng số tasks.
+	// Deprecated: Use SetTasksTotal instead.
 	SetCrawlTotal(ctx context.Context, projectID string, total int64) error
 
 	// IncrementCrawlDoneBy tăng counter crawl_done lên N.
-	// Được gọi sau mỗi batch crawl thành công.
+	// Deprecated: Use IncrementTasksDone and IncrementItemsActualBy instead.
 	IncrementCrawlDoneBy(ctx context.Context, projectID string, count int64) error
 
 	// IncrementCrawlErrorsBy tăng counter crawl_errors lên N.
-	// Được gọi sau mỗi batch crawl thất bại.
+	// Deprecated: Use IncrementTasksErrors and IncrementItemsErrorsBy instead.
 	IncrementCrawlErrorsBy(ctx context.Context, projectID string, count int64) error
 
 	// ============================================================================

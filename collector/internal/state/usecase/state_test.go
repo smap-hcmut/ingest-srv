@@ -493,3 +493,358 @@ func TestGetUserID(t *testing.T) {
 		}
 	})
 }
+
+// ============================================================================
+// Tests for Task-Level Methods (Phase 8.2.1)
+// ============================================================================
+
+func TestSetTasksTotal(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("success", func(t *testing.T) {
+		var capturedFields map[string]any
+		mockRepo := &mockStateRepository{
+			setFieldsFunc: func(ctx context.Context, key string, fields map[string]any) error {
+				capturedFields = fields
+				return nil
+			},
+		}
+
+		uc := NewUseCase(&mockLogger{}, mockRepo, state.Options{TTL: time.Hour})
+
+		err := uc.SetTasksTotal(ctx, "proj_1", 10, 500)
+		if err != nil {
+			t.Errorf("expected no error, got %v", err)
+		}
+
+		// Verify fields were set correctly
+		if capturedFields[state.FieldTasksTotal] != int64(10) {
+			t.Errorf("expected tasks_total=10, got %v", capturedFields[state.FieldTasksTotal])
+		}
+		if capturedFields[state.FieldItemsExpected] != int64(500) {
+			t.Errorf("expected items_expected=500, got %v", capturedFields[state.FieldItemsExpected])
+		}
+		if capturedFields[state.FieldStatus] != string(models.ProjectStatusProcessing) {
+			t.Errorf("expected status=PROCESSING, got %v", capturedFields[state.FieldStatus])
+		}
+	})
+
+	t.Run("error - empty project ID", func(t *testing.T) {
+		mockRepo := &mockStateRepository{}
+		uc := NewUseCase(&mockLogger{}, mockRepo, state.Options{TTL: time.Hour})
+
+		err := uc.SetTasksTotal(ctx, "", 10, 500)
+		if err != state.ErrInvalidProjectID {
+			t.Errorf("expected ErrInvalidProjectID, got %v", err)
+		}
+	})
+
+	t.Run("error - negative total", func(t *testing.T) {
+		mockRepo := &mockStateRepository{}
+		uc := NewUseCase(&mockLogger{}, mockRepo, state.Options{TTL: time.Hour})
+
+		err := uc.SetTasksTotal(ctx, "proj_1", -1, 500)
+		if err != state.ErrInvalidTotal {
+			t.Errorf("expected ErrInvalidTotal, got %v", err)
+		}
+	})
+}
+
+func TestIncrementTasksDone(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("success", func(t *testing.T) {
+		var capturedField string
+		var capturedDelta int64
+		mockRepo := &mockStateRepository{
+			incrementFieldFunc: func(ctx context.Context, key, field string, delta int64) (int64, error) {
+				capturedField = field
+				capturedDelta = delta
+				return 5, nil
+			},
+		}
+
+		uc := NewUseCase(&mockLogger{}, mockRepo, state.Options{TTL: time.Hour})
+
+		err := uc.IncrementTasksDone(ctx, "proj_1")
+		if err != nil {
+			t.Errorf("expected no error, got %v", err)
+		}
+		if capturedField != state.FieldTasksDone {
+			t.Errorf("expected field=%s, got %s", state.FieldTasksDone, capturedField)
+		}
+		if capturedDelta != 1 {
+			t.Errorf("expected delta=1, got %d", capturedDelta)
+		}
+	})
+
+	t.Run("error - empty project ID", func(t *testing.T) {
+		mockRepo := &mockStateRepository{}
+		uc := NewUseCase(&mockLogger{}, mockRepo, state.Options{TTL: time.Hour})
+
+		err := uc.IncrementTasksDone(ctx, "")
+		if err != state.ErrInvalidProjectID {
+			t.Errorf("expected ErrInvalidProjectID, got %v", err)
+		}
+	})
+}
+
+func TestIncrementTasksErrors(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("success", func(t *testing.T) {
+		var capturedField string
+		var capturedDelta int64
+		mockRepo := &mockStateRepository{
+			incrementFieldFunc: func(ctx context.Context, key, field string, delta int64) (int64, error) {
+				capturedField = field
+				capturedDelta = delta
+				return 2, nil
+			},
+		}
+
+		uc := NewUseCase(&mockLogger{}, mockRepo, state.Options{TTL: time.Hour})
+
+		err := uc.IncrementTasksErrors(ctx, "proj_1")
+		if err != nil {
+			t.Errorf("expected no error, got %v", err)
+		}
+		if capturedField != state.FieldTasksErrors {
+			t.Errorf("expected field=%s, got %s", state.FieldTasksErrors, capturedField)
+		}
+		if capturedDelta != 1 {
+			t.Errorf("expected delta=1, got %d", capturedDelta)
+		}
+	})
+
+	t.Run("error - empty project ID", func(t *testing.T) {
+		mockRepo := &mockStateRepository{}
+		uc := NewUseCase(&mockLogger{}, mockRepo, state.Options{TTL: time.Hour})
+
+		err := uc.IncrementTasksErrors(ctx, "")
+		if err != state.ErrInvalidProjectID {
+			t.Errorf("expected ErrInvalidProjectID, got %v", err)
+		}
+	})
+}
+
+func TestIncrementItemsActualBy(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("success", func(t *testing.T) {
+		incrementCalls := make(map[string]int64)
+		mockRepo := &mockStateRepository{
+			incrementFieldFunc: func(ctx context.Context, key, field string, delta int64) (int64, error) {
+				incrementCalls[field] = delta
+				return 50, nil
+			},
+		}
+
+		uc := NewUseCase(&mockLogger{}, mockRepo, state.Options{TTL: time.Hour})
+
+		err := uc.IncrementItemsActualBy(ctx, "proj_1", 10)
+		if err != nil {
+			t.Errorf("expected no error, got %v", err)
+		}
+		if incrementCalls[state.FieldItemsActual] != 10 {
+			t.Errorf("expected items_actual delta=10, got %d", incrementCalls[state.FieldItemsActual])
+		}
+		// Also check legacy field is updated
+		if incrementCalls[state.FieldCrawlDone] != 10 {
+			t.Errorf("expected crawl_done delta=10, got %d", incrementCalls[state.FieldCrawlDone])
+		}
+	})
+
+	t.Run("skip - zero count", func(t *testing.T) {
+		mockRepo := &mockStateRepository{
+			incrementFieldFunc: func(ctx context.Context, key, field string, delta int64) (int64, error) {
+				t.Error("should not call incrementField for zero count")
+				return 0, nil
+			},
+		}
+
+		uc := NewUseCase(&mockLogger{}, mockRepo, state.Options{TTL: time.Hour})
+
+		err := uc.IncrementItemsActualBy(ctx, "proj_1", 0)
+		if err != nil {
+			t.Errorf("expected no error, got %v", err)
+		}
+	})
+
+	t.Run("skip - negative count", func(t *testing.T) {
+		mockRepo := &mockStateRepository{
+			incrementFieldFunc: func(ctx context.Context, key, field string, delta int64) (int64, error) {
+				t.Error("should not call incrementField for negative count")
+				return 0, nil
+			},
+		}
+
+		uc := NewUseCase(&mockLogger{}, mockRepo, state.Options{TTL: time.Hour})
+
+		err := uc.IncrementItemsActualBy(ctx, "proj_1", -5)
+		if err != nil {
+			t.Errorf("expected no error, got %v", err)
+		}
+	})
+
+	t.Run("error - empty project ID", func(t *testing.T) {
+		mockRepo := &mockStateRepository{}
+		uc := NewUseCase(&mockLogger{}, mockRepo, state.Options{TTL: time.Hour})
+
+		err := uc.IncrementItemsActualBy(ctx, "", 10)
+		if err != state.ErrInvalidProjectID {
+			t.Errorf("expected ErrInvalidProjectID, got %v", err)
+		}
+	})
+}
+
+func TestIncrementItemsErrorsBy(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("success", func(t *testing.T) {
+		incrementCalls := make(map[string]int64)
+		mockRepo := &mockStateRepository{
+			incrementFieldFunc: func(ctx context.Context, key, field string, delta int64) (int64, error) {
+				incrementCalls[field] = delta
+				return 5, nil
+			},
+		}
+
+		uc := NewUseCase(&mockLogger{}, mockRepo, state.Options{TTL: time.Hour})
+
+		err := uc.IncrementItemsErrorsBy(ctx, "proj_1", 3)
+		if err != nil {
+			t.Errorf("expected no error, got %v", err)
+		}
+		if incrementCalls[state.FieldItemsErrors] != 3 {
+			t.Errorf("expected items_errors delta=3, got %d", incrementCalls[state.FieldItemsErrors])
+		}
+		// Also check legacy field is updated
+		if incrementCalls[state.FieldCrawlErrors] != 3 {
+			t.Errorf("expected crawl_errors delta=3, got %d", incrementCalls[state.FieldCrawlErrors])
+		}
+	})
+
+	t.Run("skip - zero count", func(t *testing.T) {
+		mockRepo := &mockStateRepository{
+			incrementFieldFunc: func(ctx context.Context, key, field string, delta int64) (int64, error) {
+				t.Error("should not call incrementField for zero count")
+				return 0, nil
+			},
+		}
+
+		uc := NewUseCase(&mockLogger{}, mockRepo, state.Options{TTL: time.Hour})
+
+		err := uc.IncrementItemsErrorsBy(ctx, "proj_1", 0)
+		if err != nil {
+			t.Errorf("expected no error, got %v", err)
+		}
+	})
+
+	t.Run("error - empty project ID", func(t *testing.T) {
+		mockRepo := &mockStateRepository{}
+		uc := NewUseCase(&mockLogger{}, mockRepo, state.Options{TTL: time.Hour})
+
+		err := uc.IncrementItemsErrorsBy(ctx, "", 3)
+		if err != state.ErrInvalidProjectID {
+			t.Errorf("expected ErrInvalidProjectID, got %v", err)
+		}
+	})
+}
+
+func TestCheckCompletion_HybridState(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("complete - task-level based", func(t *testing.T) {
+		completeState := &models.ProjectState{
+			Status:        models.ProjectStatusProcessing,
+			TasksTotal:    10,
+			TasksDone:     10,
+			TasksErrors:   0,
+			ItemsExpected: 500,
+			ItemsActual:   450,
+			ItemsErrors:   50,
+			AnalyzeTotal:  450,
+			AnalyzeDone:   450,
+			AnalyzeErrors: 0,
+		}
+		mockRepo := &mockStateRepository{
+			getStateFunc: func(ctx context.Context, key string) (*models.ProjectState, error) {
+				return completeState, nil
+			},
+			setFieldFunc: func(ctx context.Context, key, field string, value any) error {
+				return nil
+			},
+		}
+
+		uc := NewUseCase(&mockLogger{}, mockRepo, state.Options{TTL: time.Hour})
+
+		completed, err := uc.CheckCompletion(ctx, "proj_1")
+		if err != nil {
+			t.Errorf("expected no error, got %v", err)
+		}
+		if !completed {
+			t.Error("expected completed to be true")
+		}
+	})
+
+	t.Run("not complete - tasks not done", func(t *testing.T) {
+		incompleteState := &models.ProjectState{
+			Status:        models.ProjectStatusProcessing,
+			TasksTotal:    10,
+			TasksDone:     5,
+			TasksErrors:   0,
+			ItemsExpected: 500,
+			ItemsActual:   250,
+			ItemsErrors:   0,
+			AnalyzeTotal:  250,
+			AnalyzeDone:   250,
+			AnalyzeErrors: 0,
+		}
+		mockRepo := &mockStateRepository{
+			getStateFunc: func(ctx context.Context, key string) (*models.ProjectState, error) {
+				return incompleteState, nil
+			},
+		}
+
+		uc := NewUseCase(&mockLogger{}, mockRepo, state.Options{TTL: time.Hour})
+
+		completed, err := uc.CheckCompletion(ctx, "proj_1")
+		if err != nil {
+			t.Errorf("expected no error, got %v", err)
+		}
+		if completed {
+			t.Error("expected completed to be false")
+		}
+	})
+
+	t.Run("not complete - analyze not done", func(t *testing.T) {
+		incompleteState := &models.ProjectState{
+			Status:        models.ProjectStatusProcessing,
+			TasksTotal:    10,
+			TasksDone:     10,
+			TasksErrors:   0,
+			ItemsExpected: 500,
+			ItemsActual:   500,
+			ItemsErrors:   0,
+			AnalyzeTotal:  500,
+			AnalyzeDone:   250,
+			AnalyzeErrors: 0,
+		}
+		mockRepo := &mockStateRepository{
+			getStateFunc: func(ctx context.Context, key string) (*models.ProjectState, error) {
+				return incompleteState, nil
+			},
+		}
+
+		uc := NewUseCase(&mockLogger{}, mockRepo, state.Options{TTL: time.Hour})
+
+		completed, err := uc.CheckCompletion(ctx, "proj_1")
+		if err != nil {
+			t.Errorf("expected no error, got %v", err)
+		}
+		if completed {
+			t.Error("expected completed to be false")
+		}
+	})
+}

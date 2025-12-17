@@ -98,8 +98,9 @@ func (uc implUseCase) handleDryRunResult(ctx context.Context, res models.Crawler
 	return nil
 }
 
-// handleProjectResult handles project execution results by updating state and sending progress webhook
-// Two-phase state: updates crawl counters and auto-increments analyze_total for successful crawls
+// handleProjectResult handles project execution results by updating state and sending progress webhook.
+// Hybrid state: updates task-level (completion) and item-level (progress) counters.
+// Supports enhanced Crawler response with limit_info and stats, with fallback to old format.
 func (uc implUseCase) handleProjectResult(ctx context.Context, res models.CrawlerResult) error {
 	uc.l.Infof(ctx, "results.usecase.result.handleProjectResult: handling project execution result")
 
@@ -110,33 +111,56 @@ func (uc implUseCase) handleProjectResult(ctx context.Context, res models.Crawle
 		return fmt.Errorf("%w: %v", results.ErrInvalidInput, err)
 	}
 
-	// Count items in batch (for batch increment)
-	itemCount := uc.countBatchItems(ctx, res.Payload)
-	if itemCount == 0 {
-		itemCount = 1 // Default to 1 if can't determine batch size
-	}
+	// Extract limit_info and stats from enhanced response (with fallback)
+	limitInfo, stats := uc.extractLimitInfoAndStats(ctx, res)
 
-	// Update crawl state based on result success/failure
+	// =========================================================================
+	// STEP 1: Update task-level counter (always 1 per response)
+	// =========================================================================
 	if res.Success {
-		// Increment crawl_done
-		if err := uc.stateUC.IncrementCrawlDoneBy(ctx, projectID, int64(itemCount)); err != nil {
-			uc.l.Errorf(ctx, "results.usecase.result.handleProjectResult: failed to increment crawl_done: project_id=%s, count=%d, error=%v", projectID, itemCount, err)
-			return fmt.Errorf("%w: %v", results.ErrTemporary, err)
-		}
-		// Auto-increment analyze_total (each successful crawl = 1 item to analyze)
-		if err := uc.stateUC.IncrementAnalyzeTotalBy(ctx, projectID, int64(itemCount)); err != nil {
-			uc.l.Errorf(ctx, "results.usecase.result.handleProjectResult: failed to increment analyze_total: project_id=%s, count=%d, error=%v", projectID, itemCount, err)
+		if err := uc.stateUC.IncrementTasksDone(ctx, projectID); err != nil {
+			uc.l.Errorf(ctx, "results.usecase.result.handleProjectResult: failed to increment tasks_done: project_id=%s, error=%v", projectID, err)
 			return fmt.Errorf("%w: %v", results.ErrTemporary, err)
 		}
 	} else {
-		// Increment crawl_errors
-		if err := uc.stateUC.IncrementCrawlErrorsBy(ctx, projectID, int64(itemCount)); err != nil {
-			uc.l.Errorf(ctx, "results.usecase.result.handleProjectResult: failed to increment crawl_errors: project_id=%s, count=%d, error=%v", projectID, itemCount, err)
+		if err := uc.stateUC.IncrementTasksErrors(ctx, projectID); err != nil {
+			uc.l.Errorf(ctx, "results.usecase.result.handleProjectResult: failed to increment tasks_errors: project_id=%s, error=%v", projectID, err)
 			return fmt.Errorf("%w: %v", results.ErrTemporary, err)
 		}
 	}
 
-	// Get current state for progress notification
+	// =========================================================================
+	// STEP 2: Update item-level counters (from stats)
+	// =========================================================================
+	if stats.Successful > 0 {
+		if err := uc.stateUC.IncrementItemsActualBy(ctx, projectID, int64(stats.Successful)); err != nil {
+			uc.l.Errorf(ctx, "results.usecase.result.handleProjectResult: failed to increment items_actual: project_id=%s, count=%d, error=%v", projectID, stats.Successful, err)
+			return fmt.Errorf("%w: %v", results.ErrTemporary, err)
+		}
+		// Auto-increment analyze_total (each successful item = 1 item to analyze)
+		if err := uc.stateUC.IncrementAnalyzeTotalBy(ctx, projectID, int64(stats.Successful)); err != nil {
+			uc.l.Errorf(ctx, "results.usecase.result.handleProjectResult: failed to increment analyze_total: project_id=%s, count=%d, error=%v", projectID, stats.Successful, err)
+			return fmt.Errorf("%w: %v", results.ErrTemporary, err)
+		}
+	}
+	if stats.Failed > 0 {
+		if err := uc.stateUC.IncrementItemsErrorsBy(ctx, projectID, int64(stats.Failed)); err != nil {
+			uc.l.Errorf(ctx, "results.usecase.result.handleProjectResult: failed to increment items_errors: project_id=%s, count=%d, error=%v", projectID, stats.Failed, err)
+			return fmt.Errorf("%w: %v", results.ErrTemporary, err)
+		}
+	}
+
+	// =========================================================================
+	// STEP 3: Log platform limitation warning
+	// =========================================================================
+	if limitInfo != nil && limitInfo.PlatformLimited {
+		uc.l.Warnf(ctx, "results.usecase.result.handleProjectResult: platform limited - project_id=%s, requested=%d, found=%d",
+			projectID, limitInfo.RequestedLimit, limitInfo.TotalFound)
+	}
+
+	// =========================================================================
+	// STEP 4: Get current state for progress notification
+	// =========================================================================
 	state, err := uc.stateUC.GetState(ctx, projectID)
 	if err != nil {
 		uc.l.Errorf(ctx, "results.usecase.result.handleProjectResult: failed to get state: project_id=%s, error=%v", projectID, err)
@@ -150,15 +174,19 @@ func (uc implUseCase) handleProjectResult(ctx context.Context, res models.Crawle
 		userID = ""
 	}
 
-	// Send progress webhook with two-phase format
-	progressReq := uc.buildTwoPhaseProgressRequest(projectID, userID, state)
+	// =========================================================================
+	// STEP 5: Send progress webhook with hybrid format
+	// =========================================================================
+	progressReq := uc.buildHybridProgressRequest(projectID, userID, state)
 
 	if err := uc.webhookUC.NotifyProgress(ctx, progressReq); err != nil {
 		uc.l.Warnf(ctx, "results.usecase.result.handleProjectResult: failed to send progress webhook (non-fatal): project_id=%s, error=%v", projectID, err)
 		// Don't return error - progress webhook failure is non-fatal
 	}
 
-	// Check if project is complete (both crawl and analyze phases)
+	// =========================================================================
+	// STEP 6: Check if project is complete (both crawl and analyze phases)
+	// =========================================================================
 	completed, err := uc.stateUC.CheckCompletion(ctx, projectID)
 	if err != nil {
 		uc.l.Warnf(ctx, "results.usecase.result.handleProjectResult: failed to check completion: project_id=%s, error=%v", projectID, err)
@@ -171,6 +199,98 @@ func (uc implUseCase) handleProjectResult(ctx context.Context, res models.Crawle
 	}
 
 	return nil
+}
+
+// extractLimitInfoAndStats extracts limit_info and stats from enhanced Crawler response.
+// Falls back to counting payload items if enhanced fields are not present.
+func (uc implUseCase) extractLimitInfoAndStats(ctx context.Context, res models.CrawlerResult) (*models.LimitInfo, *models.CrawlStats) {
+	// Try to parse as EnhancedCrawlerResult
+	jsonData, err := json.Marshal(res)
+	if err != nil {
+		return uc.fallbackLimitInfoAndStats(ctx, res)
+	}
+
+	var enhanced models.EnhancedCrawlerResult
+	if err := json.Unmarshal(jsonData, &enhanced); err != nil {
+		return uc.fallbackLimitInfoAndStats(ctx, res)
+	}
+
+	// Check if enhanced fields exist
+	if enhanced.LimitInfo != nil && enhanced.Stats != nil {
+		uc.l.Debugf(ctx, "results.usecase.result.extractLimitInfoAndStats: using enhanced response format")
+		return enhanced.LimitInfo, enhanced.Stats
+	}
+
+	// Fallback to old format
+	return uc.fallbackLimitInfoAndStats(ctx, res)
+}
+
+// fallbackLimitInfoAndStats creates limit_info and stats from old response format by counting payload items.
+func (uc implUseCase) fallbackLimitInfoAndStats(ctx context.Context, res models.CrawlerResult) (*models.LimitInfo, *models.CrawlStats) {
+	itemCount := uc.countBatchItems(ctx, res.Payload)
+	if itemCount == 0 {
+		itemCount = 1 // Default to 1 if can't determine batch size
+	}
+
+	uc.l.Debugf(ctx, "results.usecase.result.fallbackLimitInfoAndStats: using fallback (counted %d items)", itemCount)
+
+	// For fallback, assume all items are successful if res.Success is true
+	successful := 0
+	failed := 0
+	if res.Success {
+		successful = itemCount
+	} else {
+		failed = itemCount
+	}
+
+	return &models.LimitInfo{
+			RequestedLimit:  50, // default
+			AppliedLimit:    50,
+			TotalFound:      itemCount,
+			PlatformLimited: false,
+		}, &models.CrawlStats{
+			Successful:     successful,
+			Failed:         failed,
+			Skipped:        0,
+			CompletionRate: 1.0,
+		}
+}
+
+// buildHybridProgressRequest builds a webhook.ProgressRequest with hybrid state (task-level + item-level).
+func (uc implUseCase) buildHybridProgressRequest(projectID, userID string, state *models.ProjectState) webhook.ProgressRequest {
+	return webhook.ProgressRequest{
+		ProjectID: projectID,
+		UserID:    userID,
+		Status:    string(state.Status),
+		// Task-level progress (for completion tracking)
+		Tasks: webhook.TaskProgress{
+			Total:   state.TasksTotal,
+			Done:    state.TasksDone,
+			Errors:  state.TasksErrors,
+			Percent: state.TasksProgressPercent(),
+		},
+		// Item-level progress (for progress display)
+		Items: webhook.ItemProgress{
+			Expected: state.ItemsExpected,
+			Actual:   state.ItemsActual,
+			Errors:   state.ItemsErrors,
+			Percent:  state.ItemsProgressPercent(),
+		},
+		// Legacy crawl progress (for backward compatibility)
+		Crawl: webhook.PhaseProgress{
+			Total:           state.CrawlTotal,
+			Done:            state.CrawlDone,
+			Errors:          state.CrawlErrors,
+			ProgressPercent: state.CrawlProgressPercent(),
+		},
+		Analyze: webhook.PhaseProgress{
+			Total:           state.AnalyzeTotal,
+			Done:            state.AnalyzeDone,
+			Errors:          state.AnalyzeErrors,
+			ProgressPercent: state.AnalyzeProgressPercent(),
+		},
+		OverallProgressPercent: state.OverallProgressPercent(),
+	}
 }
 
 // countBatchItems counts the number of items in a crawler result payload
@@ -194,26 +314,11 @@ func (uc implUseCase) countBatchItems(ctx context.Context, payload any) int {
 	return len(crawlerContentArray)
 }
 
-// buildTwoPhaseProgressRequest builds a webhook.ProgressRequest with two-phase state
+// buildTwoPhaseProgressRequest builds a webhook.ProgressRequest with two-phase state.
+// Deprecated: Use buildHybridProgressRequest instead for hybrid state tracking.
 func (uc implUseCase) buildTwoPhaseProgressRequest(projectID, userID string, state *models.ProjectState) webhook.ProgressRequest {
-	return webhook.ProgressRequest{
-		ProjectID: projectID,
-		UserID:    userID,
-		Status:    string(state.Status),
-		Crawl: webhook.PhaseProgress{
-			Total:           state.CrawlTotal,
-			Done:            state.CrawlDone,
-			Errors:          state.CrawlErrors,
-			ProgressPercent: state.CrawlProgressPercent(),
-		},
-		Analyze: webhook.PhaseProgress{
-			Total:           state.AnalyzeTotal,
-			Done:            state.AnalyzeDone,
-			Errors:          state.AnalyzeErrors,
-			ProgressPercent: state.AnalyzeProgressPercent(),
-		},
-		OverallProgressPercent: state.OverallProgressPercent(),
-	}
+	// Delegate to hybrid progress request for consistency
+	return uc.buildHybridProgressRequest(projectID, userID, state)
 }
 
 // handleAnalyzeResult handles analyze results from Analytics Service

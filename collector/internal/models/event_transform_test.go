@@ -1,6 +1,7 @@
 package models
 
 import (
+	"smap-collector/config"
 	"testing"
 	"time"
 )
@@ -415,6 +416,478 @@ func TestProjectState_ProgressPercent(t *testing.T) {
 			}
 			if tt.state.OverallProgressPercent() != tt.expectedOverall {
 				t.Errorf("overall: expected %v, got %v", tt.expectedOverall, tt.state.OverallProgressPercent())
+			}
+		})
+	}
+}
+
+// ============================================================================
+// Tests for NewTransformOptionsFromConfig (Phase 8.1.1)
+// ============================================================================
+
+func TestNewTransformOptionsFromConfig(t *testing.T) {
+	tests := []struct {
+		name     string
+		cfg      config.CrawlLimitsConfig
+		expected TransformOptions
+	}{
+		{
+			name: "default config values",
+			cfg: config.CrawlLimitsConfig{
+				DefaultLimitPerKeyword: 50,
+				DefaultMaxComments:     100,
+				DefaultMaxAttempts:     3,
+				MaxLimitPerKeyword:     500,
+				MaxMaxComments:         1000,
+				IncludeComments:        true,
+				DownloadMedia:          false,
+			},
+			expected: TransformOptions{
+				MaxAttempts:     3,
+				LimitPerKeyword: 50,
+				IncludeComments: true,
+				MaxComments:     100,
+				DownloadMedia:   false,
+			},
+		},
+		{
+			name: "custom config values",
+			cfg: config.CrawlLimitsConfig{
+				DefaultLimitPerKeyword: 100,
+				DefaultMaxComments:     200,
+				DefaultMaxAttempts:     5,
+				MaxLimitPerKeyword:     500,
+				MaxMaxComments:         1000,
+				IncludeComments:        false,
+				DownloadMedia:          true,
+			},
+			expected: TransformOptions{
+				MaxAttempts:     5,
+				LimitPerKeyword: 100,
+				IncludeComments: false,
+				MaxComments:     200,
+				DownloadMedia:   true,
+			},
+		},
+		{
+			name: "hard limit validation - limit_per_keyword exceeds max",
+			cfg: config.CrawlLimitsConfig{
+				DefaultLimitPerKeyword: 600, // exceeds max
+				DefaultMaxComments:     100,
+				DefaultMaxAttempts:     3,
+				MaxLimitPerKeyword:     500, // hard limit
+				MaxMaxComments:         1000,
+				IncludeComments:        true,
+				DownloadMedia:          false,
+			},
+			expected: TransformOptions{
+				MaxAttempts:     3,
+				LimitPerKeyword: 500, // capped to max
+				IncludeComments: true,
+				MaxComments:     100,
+				DownloadMedia:   false,
+			},
+		},
+		{
+			name: "hard limit validation - max_comments exceeds max",
+			cfg: config.CrawlLimitsConfig{
+				DefaultLimitPerKeyword: 50,
+				DefaultMaxComments:     1500, // exceeds max
+				DefaultMaxAttempts:     3,
+				MaxLimitPerKeyword:     500,
+				MaxMaxComments:         1000, // hard limit
+				IncludeComments:        true,
+				DownloadMedia:          false,
+			},
+			expected: TransformOptions{
+				MaxAttempts:     3,
+				LimitPerKeyword: 50,
+				IncludeComments: true,
+				MaxComments:     1000, // capped to max
+				DownloadMedia:   false,
+			},
+		},
+		{
+			name: "hard limit validation - both exceed max",
+			cfg: config.CrawlLimitsConfig{
+				DefaultLimitPerKeyword: 1000, // exceeds max
+				DefaultMaxComments:     2000, // exceeds max
+				DefaultMaxAttempts:     3,
+				MaxLimitPerKeyword:     500,  // hard limit
+				MaxMaxComments:         1000, // hard limit
+				IncludeComments:        true,
+				DownloadMedia:          false,
+			},
+			expected: TransformOptions{
+				MaxAttempts:     3,
+				LimitPerKeyword: 500, // capped to max
+				IncludeComments: true,
+				MaxComments:     1000, // capped to max
+				DownloadMedia:   false,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := NewTransformOptionsFromConfig(tt.cfg)
+			if result.MaxAttempts != tt.expected.MaxAttempts {
+				t.Errorf("MaxAttempts: expected %d, got %d", tt.expected.MaxAttempts, result.MaxAttempts)
+			}
+			if result.LimitPerKeyword != tt.expected.LimitPerKeyword {
+				t.Errorf("LimitPerKeyword: expected %d, got %d", tt.expected.LimitPerKeyword, result.LimitPerKeyword)
+			}
+			if result.IncludeComments != tt.expected.IncludeComments {
+				t.Errorf("IncludeComments: expected %v, got %v", tt.expected.IncludeComments, result.IncludeComments)
+			}
+			if result.MaxComments != tt.expected.MaxComments {
+				t.Errorf("MaxComments: expected %d, got %d", tt.expected.MaxComments, result.MaxComments)
+			}
+			if result.DownloadMedia != tt.expected.DownloadMedia {
+				t.Errorf("DownloadMedia: expected %v, got %v", tt.expected.DownloadMedia, result.DownloadMedia)
+			}
+		})
+	}
+}
+
+// ============================================================================
+// Tests for NewDryRunOptionsFromConfig (Phase 8.1.2)
+// ============================================================================
+
+func TestNewDryRunOptionsFromConfig(t *testing.T) {
+	tests := []struct {
+		name     string
+		cfg      config.CrawlLimitsConfig
+		expected TransformOptions
+	}{
+		{
+			name: "dry-run specific values",
+			cfg: config.CrawlLimitsConfig{
+				DryRunLimitPerKeyword: 3,
+				DryRunMaxComments:     5,
+				DefaultMaxAttempts:    3,
+				MaxLimitPerKeyword:    500,
+				MaxMaxComments:        1000,
+				IncludeComments:       true,
+				DownloadMedia:         true, // should be ignored in dry-run
+			},
+			expected: TransformOptions{
+				MaxAttempts:     3,
+				LimitPerKeyword: 3,
+				IncludeComments: true,
+				MaxComments:     5,
+				DownloadMedia:   false, // always false in dry-run
+			},
+		},
+		{
+			name: "DownloadMedia always false in dry-run",
+			cfg: config.CrawlLimitsConfig{
+				DryRunLimitPerKeyword: 5,
+				DryRunMaxComments:     10,
+				DefaultMaxAttempts:    5,
+				MaxLimitPerKeyword:    500,
+				MaxMaxComments:        1000,
+				IncludeComments:       false,
+				DownloadMedia:         true, // should be ignored
+			},
+			expected: TransformOptions{
+				MaxAttempts:     5,
+				LimitPerKeyword: 5,
+				IncludeComments: false,
+				MaxComments:     10,
+				DownloadMedia:   false, // always false
+			},
+		},
+		{
+			name: "dry-run with hard limit validation",
+			cfg: config.CrawlLimitsConfig{
+				DryRunLimitPerKeyword: 600,  // exceeds max
+				DryRunMaxComments:     1500, // exceeds max
+				DefaultMaxAttempts:    3,
+				MaxLimitPerKeyword:    500,
+				MaxMaxComments:        1000,
+				IncludeComments:       true,
+				DownloadMedia:         true,
+			},
+			expected: TransformOptions{
+				MaxAttempts:     3,
+				LimitPerKeyword: 500, // capped to max
+				IncludeComments: true,
+				MaxComments:     1000, // capped to max
+				DownloadMedia:   false,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := NewDryRunOptionsFromConfig(tt.cfg)
+			if result.MaxAttempts != tt.expected.MaxAttempts {
+				t.Errorf("MaxAttempts: expected %d, got %d", tt.expected.MaxAttempts, result.MaxAttempts)
+			}
+			if result.LimitPerKeyword != tt.expected.LimitPerKeyword {
+				t.Errorf("LimitPerKeyword: expected %d, got %d", tt.expected.LimitPerKeyword, result.LimitPerKeyword)
+			}
+			if result.IncludeComments != tt.expected.IncludeComments {
+				t.Errorf("IncludeComments: expected %v, got %v", tt.expected.IncludeComments, result.IncludeComments)
+			}
+			if result.MaxComments != tt.expected.MaxComments {
+				t.Errorf("MaxComments: expected %d, got %d", tt.expected.MaxComments, result.MaxComments)
+			}
+			if result.DownloadMedia != tt.expected.DownloadMedia {
+				t.Errorf("DownloadMedia: expected %v, got %v (should always be false in dry-run)", tt.expected.DownloadMedia, result.DownloadMedia)
+			}
+		})
+	}
+}
+
+// ============================================================================
+// Tests for ProjectState hybrid methods (Phase 8.1.3)
+// ============================================================================
+
+func TestProjectState_IsCrawlComplete_TaskLevel(t *testing.T) {
+	tests := []struct {
+		name     string
+		state    ProjectState
+		expected bool
+	}{
+		{
+			name: "complete - task-level all done",
+			state: ProjectState{
+				TasksTotal:  10,
+				TasksDone:   10,
+				TasksErrors: 0,
+			},
+			expected: true,
+		},
+		{
+			name: "complete - task-level done + errors >= total",
+			state: ProjectState{
+				TasksTotal:  10,
+				TasksDone:   8,
+				TasksErrors: 2,
+			},
+			expected: true,
+		},
+		{
+			name: "incomplete - task-level",
+			state: ProjectState{
+				TasksTotal:  10,
+				TasksDone:   5,
+				TasksErrors: 1,
+			},
+			expected: false,
+		},
+		{
+			name: "fallback to legacy - task-level zero",
+			state: ProjectState{
+				TasksTotal:  0,
+				TasksDone:   0,
+				TasksErrors: 0,
+				CrawlTotal:  10,
+				CrawlDone:   10,
+				CrawlErrors: 0,
+			},
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.state.IsCrawlComplete() != tt.expected {
+				t.Errorf("expected %v, got %v", tt.expected, tt.state.IsCrawlComplete())
+			}
+		})
+	}
+}
+
+func TestProjectState_CrawlProgressPercent_ItemLevel(t *testing.T) {
+	tests := []struct {
+		name     string
+		state    ProjectState
+		expected float64
+	}{
+		{
+			name: "item-level progress 50%",
+			state: ProjectState{
+				ItemsExpected: 100,
+				ItemsActual:   50,
+				ItemsErrors:   0,
+			},
+			expected: 50.0,
+		},
+		{
+			name: "item-level progress with errors",
+			state: ProjectState{
+				ItemsExpected: 100,
+				ItemsActual:   40,
+				ItemsErrors:   10,
+			},
+			expected: 50.0, // (40 + 10) / 100 * 100
+		},
+		{
+			name: "fallback to task-level when items not tracked",
+			state: ProjectState{
+				ItemsExpected: 0,
+				ItemsActual:   0,
+				ItemsErrors:   0,
+				TasksTotal:    10,
+				TasksDone:     5,
+				TasksErrors:   0,
+			},
+			expected: 50.0, // 5 / 10 * 100
+		},
+		{
+			name: "fallback to legacy when both zero",
+			state: ProjectState{
+				ItemsExpected: 0,
+				TasksTotal:    0,
+				CrawlTotal:    100,
+				CrawlDone:     75,
+				CrawlErrors:   0,
+			},
+			expected: 75.0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.state.CrawlProgressPercent()
+			if result != tt.expected {
+				t.Errorf("expected %v, got %v", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestProjectState_TasksProgressPercent(t *testing.T) {
+	tests := []struct {
+		name     string
+		state    ProjectState
+		expected float64
+	}{
+		{
+			name: "50% tasks progress",
+			state: ProjectState{
+				TasksTotal:  10,
+				TasksDone:   5,
+				TasksErrors: 0,
+			},
+			expected: 50.0,
+		},
+		{
+			name: "tasks progress with errors",
+			state: ProjectState{
+				TasksTotal:  10,
+				TasksDone:   4,
+				TasksErrors: 1,
+			},
+			expected: 50.0, // (4 + 1) / 10 * 100
+		},
+		{
+			name: "zero tasks total",
+			state: ProjectState{
+				TasksTotal:  0,
+				TasksDone:   0,
+				TasksErrors: 0,
+			},
+			expected: 0.0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.state.TasksProgressPercent()
+			if result != tt.expected {
+				t.Errorf("expected %v, got %v", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestProjectState_ItemsProgressPercent(t *testing.T) {
+	tests := []struct {
+		name     string
+		state    ProjectState
+		expected float64
+	}{
+		{
+			name: "50% items progress",
+			state: ProjectState{
+				ItemsExpected: 100,
+				ItemsActual:   50,
+				ItemsErrors:   0,
+			},
+			expected: 50.0,
+		},
+		{
+			name: "items progress with errors",
+			state: ProjectState{
+				ItemsExpected: 100,
+				ItemsActual:   30,
+				ItemsErrors:   20,
+			},
+			expected: 50.0, // (30 + 20) / 100 * 100
+		},
+		{
+			name: "zero items expected",
+			state: ProjectState{
+				ItemsExpected: 0,
+				ItemsActual:   0,
+				ItemsErrors:   0,
+			},
+			expected: 0.0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.state.ItemsProgressPercent()
+			if result != tt.expected {
+				t.Errorf("expected %v, got %v", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestProjectState_OverallProgressPercent_Hybrid(t *testing.T) {
+	tests := []struct {
+		name     string
+		state    ProjectState
+		expected float64
+	}{
+		{
+			name: "hybrid state - item-level crawl + analyze",
+			state: ProjectState{
+				ItemsExpected: 100,
+				ItemsActual:   50,
+				ItemsErrors:   0,
+				AnalyzeTotal:  50,
+				AnalyzeDone:   25,
+				AnalyzeErrors: 0,
+			},
+			expected: 50.0, // (50% crawl + 50% analyze) / 2
+		},
+		{
+			name: "hybrid state - task-level fallback",
+			state: ProjectState{
+				ItemsExpected: 0, // no item tracking
+				TasksTotal:    10,
+				TasksDone:     5,
+				TasksErrors:   0,
+				AnalyzeTotal:  10,
+				AnalyzeDone:   5,
+				AnalyzeErrors: 0,
+			},
+			expected: 50.0, // (50% crawl + 50% analyze) / 2
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.state.OverallProgressPercent()
+			if result != tt.expected {
+				t.Errorf("expected %v, got %v", tt.expected, result)
 			}
 		})
 	}

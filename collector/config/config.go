@@ -21,6 +21,30 @@ type Config struct {
 
 	// Monitoring & Notification Configuration
 	Discord DiscordConfig
+
+	// Crawl Limits Configuration
+	CrawlLimits CrawlLimitsConfig
+}
+
+// CrawlLimitsConfig chứa các giới hạn cho crawling.
+// Tất cả giá trị được load từ env vars, không hardcode trong code.
+type CrawlLimitsConfig struct {
+	// Default limits (used for production crawling)
+	DefaultLimitPerKeyword int `env:"DEFAULT_LIMIT_PER_KEYWORD" envDefault:"50"`
+	DefaultMaxComments     int `env:"DEFAULT_MAX_COMMENTS" envDefault:"100"`
+	DefaultMaxAttempts     int `env:"DEFAULT_MAX_ATTEMPTS" envDefault:"3"`
+
+	// Dry-run limits (for testing/preview)
+	DryRunLimitPerKeyword int `env:"DRYRUN_LIMIT_PER_KEYWORD" envDefault:"3"`
+	DryRunMaxComments     int `env:"DRYRUN_MAX_COMMENTS" envDefault:"5"`
+
+	// Hard limits (safety caps - cannot be exceeded)
+	MaxLimitPerKeyword int `env:"MAX_LIMIT_PER_KEYWORD" envDefault:"500"`
+	MaxMaxComments     int `env:"MAX_MAX_COMMENTS" envDefault:"1000"`
+
+	// Feature flags
+	IncludeComments bool `env:"INCLUDE_COMMENTS" envDefault:"true"`
+	DownloadMedia   bool `env:"DOWNLOAD_MEDIA" envDefault:"false"`
 }
 
 // LoggerConfig is the configuration for the logger.

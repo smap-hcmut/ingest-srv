@@ -113,6 +113,24 @@ PORT=8080
 MODE=debug
 ```
 
+### Crawl Limits Configuration
+
+The service supports configurable crawl limits to control resource usage:
+
+| Environment Variable        | Default | Description                              |
+| --------------------------- | ------- | ---------------------------------------- |
+| `DEFAULT_LIMIT_PER_KEYWORD` | 50      | Default items per keyword for production |
+| `DEFAULT_MAX_COMMENTS`      | 100     | Default max comments per item            |
+| `DEFAULT_MAX_ATTEMPTS`      | 3       | Max retry attempts for failed tasks      |
+| `DRYRUN_LIMIT_PER_KEYWORD`  | 3       | Items per keyword for dry-run/testing    |
+| `DRYRUN_MAX_COMMENTS`       | 5       | Max comments per item for dry-run        |
+| `MAX_LIMIT_PER_KEYWORD`     | 500     | Hard limit (safety cap) for items        |
+| `MAX_MAX_COMMENTS`          | 1000    | Hard limit (safety cap) for comments     |
+| `INCLUDE_COMMENTS`          | true    | Whether to include comments in crawl     |
+| `DOWNLOAD_MEDIA`            | false   | Whether to download media files          |
+
+**Note:** Hard limits (`MAX_*`) are safety caps that cannot be exceeded even if default values are set higher.
+
 ### Running the Service
 
 **Start the Dispatcher Consumer:**
@@ -180,39 +198,53 @@ The service now supports event-driven choreography with the Project Service. See
 }
 ```
 
-#### Redis State Management (Two-Phase)
+#### Redis State Management (Hybrid State)
 
 The service updates project state in Redis (DB 1) with key schema `smap:proj:{projectID}`.
 
-**Two-Phase Pipeline:**
+**Hybrid State Pipeline:**
 
 ```
-Phase 1: CRAWL                    Phase 2: ANALYZE
-┌─────────────────────┐           ┌─────────────────────┐
-│ crawl_total: 100    │           │ analyze_total: 98   │
-│ crawl_done: 98      │  ──────►  │ analyze_done: 45    │
-│ crawl_errors: 2     │           │ analyze_errors: 1   │
-└─────────────────────┘           └─────────────────────┘
-Crawler → Collector               Analytics → Collector
+Phase 1: CRAWL                              Phase 2: ANALYZE
+┌─────────────────────────────────┐         ┌─────────────────────────┐
+│ Task-Level (completion check):  │         │ analyze_total: 450      │
+│   tasks_total: 10               │         │ analyze_done: 200       │
+│   tasks_done: 10                │  ────►  │ analyze_errors: 5       │
+│   tasks_errors: 0               │         └─────────────────────────┘
+│                                 │
+│ Item-Level (progress display):  │
+│   items_expected: 500           │
+│   items_actual: 450             │
+│   items_errors: 50              │
+└─────────────────────────────────┘
+Crawler → Collector                         Analytics → Collector
 ```
 
-| Field            | Type   | Description                             |
-| ---------------- | ------ | --------------------------------------- |
-| `status`         | String | INITIALIZING, PROCESSING, DONE, FAILED  |
-| `crawl_total`    | Int    | Total crawl tasks                       |
-| `crawl_done`     | Int    | Crawl tasks completed                   |
-| `crawl_errors`   | Int    | Crawl tasks failed                      |
-| `analyze_total`  | Int    | Total analyze tasks (auto-set on crawl) |
-| `analyze_done`   | Int    | Analyze tasks completed                 |
-| `analyze_errors` | Int    | Analyze tasks failed                    |
+| Field            | Type   | Description                                |
+| ---------------- | ------ | ------------------------------------------ |
+| `status`         | String | INITIALIZING, PROCESSING, DONE, FAILED     |
+| `tasks_total`    | Int    | Total crawl tasks (keywords × platforms)   |
+| `tasks_done`     | Int    | Crawl tasks completed                      |
+| `tasks_errors`   | Int    | Crawl tasks failed                         |
+| `items_expected` | Int    | Expected items (tasks × limit_per_keyword) |
+| `items_actual`   | Int    | Actual items crawled successfully          |
+| `items_errors`   | Int    | Items failed to crawl                      |
+| `analyze_total`  | Int    | Total analyze tasks (auto-set on crawl)    |
+| `analyze_done`   | Int    | Analyze tasks completed                    |
+| `analyze_errors` | Int    | Analyze tasks failed                       |
 
 **Completion Logic:**
 
-- Crawl complete: `crawl_done + crawl_errors >= crawl_total`
+- Crawl complete: `tasks_done + tasks_errors >= tasks_total` (task-level)
 - Analyze complete: `analyze_done + analyze_errors >= analyze_total`
 - Project complete: Both phases complete
 
-#### Progress Webhook (Two-Phase Format)
+**Progress Display:**
+
+- Uses item-level for accurate progress: `(items_actual + items_errors) / items_expected`
+- Falls back to task-level if items not tracked
+
+#### Progress Webhook (Hybrid Format)
 
 The service calls Project Service webhook to notify progress:
 
@@ -226,19 +258,31 @@ Header: X-Internal-Key: {internal_key}
   "project_id": "proj_xyz",
   "user_id": "user_123",
   "status": "PROCESSING",
+  "tasks": {
+    "total": 10,
+    "done": 8,
+    "errors": 0,
+    "percent": 80.0
+  },
+  "items": {
+    "expected": 500,
+    "actual": 400,
+    "errors": 20,
+    "percent": 84.0
+  },
   "crawl": {
-    "total": 100,
-    "done": 80,
-    "errors": 2,
-    "progress_percent": 82.0
+    "total": 10,
+    "done": 8,
+    "errors": 0,
+    "progress_percent": 84.0
   },
   "analyze": {
-    "total": 78,
-    "done": 45,
-    "errors": 1,
-    "progress_percent": 59.0
+    "total": 400,
+    "done": 200,
+    "errors": 5,
+    "progress_percent": 51.25
   },
-  "overall_progress_percent": 70.5
+  "overall_progress_percent": 67.625
 }
 ```
 

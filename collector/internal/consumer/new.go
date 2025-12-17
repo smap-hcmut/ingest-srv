@@ -28,6 +28,7 @@ type Config struct {
 	ProjectConfig     config.ProjectConfig
 	RedisClient       pkgRedis.Client
 	StateOptions      state.Options
+	CrawlLimitsConfig config.CrawlLimitsConfig
 }
 
 func New(cfg Config) (*Server, error) {

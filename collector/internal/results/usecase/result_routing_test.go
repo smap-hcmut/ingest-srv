@@ -145,6 +145,39 @@ func (m *mockStateUseCaseForRouting) GetUserID(ctx context.Context, projectID st
 	return m.getUserIDResult, m.getUserIDErr
 }
 
+// Task-level methods (new hybrid state)
+func (m *mockStateUseCaseForRouting) SetTasksTotal(ctx context.Context, projectID string, tasksTotal, itemsExpected int64) error {
+	return nil
+}
+
+func (m *mockStateUseCaseForRouting) IncrementTasksDone(ctx context.Context, projectID string) error {
+	m.incrementCrawlDoneCalled = true
+	m.incrementCrawlDoneProjectID = projectID
+	m.incrementCrawlDoneCount = 1
+	return m.incrementCrawlDoneErr
+}
+
+func (m *mockStateUseCaseForRouting) IncrementTasksErrors(ctx context.Context, projectID string) error {
+	m.incrementCrawlErrorsCalled = true
+	m.incrementCrawlErrorsProjectID = projectID
+	m.incrementCrawlErrorsCount = 1
+	return m.incrementCrawlErrorsErr
+}
+
+func (m *mockStateUseCaseForRouting) IncrementItemsActualBy(ctx context.Context, projectID string, count int64) error {
+	m.incrementCrawlDoneCalled = true
+	m.incrementCrawlDoneProjectID = projectID
+	m.incrementCrawlDoneCount = count
+	return m.incrementCrawlDoneErr
+}
+
+func (m *mockStateUseCaseForRouting) IncrementItemsErrorsBy(ctx context.Context, projectID string, count int64) error {
+	m.incrementCrawlErrorsCalled = true
+	m.incrementCrawlErrorsProjectID = projectID
+	m.incrementCrawlErrorsCount = count
+	return m.incrementCrawlErrorsErr
+}
+
 type mockWebhookUseCaseForRouting struct {
 	notifyProgressCalled bool
 	notifyProgressReq    webhook.ProgressRequest

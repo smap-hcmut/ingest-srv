@@ -8,6 +8,7 @@ import (
 )
 
 // HandleProjectCreatedEvent xử lý ProjectCreatedEvent từ Project Service.
+// Sử dụng config-driven limits thay vì hardcode values.
 func (uc implUseCase) HandleProjectCreatedEvent(ctx context.Context, event models.ProjectCreatedEvent) error {
 	// Validate event
 	if !event.IsValid() {
@@ -29,17 +30,21 @@ func (uc implUseCase) HandleProjectCreatedEvent(ctx context.Context, event model
 		}
 	}
 
-	// Transform event to CrawlRequests
-	requests := models.TransformProjectEventToRequests(event, models.DefaultTransformOptions())
-	totalTasks := len(requests) * len(uc.selectPlatforms()) // Each request goes to all platforms
+	// Transform event to CrawlRequests using config-driven limits
+	opts := models.NewTransformOptionsFromConfig(uc.crawlLimitsCfg)
+	requests := models.TransformProjectEventToRequests(event, opts)
+	totalTasks := int64(len(requests) * len(uc.selectPlatforms())) // Each request goes to all platforms
 
-	uc.l.Infof(ctx, "dispatcher.usecase.project_event.HandleProjectCreatedEvent: transformed to %d requests, total tasks=%d",
-		len(requests), totalTasks)
+	// Calculate items expected (for item-level progress tracking)
+	itemsExpected := totalTasks * int64(opts.LimitPerKeyword)
 
-	// Set crawl total in Redis state and notify (if state usecase is available)
+	uc.l.Infof(ctx, "dispatcher.usecase.project_event.HandleProjectCreatedEvent: transformed to %d requests, total_tasks=%d, items_expected=%d, limit_per_keyword=%d",
+		len(requests), totalTasks, itemsExpected, opts.LimitPerKeyword)
+
+	// Set tasks total and items expected in Redis state (hybrid state tracking)
 	if uc.stateUC != nil {
-		if err := uc.stateUC.SetCrawlTotal(ctx, projectID, int64(totalTasks)); err != nil {
-			uc.l.Warnf(ctx, "dispatcher.usecase.project_event.HandleProjectCreatedEvent: failed to set crawl total: %v", err)
+		if err := uc.stateUC.SetTasksTotal(ctx, projectID, totalTasks, itemsExpected); err != nil {
+			uc.l.Warnf(ctx, "dispatcher.usecase.project_event.HandleProjectCreatedEvent: failed to set tasks total: %v", err)
 		}
 
 		// Notify progress after setting total
@@ -57,12 +62,14 @@ func (uc implUseCase) HandleProjectCreatedEvent(ctx context.Context, event model
 		tasks, err := uc.Dispatch(ctx, req)
 		if err != nil {
 			uc.l.Errorf(ctx, "dispatcher.usecase.project_event.HandleProjectCreatedEvent: failed to dispatch job_id=%s: %v", req.JobID, err)
-			platformCount := int64(len(uc.selectPlatforms()))
-			errorCount += int(platformCount)
+			platformCount := len(uc.selectPlatforms())
+			errorCount += platformCount
 
-			// Update crawl error count in state
+			// Update task errors in state (1 error per platform)
 			if uc.stateUC != nil {
-				_ = uc.stateUC.IncrementCrawlErrorsBy(ctx, projectID, platformCount)
+				for i := 0; i < platformCount; i++ {
+					_ = uc.stateUC.IncrementTasksErrors(ctx, projectID)
+				}
 			}
 			continue
 		}
@@ -91,12 +98,28 @@ func (uc implUseCase) notifyProgress(ctx context.Context, projectID, userID stri
 	}
 }
 
-// buildProgressRequest builds a webhook progress request from state with two-phase format.
+// buildProgressRequest builds a webhook progress request from state with hybrid format.
+// Includes both task-level and item-level progress for crawl phase.
 func (uc implUseCase) buildProgressRequest(projectID, userID string, state *models.ProjectState) webhook.ProgressRequest {
 	return webhook.ProgressRequest{
 		ProjectID: projectID,
 		UserID:    userID,
 		Status:    string(state.Status),
+		// Task-level progress (for completion tracking)
+		Tasks: webhook.TaskProgress{
+			Total:   state.TasksTotal,
+			Done:    state.TasksDone,
+			Errors:  state.TasksErrors,
+			Percent: state.TasksProgressPercent(),
+		},
+		// Item-level progress (for progress display)
+		Items: webhook.ItemProgress{
+			Expected: state.ItemsExpected,
+			Actual:   state.ItemsActual,
+			Errors:   state.ItemsErrors,
+			Percent:  state.ItemsProgressPercent(),
+		},
+		// Legacy crawl progress (for backward compatibility)
 		Crawl: webhook.PhaseProgress{
 			Total:           state.CrawlTotal,
 			Done:            state.CrawlDone,

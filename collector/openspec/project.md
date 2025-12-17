@@ -130,12 +130,23 @@ SMAP là hệ thống data collection và analysis cho social media platforms (Y
   - `analysis.finished`: Analytics Service → Insight Service
   - `job.completed`: Analytics Service → Notification
 
-**State Management:**
+**State Management (Hybrid State):**
 
 - Redis DB 1: Project execution state
 - Key schema: `smap:proj:{projectID}`
-- Fields: `status`, `total`, `done`, `errors`
-- Status flow: `INITIALIZING` → `CRAWLING` → `PROCESSING` → `DONE`/`FAILED`
+- Task-level fields: `tasks_total`, `tasks_done`, `tasks_errors` (for completion check)
+- Item-level fields: `items_expected`, `items_actual`, `items_errors` (for progress display)
+- Analyze fields: `analyze_total`, `analyze_done`, `analyze_errors`
+- Legacy fields: `crawl_total`, `crawl_done`, `crawl_errors` (backward compatibility)
+- Status flow: `INITIALIZING` → `PROCESSING` → `DONE`/`FAILED`
+
+**Crawl Limits Configuration:**
+
+- All limits are configurable via environment variables
+- Default limits: `DEFAULT_LIMIT_PER_KEYWORD=50`, `DEFAULT_MAX_COMMENTS=100`
+- Dry-run limits: `DRYRUN_LIMIT_PER_KEYWORD=3`, `DRYRUN_MAX_COMMENTS=5`
+- Hard limits (safety caps): `MAX_LIMIT_PER_KEYWORD=500`, `MAX_MAX_COMMENTS=1000`
+- Feature flags: `INCLUDE_COMMENTS=true`, `DOWNLOAD_MEDIA=false`
 
 **Task Types:**
 

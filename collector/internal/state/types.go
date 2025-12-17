@@ -14,19 +14,32 @@ const (
 	DefaultTTL = 7 * 24 * time.Hour
 )
 
-// Redis hash field names - Two-phase state structure
+// Redis hash field names - Hybrid state structure
 const (
 	FieldStatus = "status"
 
-	// Crawl phase fields
-	FieldCrawlTotal  = "crawl_total"
-	FieldCrawlDone   = "crawl_done"
-	FieldCrawlErrors = "crawl_errors"
+	// Task-level fields (for completion check)
+	// Mỗi response từ Crawler = 1 task
+	FieldTasksTotal  = "tasks_total"
+	FieldTasksDone   = "tasks_done"
+	FieldTasksErrors = "tasks_errors"
 
-	// Analyze phase fields
+	// Item-level fields (for progress display)
+	// Số items thực tế crawl được từ platform
+	FieldItemsExpected = "items_expected"
+	FieldItemsActual   = "items_actual"
+	FieldItemsErrors   = "items_errors"
+
+	// Analyze phase fields (unchanged)
 	FieldAnalyzeTotal  = "analyze_total"
 	FieldAnalyzeDone   = "analyze_done"
 	FieldAnalyzeErrors = "analyze_errors"
+
+	// Legacy crawl phase fields (for backward compatibility)
+	// Deprecated: Use task-level and item-level fields instead
+	FieldCrawlTotal  = "crawl_total"
+	FieldCrawlDone   = "crawl_done"
+	FieldCrawlErrors = "crawl_errors"
 )
 
 // BuildStateKey tạo Redis key cho project state.

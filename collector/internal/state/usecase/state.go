@@ -49,10 +49,138 @@ func (uc *implUseCase) InitState(ctx context.Context, projectID string) error {
 }
 
 // ============================================================================
-// Crawl Phase Methods
+// Task-Level Methods (for completion check)
+// ============================================================================
+
+// SetTasksTotal set tổng số tasks và items expected, chuyển status sang PROCESSING.
+func (uc *implUseCase) SetTasksTotal(ctx context.Context, projectID string, tasksTotal, itemsExpected int64) error {
+	if projectID == "" {
+		return state.ErrInvalidProjectID
+	}
+	if tasksTotal < 0 {
+		return state.ErrInvalidTotal
+	}
+
+	key := state.BuildStateKey(projectID)
+
+	// Update task-level, item-level fields and status in one operation
+	fields := map[string]any{
+		state.FieldTasksTotal:    tasksTotal,
+		state.FieldItemsExpected: itemsExpected,
+		state.FieldStatus:        string(models.ProjectStatusProcessing),
+		// Also set legacy crawl_total for backward compatibility
+		state.FieldCrawlTotal: tasksTotal,
+	}
+
+	if err := uc.repo.SetFields(ctx, key, fields); err != nil {
+		uc.l.Errorf(ctx, "Failed to set tasks total: project_id=%s, tasks_total=%d, items_expected=%d, error=%v",
+			projectID, tasksTotal, itemsExpected, err)
+		return err
+	}
+
+	uc.l.Infof(ctx, "Set tasks total: project_id=%s, tasks_total=%d, items_expected=%d, status=PROCESSING",
+		projectID, tasksTotal, itemsExpected)
+	return nil
+}
+
+// IncrementTasksDone tăng counter tasks_done lên 1.
+func (uc *implUseCase) IncrementTasksDone(ctx context.Context, projectID string) error {
+	if projectID == "" {
+		return state.ErrInvalidProjectID
+	}
+
+	key := state.BuildStateKey(projectID)
+
+	newValue, err := uc.repo.IncrementField(ctx, key, state.FieldTasksDone, 1)
+	if err != nil {
+		uc.l.Errorf(ctx, "Failed to increment tasks_done: project_id=%s, error=%v", projectID, err)
+		return err
+	}
+
+	uc.l.Debugf(ctx, "Incremented tasks_done: project_id=%s, new_value=%d", projectID, newValue)
+	return nil
+}
+
+// IncrementTasksErrors tăng counter tasks_errors lên 1.
+func (uc *implUseCase) IncrementTasksErrors(ctx context.Context, projectID string) error {
+	if projectID == "" {
+		return state.ErrInvalidProjectID
+	}
+
+	key := state.BuildStateKey(projectID)
+
+	newValue, err := uc.repo.IncrementField(ctx, key, state.FieldTasksErrors, 1)
+	if err != nil {
+		uc.l.Errorf(ctx, "Failed to increment tasks_errors: project_id=%s, error=%v", projectID, err)
+		return err
+	}
+
+	uc.l.Debugf(ctx, "Incremented tasks_errors: project_id=%s, new_value=%d", projectID, newValue)
+	return nil
+}
+
+// ============================================================================
+// Item-Level Methods (for progress display)
+// ============================================================================
+
+// IncrementItemsActualBy tăng counter items_actual lên N.
+func (uc *implUseCase) IncrementItemsActualBy(ctx context.Context, projectID string, count int64) error {
+	if projectID == "" {
+		return state.ErrInvalidProjectID
+	}
+	if count <= 0 {
+		return nil // Skip if count is 0 or negative
+	}
+
+	key := state.BuildStateKey(projectID)
+
+	newValue, err := uc.repo.IncrementField(ctx, key, state.FieldItemsActual, count)
+	if err != nil {
+		uc.l.Errorf(ctx, "Failed to increment items_actual: project_id=%s, count=%d, error=%v", projectID, count, err)
+		return err
+	}
+
+	// Also increment legacy crawl_done for backward compatibility
+	if _, err := uc.repo.IncrementField(ctx, key, state.FieldCrawlDone, count); err != nil {
+		uc.l.Warnf(ctx, "Failed to increment legacy crawl_done: project_id=%s, count=%d, error=%v", projectID, count, err)
+	}
+
+	uc.l.Debugf(ctx, "Incremented items_actual: project_id=%s, count=%d, new_value=%d", projectID, count, newValue)
+	return nil
+}
+
+// IncrementItemsErrorsBy tăng counter items_errors lên N.
+func (uc *implUseCase) IncrementItemsErrorsBy(ctx context.Context, projectID string, count int64) error {
+	if projectID == "" {
+		return state.ErrInvalidProjectID
+	}
+	if count <= 0 {
+		return nil // Skip if count is 0 or negative
+	}
+
+	key := state.BuildStateKey(projectID)
+
+	newValue, err := uc.repo.IncrementField(ctx, key, state.FieldItemsErrors, count)
+	if err != nil {
+		uc.l.Errorf(ctx, "Failed to increment items_errors: project_id=%s, count=%d, error=%v", projectID, count, err)
+		return err
+	}
+
+	// Also increment legacy crawl_errors for backward compatibility
+	if _, err := uc.repo.IncrementField(ctx, key, state.FieldCrawlErrors, count); err != nil {
+		uc.l.Warnf(ctx, "Failed to increment legacy crawl_errors: project_id=%s, count=%d, error=%v", projectID, count, err)
+	}
+
+	uc.l.Debugf(ctx, "Incremented items_errors: project_id=%s, count=%d, new_value=%d", projectID, count, newValue)
+	return nil
+}
+
+// ============================================================================
+// Legacy Crawl Phase Methods (for backward compatibility)
 // ============================================================================
 
 // SetCrawlTotal set tổng số items cần crawl và chuyển status sang PROCESSING.
+// Deprecated: Use SetTasksTotal instead.
 func (uc *implUseCase) SetCrawlTotal(ctx context.Context, projectID string, total int64) error {
 	if projectID == "" {
 		return state.ErrInvalidProjectID
@@ -80,6 +208,7 @@ func (uc *implUseCase) SetCrawlTotal(ctx context.Context, projectID string, tota
 }
 
 // IncrementCrawlDoneBy tăng counter crawl_done lên N.
+// Deprecated: Use IncrementTasksDone and IncrementItemsActualBy instead.
 func (uc *implUseCase) IncrementCrawlDoneBy(ctx context.Context, projectID string, count int64) error {
 	if projectID == "" {
 		return state.ErrInvalidProjectID
@@ -101,6 +230,7 @@ func (uc *implUseCase) IncrementCrawlDoneBy(ctx context.Context, projectID strin
 }
 
 // IncrementCrawlErrorsBy tăng counter crawl_errors lên N.
+// Deprecated: Use IncrementTasksErrors and IncrementItemsErrorsBy instead.
 func (uc *implUseCase) IncrementCrawlErrorsBy(ctx context.Context, projectID string, count int64) error {
 	if projectID == "" {
 		return state.ErrInvalidProjectID
@@ -235,6 +365,7 @@ func (uc *implUseCase) GetState(ctx context.Context, projectID string) (*models.
 }
 
 // CheckCompletion kiểm tra và update status nếu cả crawl và analyze đều complete.
+// Sử dụng task-level để check crawl completion (reliable hơn item-level).
 func (uc *implUseCase) CheckCompletion(ctx context.Context, projectID string) (bool, error) {
 	if projectID == "" {
 		return false, state.ErrInvalidProjectID
@@ -254,9 +385,10 @@ func (uc *implUseCase) CheckCompletion(ctx context.Context, projectID string) (b
 			return false, ErrUpdateCompletionFailed
 		}
 
-		uc.l.Infof(ctx, "Project completed: project_id=%s, crawl=[%d/%d/%d], analyze=[%d/%d/%d]",
+		uc.l.Infof(ctx, "Project completed: project_id=%s, tasks=[%d/%d/%d], items=[%d/%d/%d], analyze=[%d/%d/%d]",
 			projectID,
-			s.CrawlDone, s.CrawlErrors, s.CrawlTotal,
+			s.TasksDone, s.TasksErrors, s.TasksTotal,
+			s.ItemsActual, s.ItemsErrors, s.ItemsExpected,
 			s.AnalyzeDone, s.AnalyzeErrors, s.AnalyzeTotal)
 		return true, nil
 	}
