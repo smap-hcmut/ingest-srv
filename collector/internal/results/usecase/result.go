@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"smap-collector/internal/models"
@@ -21,7 +20,12 @@ func (uc implUseCase) HandleResult(ctx context.Context, res models.CrawlerResult
 	uc.l.Infof(ctx, "results.usecase.result.HandleResult: handling crawler result: success=%v", res.Success)
 
 	// Extract task_type from result to determine handling strategy
-	taskType := uc.extractTaskType(ctx, res.Payload)
+	// First try to extract from root level (FLAT format v3.0)
+	taskType := uc.extractTaskTypeFromRoot(ctx, res)
+	if taskType == "" {
+		// Fallback to extracting from payload (legacy format)
+		taskType = uc.extractTaskType(ctx, res.Payload)
+	}
 
 	// Route to appropriate handler based on task_type
 	switch taskType {
@@ -38,8 +42,21 @@ func (uc implUseCase) HandleResult(ctx context.Context, res models.CrawlerResult
 	}
 }
 
-// extractTaskType extracts task_type from crawler result payload
-// Supports both crawler content array format and analyze result format
+// extractTaskTypeFromRoot extracts task_type from root level of CrawlerResult (FLAT format v3.0).
+// Returns empty string if task_type is not at root level.
+func (uc implUseCase) extractTaskTypeFromRoot(ctx context.Context, res models.CrawlerResult) string {
+	if res.TaskType != "" {
+		uc.l.Infof(ctx, "results.usecase.result.extractTaskTypeFromRoot: extracted task_type from root: %s", res.TaskType)
+		return res.TaskType
+	}
+	return ""
+}
+
+// extractTaskType extracts task_type from crawler result.
+// Supports multiple formats:
+// 1. FLAT format (v3.0): task_type at root level of CrawlerResult
+// 2. AnalyzeResultPayload: task_type in payload object
+// 3. Legacy format: task_type in payload[0].meta.task_type (crawler content array)
 func (uc implUseCase) extractTaskType(ctx context.Context, payload any) string {
 	if payload == nil {
 		uc.l.Warnf(ctx, "results.usecase.result.extractTaskType: payload is nil")
@@ -59,19 +76,14 @@ func (uc implUseCase) extractTaskType(ctx context.Context, payload any) string {
 		return analyzePayload.TaskType
 	}
 
-	// Try to parse as crawler content array
+	// Try to parse as crawler content array (legacy format for dry-run)
 	var crawlerContentArray []results.CrawlerContent
-	if err := json.Unmarshal(jsonData, &crawlerContentArray); err != nil {
-		uc.l.Warnf(ctx, "results.usecase.result.extractTaskType: failed to unmarshal payload: %v", err)
-		return ""
-	}
-
-	if len(crawlerContentArray) > 0 {
-		uc.l.Infof(ctx, "results.usecase.result.extractTaskType: extracted task_type: %s", crawlerContentArray[0].Meta.TaskType)
+	if err := json.Unmarshal(jsonData, &crawlerContentArray); err == nil && len(crawlerContentArray) > 0 {
+		uc.l.Infof(ctx, "results.usecase.result.extractTaskType: extracted task_type from content array: %s", crawlerContentArray[0].Meta.TaskType)
 		return crawlerContentArray[0].Meta.TaskType
 	}
 
-	uc.l.Warnf(ctx, "results.usecase.result.extractTaskType: no task_type found")
+	uc.l.Warnf(ctx, "results.usecase.result.extractTaskType: no task_type found in payload")
 	return ""
 }
 
@@ -100,24 +112,37 @@ func (uc implUseCase) handleDryRunResult(ctx context.Context, res models.Crawler
 
 // handleProjectResult handles project execution results by updating state and sending progress webhook.
 // Hybrid state: updates task-level (completion) and item-level (progress) counters.
-// Supports enhanced Crawler response with limit_info and stats, with fallback to old format.
+// Uses FLAT CrawlerResultMessage format (Version 3.0) - all fields at root level, no payload.
 func (uc implUseCase) handleProjectResult(ctx context.Context, res models.CrawlerResult) error {
 	uc.l.Infof(ctx, "results.usecase.result.handleProjectResult: handling project execution result")
 
-	// Extract project_id from job_id (format: {projectID}-brand-{index})
-	projectID, err := uc.extractProjectID(ctx, res.Payload)
+	// Parse as CrawlerResultMessage (FLAT format v3.0)
+	msg, err := uc.parseCrawlerResultMessage(ctx, res)
 	if err != nil {
-		uc.l.Errorf(ctx, "results.usecase.result.handleProjectResult: failed to extract project_id: %v", err)
+		uc.l.Errorf(ctx, "results.usecase.result.handleProjectResult: failed to parse CrawlerResultMessage: %v", err)
 		return fmt.Errorf("%w: %v", results.ErrInvalidInput, err)
 	}
 
-	// Extract limit_info and stats from enhanced response (with fallback)
-	limitInfo, stats := uc.extractLimitInfoAndStats(ctx, res)
+	// Validate message
+	if err := msg.Validate(); err != nil {
+		uc.l.Errorf(ctx, "results.usecase.result.handleProjectResult: invalid CrawlerResultMessage: %v", err)
+		return fmt.Errorf("%w: %v", results.ErrInvalidInput, err)
+	}
+
+	// Extract project_id from job_id (format: {projectID}-brand-{index})
+	projectID := msg.ExtractProjectID()
+	if projectID == "" {
+		uc.l.Errorf(ctx, "results.usecase.result.handleProjectResult: failed to extract project_id from job_id=%s", msg.JobID)
+		return results.ErrInvalidInput
+	}
+
+	uc.l.Infof(ctx, "results.usecase.result.handleProjectResult: processing message: project_id=%s, job_id=%s, platform=%s, success=%v",
+		projectID, msg.JobID, msg.Platform, msg.Success)
 
 	// =========================================================================
 	// STEP 1: Update task-level counter (always 1 per response)
 	// =========================================================================
-	if res.Success {
+	if msg.Success {
 		if err := uc.stateUC.IncrementTasksDone(ctx, projectID); err != nil {
 			uc.l.Errorf(ctx, "results.usecase.result.handleProjectResult: failed to increment tasks_done: project_id=%s, error=%v", projectID, err)
 			return fmt.Errorf("%w: %v", results.ErrTemporary, err)
@@ -130,32 +155,32 @@ func (uc implUseCase) handleProjectResult(ctx context.Context, res models.Crawle
 	}
 
 	// =========================================================================
-	// STEP 2: Update item-level counters (from stats)
+	// STEP 2: Update item-level counters (FLAT - direct access from msg)
 	// =========================================================================
-	if stats.Successful > 0 {
-		if err := uc.stateUC.IncrementItemsActualBy(ctx, projectID, int64(stats.Successful)); err != nil {
-			uc.l.Errorf(ctx, "results.usecase.result.handleProjectResult: failed to increment items_actual: project_id=%s, count=%d, error=%v", projectID, stats.Successful, err)
+	if msg.Successful > 0 {
+		if err := uc.stateUC.IncrementItemsActualBy(ctx, projectID, int64(msg.Successful)); err != nil {
+			uc.l.Errorf(ctx, "results.usecase.result.handleProjectResult: failed to increment items_actual: project_id=%s, count=%d, error=%v", projectID, msg.Successful, err)
 			return fmt.Errorf("%w: %v", results.ErrTemporary, err)
 		}
 		// Auto-increment analyze_total (each successful item = 1 item to analyze)
-		if err := uc.stateUC.IncrementAnalyzeTotalBy(ctx, projectID, int64(stats.Successful)); err != nil {
-			uc.l.Errorf(ctx, "results.usecase.result.handleProjectResult: failed to increment analyze_total: project_id=%s, count=%d, error=%v", projectID, stats.Successful, err)
+		if err := uc.stateUC.IncrementAnalyzeTotalBy(ctx, projectID, int64(msg.Successful)); err != nil {
+			uc.l.Errorf(ctx, "results.usecase.result.handleProjectResult: failed to increment analyze_total: project_id=%s, count=%d, error=%v", projectID, msg.Successful, err)
 			return fmt.Errorf("%w: %v", results.ErrTemporary, err)
 		}
 	}
-	if stats.Failed > 0 {
-		if err := uc.stateUC.IncrementItemsErrorsBy(ctx, projectID, int64(stats.Failed)); err != nil {
-			uc.l.Errorf(ctx, "results.usecase.result.handleProjectResult: failed to increment items_errors: project_id=%s, count=%d, error=%v", projectID, stats.Failed, err)
+	if msg.Failed > 0 {
+		if err := uc.stateUC.IncrementItemsErrorsBy(ctx, projectID, int64(msg.Failed)); err != nil {
+			uc.l.Errorf(ctx, "results.usecase.result.handleProjectResult: failed to increment items_errors: project_id=%s, count=%d, error=%v", projectID, msg.Failed, err)
 			return fmt.Errorf("%w: %v", results.ErrTemporary, err)
 		}
 	}
 
 	// =========================================================================
-	// STEP 3: Log platform limitation warning
+	// STEP 3: Log platform limitation warning (FLAT - direct access)
 	// =========================================================================
-	if limitInfo != nil && limitInfo.PlatformLimited {
+	if msg.PlatformLimited {
 		uc.l.Warnf(ctx, "results.usecase.result.handleProjectResult: platform limited - project_id=%s, requested=%d, found=%d",
-			projectID, limitInfo.RequestedLimit, limitInfo.TotalFound)
+			projectID, msg.RequestedLimit, msg.TotalFound)
 	}
 
 	// =========================================================================
@@ -201,59 +226,29 @@ func (uc implUseCase) handleProjectResult(ctx context.Context, res models.Crawle
 	return nil
 }
 
-// extractLimitInfoAndStats extracts limit_info and stats from enhanced Crawler response.
-// Falls back to counting payload items if enhanced fields are not present.
-func (uc implUseCase) extractLimitInfoAndStats(ctx context.Context, res models.CrawlerResult) (*models.LimitInfo, *models.CrawlStats) {
-	// Try to parse as EnhancedCrawlerResult
-	jsonData, err := json.Marshal(res)
-	if err != nil {
-		return uc.fallbackLimitInfoAndStats(ctx, res)
+// parseCrawlerResultMessage converts CrawlerResult to CrawlerResultMessage (FLAT format v3.0).
+// CrawlerResult now contains FLAT format fields at root level.
+func (uc implUseCase) parseCrawlerResultMessage(ctx context.Context, res models.CrawlerResult) (*models.CrawlerResultMessage, error) {
+	msg := &models.CrawlerResultMessage{
+		Success:         res.Success,
+		TaskType:        res.TaskType,
+		JobID:           res.JobID,
+		Platform:        res.Platform,
+		RequestedLimit:  res.RequestedLimit,
+		AppliedLimit:    res.AppliedLimit,
+		TotalFound:      res.TotalFound,
+		PlatformLimited: res.PlatformLimited,
+		Successful:      res.Successful,
+		Failed:          res.Failed,
+		Skipped:         res.Skipped,
+		ErrorCode:       res.ErrorCode,
+		ErrorMessage:    res.ErrorMessage,
 	}
 
-	var enhanced models.EnhancedCrawlerResult
-	if err := json.Unmarshal(jsonData, &enhanced); err != nil {
-		return uc.fallbackLimitInfoAndStats(ctx, res)
-	}
+	uc.l.Debugf(ctx, "results.usecase.result.parseCrawlerResultMessage: parsed FLAT message: job_id=%s, platform=%s, successful=%d, failed=%d",
+		msg.JobID, msg.Platform, msg.Successful, msg.Failed)
 
-	// Check if enhanced fields exist
-	if enhanced.LimitInfo != nil && enhanced.Stats != nil {
-		uc.l.Debugf(ctx, "results.usecase.result.extractLimitInfoAndStats: using enhanced response format")
-		return enhanced.LimitInfo, enhanced.Stats
-	}
-
-	// Fallback to old format
-	return uc.fallbackLimitInfoAndStats(ctx, res)
-}
-
-// fallbackLimitInfoAndStats creates limit_info and stats from old response format by counting payload items.
-func (uc implUseCase) fallbackLimitInfoAndStats(ctx context.Context, res models.CrawlerResult) (*models.LimitInfo, *models.CrawlStats) {
-	itemCount := uc.countBatchItems(ctx, res.Payload)
-	if itemCount == 0 {
-		itemCount = 1 // Default to 1 if can't determine batch size
-	}
-
-	uc.l.Debugf(ctx, "results.usecase.result.fallbackLimitInfoAndStats: using fallback (counted %d items)", itemCount)
-
-	// For fallback, assume all items are successful if res.Success is true
-	successful := 0
-	failed := 0
-	if res.Success {
-		successful = itemCount
-	} else {
-		failed = itemCount
-	}
-
-	return &models.LimitInfo{
-			RequestedLimit:  50, // default
-			AppliedLimit:    50,
-			TotalFound:      itemCount,
-			PlatformLimited: false,
-		}, &models.CrawlStats{
-			Successful:     successful,
-			Failed:         failed,
-			Skipped:        0,
-			CompletionRate: 1.0,
-		}
+	return msg, nil
 }
 
 // buildHybridProgressRequest builds a webhook.ProgressRequest with hybrid state (task-level + item-level).
@@ -291,34 +286,6 @@ func (uc implUseCase) buildHybridProgressRequest(projectID, userID string, state
 		},
 		OverallProgressPercent: state.OverallProgressPercent(),
 	}
-}
-
-// countBatchItems counts the number of items in a crawler result payload
-func (uc implUseCase) countBatchItems(ctx context.Context, payload any) int {
-	if payload == nil {
-		return 0
-	}
-
-	jsonData, err := json.Marshal(payload)
-	if err != nil {
-		uc.l.Warnf(ctx, "results.usecase.result.countBatchItems: failed to marshal payload: %v", err)
-		return 0
-	}
-
-	var crawlerContentArray []results.CrawlerContent
-	if err := json.Unmarshal(jsonData, &crawlerContentArray); err != nil {
-		uc.l.Warnf(ctx, "results.usecase.result.countBatchItems: failed to unmarshal payload: %v", err)
-		return 0
-	}
-
-	return len(crawlerContentArray)
-}
-
-// buildTwoPhaseProgressRequest builds a webhook.ProgressRequest with two-phase state.
-// Deprecated: Use buildHybridProgressRequest instead for hybrid state tracking.
-func (uc implUseCase) buildTwoPhaseProgressRequest(projectID, userID string, state *models.ProjectState) webhook.ProgressRequest {
-	// Delegate to hybrid progress request for consistency
-	return uc.buildHybridProgressRequest(projectID, userID, state)
 }
 
 // handleAnalyzeResult handles analyze results from Analytics Service
@@ -373,8 +340,8 @@ func (uc implUseCase) handleAnalyzeResult(ctx context.Context, res models.Crawle
 		userID = ""
 	}
 
-	// Send progress webhook with two-phase format
-	progressReq := uc.buildTwoPhaseProgressRequest(projectID, userID, state)
+	// Send progress webhook
+	progressReq := uc.buildHybridProgressRequest(projectID, userID, state)
 
 	if err := uc.webhookUC.NotifyProgress(ctx, progressReq); err != nil {
 		uc.l.Warnf(ctx, "results.usecase.result.handleAnalyzeResult: failed to send progress webhook (non-fatal): project_id=%s, error=%v", projectID, err)
@@ -414,55 +381,6 @@ func (uc implUseCase) extractAnalyzePayload(ctx context.Context, payload any) (*
 	}
 
 	return &analyzePayload, nil
-}
-
-// extractProjectID extracts project_id from job_id in payload
-// job_id format for project execution: {projectID}-brand-{index}
-func (uc implUseCase) extractProjectID(ctx context.Context, payload any) (string, error) {
-	if payload == nil {
-		uc.l.Errorf(ctx, "results.usecase.result.extractProjectID: payload is nil")
-		return "", results.ErrInvalidInput
-	}
-
-	jsonData, err := json.Marshal(payload)
-	if err != nil {
-		uc.l.Errorf(ctx, "results.usecase.result.extractProjectID: failed to marshal payload: %v", err)
-		return "", results.ErrInvalidInput
-	}
-
-	var crawlerContentArray []results.CrawlerContent
-	if err := json.Unmarshal(jsonData, &crawlerContentArray); err != nil {
-		uc.l.Errorf(ctx, "results.usecase.result.extractProjectID: failed to unmarshal payload: %v", err)
-		return "", results.ErrInvalidInput
-	} else if len(crawlerContentArray) == 0 {
-		uc.l.Errorf(ctx, "results.usecase.result.extractProjectID: empty content array")
-		return "", results.ErrInvalidInput
-	} else if crawlerContentArray[0].Meta.JobID == "" {
-		uc.l.Errorf(ctx, "results.usecase.result.extractProjectID: job_id is empty")
-		return "", results.ErrInvalidInput
-	}
-
-	if len(crawlerContentArray) == 0 {
-		uc.l.Errorf(ctx, "results.usecase.result.extractProjectID: empty content array")
-		return "", results.ErrInvalidInput
-	}
-
-	jobID := crawlerContentArray[0].Meta.JobID
-	if jobID == "" {
-		uc.l.Errorf(ctx, "results.usecase.result.extractProjectID: job_id is empty")
-		return "", results.ErrInvalidInput
-	}
-
-	// Extract project_id from job_id (format: {projectID}-brand-{index})
-	// Find the last occurrence of "-brand-" and take everything before it
-	const brandSuffix = "-brand-"
-	idx := strings.LastIndex(jobID, brandSuffix)
-	if idx == -1 {
-		// If no "-brand-" suffix, assume job_id is the project_id
-		return jobID, nil
-	}
-
-	return jobID[:idx], nil
 }
 
 // handleWebhookError determines if a webhook error is permanent or temporary

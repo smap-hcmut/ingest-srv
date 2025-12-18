@@ -1,84 +1,128 @@
 package models
 
-// CrawlerStatus mô tả trạng thái trả về của worker.
-type CrawlerStatus string
-
-const (
-	CrawlerStatusSuccess CrawlerStatus = "success"
-	CrawlerStatusSkipped CrawlerStatus = "skipped"
-	CrawlerStatusFailed  CrawlerStatus = "failed"
-)
-
 // CrawlerResult là payload worker gửi ngược collector.
-// Format mới chỉ có 2 fields: success và payload (array of content items).
-// Metadata như job_id, platform được lấy từ payload[].meta
+// Supports both legacy format (dry-run with payload) and FLAT format (research_and_crawl).
+// FLAT format fields are at root level, legacy format uses Payload array.
 type CrawlerResult struct {
 	Success bool `json:"success"`
-	Payload any  `json:"payload"` // Array of content items with meta, content, interaction, author, comments
-}
+	Payload any  `json:"payload,omitempty"` // Array of content items (legacy/dry-run format)
 
-// ResultMetrics thống kê kết quả crawl.
-type ResultMetrics struct {
-	Documents  int64 `json:"documents,omitempty"`
-	Bytes      int64 `json:"bytes,omitempty"`
-	DurationMs int64 `json:"duration_ms,omitempty"`
-}
-
-// ResultError chứa mã lỗi máy đọc được từ worker.
-type ResultError struct {
-	Code    string `json:"code"`
-	Message string `json:"message,omitempty"`
+	// FLAT format fields (research_and_crawl) - Version 3.0
+	TaskType        string  `json:"task_type,omitempty"`
+	JobID           string  `json:"job_id,omitempty"`
+	Platform        string  `json:"platform,omitempty"`
+	RequestedLimit  int     `json:"requested_limit,omitempty"`
+	AppliedLimit    int     `json:"applied_limit,omitempty"`
+	TotalFound      int     `json:"total_found,omitempty"`
+	PlatformLimited bool    `json:"platform_limited,omitempty"`
+	Successful      int     `json:"successful,omitempty"`
+	Failed          int     `json:"failed,omitempty"`
+	Skipped         int     `json:"skipped,omitempty"`
+	ErrorCode       *string `json:"error_code,omitempty"`
+	ErrorMessage    *string `json:"error_message,omitempty"`
 }
 
 // ============================================================================
-// Enhanced Crawler Response (for new Crawler format with limit_info and stats)
+// Crawler Result Message (FLAT format for research_and_crawl)
+// Version 3.0: No payload, all fields at root level
 // ============================================================================
 
-// EnhancedCrawlerResult là response format mới từ Crawler với limit_info và stats.
-// Collector sẽ parse format này trước, fallback về CrawlerResult nếu không có.
-type EnhancedCrawlerResult struct {
-	Success   bool        `json:"success"`
-	TaskType  string      `json:"task_type,omitempty"`
-	LimitInfo *LimitInfo  `json:"limit_info,omitempty"`
-	Stats     *CrawlStats `json:"stats,omitempty"`
-	Error     *CrawlError `json:"error,omitempty"`
-	Payload   any         `json:"payload"`
+// CrawlerResultMessage là flat message format từ Crawler cho case research_and_crawl.
+// Không có payload - Crawler push content trực tiếp sang Analytics.
+type CrawlerResultMessage struct {
+	Success         bool    `json:"success"`
+	TaskType        string  `json:"task_type"`
+	JobID           string  `json:"job_id"`
+	Platform        string  `json:"platform"`
+	RequestedLimit  int     `json:"requested_limit"`
+	AppliedLimit    int     `json:"applied_limit"`
+	TotalFound      int     `json:"total_found"`
+	PlatformLimited bool    `json:"platform_limited"`
+	Successful      int     `json:"successful"`
+	Failed          int     `json:"failed"`
+	Skipped         int     `json:"skipped"`
+	ErrorCode       *string `json:"error_code,omitempty"`
+	ErrorMessage    *string `json:"error_message,omitempty"`
 }
 
-// LimitInfo chứa thông tin về limits và actual results từ Crawler.
-// Giúp Collector biết platform có bị giới hạn không.
-type LimitInfo struct {
-	RequestedLimit  int  `json:"requested_limit"`  // Limit được request từ Collector
-	AppliedLimit    int  `json:"applied_limit"`    // Limit thực tế Crawler áp dụng
-	TotalFound      int  `json:"total_found"`      // Số items tìm được trên platform
-	PlatformLimited bool `json:"platform_limited"` // Platform có bị giới hạn không
+// ============================================================================
+// CrawlerResultMessage Validation Methods
+// ============================================================================
+
+// Validate kiểm tra CrawlerResultMessage có hợp lệ không.
+func (m *CrawlerResultMessage) Validate() error {
+	if m.TaskType == "" {
+		return ErrMissingTaskType
+	}
+	if m.JobID == "" {
+		return ErrMissingJobID
+	}
+	if m.Platform == "" {
+		return ErrMissingPlatform
+	}
+	if m.Successful < 0 || m.Failed < 0 || m.Skipped < 0 {
+		return ErrInvalidCounts
+	}
+	if m.RequestedLimit < 0 || m.AppliedLimit < 0 || m.TotalFound < 0 {
+		return ErrInvalidLimits
+	}
+	return nil
 }
 
-// CrawlStats chứa statistics về crawl results.
-// Dùng để update item-level state trong Redis.
-type CrawlStats struct {
-	Successful     int     `json:"successful"`      // Số items crawl thành công
-	Failed         int     `json:"failed"`          // Số items crawl thất bại
-	Skipped        int     `json:"skipped"`         // Số items bị skip
-	CompletionRate float64 `json:"completion_rate"` // Tỷ lệ hoàn thành (0.0 - 1.0)
+// ExtractProjectID extracts project_id from job_id.
+// Job ID format: {projectID}-{source}-{index} (e.g., "proj123-brand-0")
+func (m *CrawlerResultMessage) ExtractProjectID() string {
+	const brandSuffix = "-brand-"
+	const competitorSuffix = "-competitor-"
+
+	jobID := m.JobID
+	if idx := lastIndex(jobID, brandSuffix); idx != -1 {
+		return jobID[:idx]
+	}
+	if idx := lastIndex(jobID, competitorSuffix); idx != -1 {
+		return jobID[:idx]
+	}
+	return jobID
 }
 
-// CrawlError chứa error details khi crawl fail.
-type CrawlError struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
-}
-
-// IsRetryable kiểm tra error có thể retry không.
-// Một số lỗi như AUTH_FAILED, INVALID_KEYWORD không nên retry.
-func (e *CrawlError) IsRetryable() bool {
-	if e == nil {
+// IsErrorRetryable kiểm tra error có thể retry không.
+func (m *CrawlerResultMessage) IsErrorRetryable() bool {
+	if m.ErrorCode == nil {
 		return false
 	}
-	switch e.Code {
+	switch *m.ErrorCode {
 	case "AUTH_FAILED", "INVALID_KEYWORD", "BLOCKED", "RATE_LIMITED_PERMANENT":
 		return false
 	default:
 		return true
 	}
+}
+
+// lastIndex returns the index of the last occurrence of substr in s, or -1 if not found.
+func lastIndex(s, substr string) int {
+	for i := len(s) - len(substr); i >= 0; i-- {
+		if s[i:i+len(substr)] == substr {
+			return i
+		}
+	}
+	return -1
+}
+
+// Validation errors
+var (
+	ErrMissingTaskType = &ValidationError{Field: "task_type", Message: "task_type is required"}
+	ErrMissingJobID    = &ValidationError{Field: "job_id", Message: "job_id is required"}
+	ErrMissingPlatform = &ValidationError{Field: "platform", Message: "platform is required"}
+	ErrInvalidCounts   = &ValidationError{Field: "counts", Message: "successful, failed, skipped must be non-negative"}
+	ErrInvalidLimits   = &ValidationError{Field: "limits", Message: "requested_limit, applied_limit, total_found must be non-negative"}
+)
+
+// ValidationError represents a validation error for crawler result fields.
+type ValidationError struct {
+	Field   string
+	Message string
+}
+
+func (e *ValidationError) Error() string {
+	return e.Field + ": " + e.Message
 }

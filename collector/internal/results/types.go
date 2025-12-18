@@ -102,13 +102,66 @@ type CrawlerCommentUser struct {
 	AvatarURL *string `json:"avatar_url,omitempty"`
 }
 
+// TaskType constants for routing messages
+const (
+	// TaskTypeAnalyzeResult is the required task_type for Analytics → Collector messages
+	TaskTypeAnalyzeResult = "analyze_result"
+	// TaskTypeResearchAndCrawl is the task_type for production crawl tasks
+	TaskTypeResearchAndCrawl = "research_and_crawl"
+	// TaskTypeDryrunKeyword is the task_type for dry-run/preview tasks
+	TaskTypeDryrunKeyword = "dryrun_keyword"
+)
+
 // AnalyzeResultPayload represents the payload from Analytics Service
 // when an analyze batch completes.
 type AnalyzeResultPayload struct {
 	ProjectID    string `json:"project_id"`
 	JobID        string `json:"job_id"`
-	TaskType     string `json:"task_type"` // "analyze_result"
+	TaskType     string `json:"task_type"` // Must be "analyze_result"
 	BatchSize    int    `json:"batch_size"`
 	SuccessCount int    `json:"success_count"`
 	ErrorCount   int    `json:"error_count"`
+}
+
+// Validate kiểm tra AnalyzeResultPayload có hợp lệ không.
+// Returns error nếu có vấn đề với data.
+func (p *AnalyzeResultPayload) Validate() error {
+	if p.TaskType != TaskTypeAnalyzeResult {
+		return ErrInvalidTaskType
+	}
+	if p.ProjectID == "" {
+		return ErrMissingProjectID
+	}
+	if p.SuccessCount < 0 || p.ErrorCount < 0 || p.BatchSize < 0 {
+		return ErrInvalidAnalyzeCounts
+	}
+	return nil
+}
+
+// IsValid kiểm tra payload có hợp lệ để xử lý không.
+// Shorthand for Validate() == nil.
+func (p *AnalyzeResultPayload) IsValid() bool {
+	return p.Validate() == nil
+}
+
+// TotalProcessed trả về tổng số items đã xử lý (success + error).
+func (p *AnalyzeResultPayload) TotalProcessed() int {
+	return p.SuccessCount + p.ErrorCount
+}
+
+// Validation errors for AnalyzeResultPayload
+var (
+	ErrInvalidTaskType      = &AnalyzeValidationError{Field: "task_type", Message: "task_type must be 'analyze_result'"}
+	ErrMissingProjectID     = &AnalyzeValidationError{Field: "project_id", Message: "project_id is required"}
+	ErrInvalidAnalyzeCounts = &AnalyzeValidationError{Field: "counts", Message: "success_count, error_count, and batch_size must be non-negative"}
+)
+
+// AnalyzeValidationError represents a validation error for analyze result payload.
+type AnalyzeValidationError struct {
+	Field   string
+	Message string
+}
+
+func (e *AnalyzeValidationError) Error() string {
+	return e.Field + ": " + e.Message
 }

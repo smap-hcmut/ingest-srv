@@ -1,10 +1,15 @@
-# Collector ↔ Crawler Contract Specification
+# Collector ↔ Services Contract Specification
 
 ## Tổng quan
 
-Document này định nghĩa contract giữa Collector (Dispatcher) và Crawler services sau khi fix các vấn đề trong `collector-limit-config-analysis.md`.
+Document này định nghĩa contract giữa Collector Service và các services khác:
 
-**Mục đích:** Đảm bảo 2 services đồng bộ về format message, behavior, và expectations.
+1. **Crawler → Collector**: Kết quả crawl từ TikTok/YouTube (case `research_and_crawl`)
+2. **Analytics → Collector**: Kết quả phân tích từ Analytics Service
+
+**Mục đích:** Đảm bảo các services đồng bộ về format message, behavior, và expectations.
+
+**Version:** 3.0 (Flat structure, no payload for research_and_crawl)
 
 ---
 
@@ -12,29 +17,31 @@ Document này định nghĩa contract giữa Collector (Dispatcher) và Crawler 
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                         OUTBOUND: Collector → Crawler                        │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  ┌──────────────┐         ┌─────────────┐         ┌──────────────┐          │
-│  │   Collector  │ ──────► │  RabbitMQ   │ ──────► │   Crawler    │          │
-│  │  (Dispatcher)│         │   Queues    │         │   (Worker)   │          │
-│  └──────────────┘         └─────────────┘         └──────────────┘          │
-│                                                                              │
-│  Message: CollectorTask (TikTokCollectorTask / YouTubeCollectorTask)         │
-│  Queue: tiktok.crawl / youtube.crawl                                         │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                         INBOUND: Crawler → Collector                         │
+│                    PHASE 1: CRAWL (Crawler → Collector)                      │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
 │  ┌──────────────┐         ┌─────────────┐         ┌──────────────┐          │
 │  │   Crawler    │ ──────► │  RabbitMQ   │ ──────► │  Collector   │          │
-│  │   (Worker)   │         │   Queues    │         │   (Results)  │          │
+│  │   (Worker)   │         │   Queue     │         │   (Results)  │          │
 │  └──────────────┘         └─────────────┘         └──────────────┘          │
 │                                                                              │
-│  Message: CrawlerResult (Enhanced format)                                    │
+│  Message: CrawlerResultMessage (flat, no payload)                            │
+│  Queue: collector.results                                                    │
+│                                                                              │
+│  NOTE: Crawler push content trực tiếp sang Analytics, không qua Collector    │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                   PHASE 2: ANALYZE (Analytics → Collector)                   │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌──────────────┐         ┌─────────────┐         ┌──────────────┐          │
+│  │  Analytics   │ ──────► │  RabbitMQ   │ ──────► │  Collector   │          │
+│  │   Service    │         │   Queue     │         │   (Results)  │          │
+│  └──────────────┘         └─────────────┘         └──────────────┘          │
+│                                                                              │
+│  Message: AnalyzeResultMessage (flat)                                        │
 │  Queue: collector.results                                                    │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -42,200 +49,47 @@ Document này định nghĩa contract giữa Collector (Dispatcher) và Crawler 
 
 ---
 
-## 2. OUTBOUND: Collector → Crawler
+## 2. CONTRACT 1: Crawler → Collector (CrawlerResultMessage)
 
-### 2.1 Message Format (CollectorTask)
-
-**Base Task Structure:**
+### 2.1 Message Structure (FLAT - No Payload)
 
 ```json
 {
+  "success": true,
+  "task_type": "research_and_crawl",
   "job_id": "proj123-brand-0",
   "platform": "tiktok",
-  "task_type": "research_and_crawl",
-  "time_range": 30,
-  "attempt": 1,
-  "max_attempts": 3,
-  "retry": false,
-  "schema_version": 1,
-  "trace_id": "trace-abc123",
-  "routing_key": "tiktok.crawl",
-  "emitted_at": "2024-01-15T10:30:00Z",
-  "headers": {
-    "x-schema-version": 1
-  },
-  "payload": { ... }
+  "requested_limit": 50,
+  "applied_limit": 50,
+  "total_found": 30,
+  "platform_limited": true,
+  "successful": 28,
+  "failed": 2,
+  "skipped": 0,
+  "error_code": null,
+  "error_message": null
 }
 ```
 
-### 2.2 Payload by Task Type
+### 2.2 Field Definitions
 
-#### 2.2.1 `research_and_crawl` (Production)
+| Field              | Type        | Required | Description                                         |
+| ------------------ | ----------- | -------- | --------------------------------------------------- |
+| `success`          | bool        | ✅       | `true` nếu task hoàn thành (kể cả không có kết quả) |
+| `task_type`        | string      | ✅       | `"research_and_crawl"` cho project execution        |
+| `job_id`           | string      | ✅       | Job ID format: `{projectID}-{source}-{index}`       |
+| `platform`         | string      | ✅       | `"tiktok"` hoặc `"youtube"`                         |
+| `requested_limit`  | int         | ✅       | Limit được request từ Collector                     |
+| `applied_limit`    | int         | ✅       | Limit thực tế Crawler áp dụng                       |
+| `total_found`      | int         | ✅       | Số items tìm được trên platform (trước khi crawl)   |
+| `platform_limited` | bool        | ✅       | `true` nếu `total_found < requested_limit`          |
+| `successful`       | int         | ✅       | Số items crawl thành công                           |
+| `failed`           | int         | ✅       | Số items crawl thất bại                             |
+| `skipped`          | int         | ✅       | Số items bị skip (duplicate, filtered, etc.)        |
+| `error_code`       | string/null | ❌       | Error code khi `success=false`                      |
+| `error_message`    | string/null | ❌       | Error message khi `success=false`                   |
 
-```json
-{
-  "payload": {
-    "keywords": ["keyword1"],
-    "limit_per_keyword": 50,
-    "include_comments": true,
-    "max_comments": 100,
-    "download_media": false,
-    "time_range": 30,
-    "project_id": "proj123",
-    "user_id": "user456",
-    "keyword_source": "brand",
-    "brand_name": "BrandX"
-  }
-}
-```
-
-#### 2.2.2 `dryrun_keyword` (Testing/Preview)
-
-```json
-{
-  "payload": {
-    "keywords": ["keyword1"],
-    "limit_per_keyword": 3,
-    "include_comments": true,
-    "max_comments": 5,
-    "download_media": false,
-    "time_range": 30
-  }
-}
-```
-
-### 2.3 Field Definitions & Expectations
-
-| Field               | Type     | Required | Description                   | Crawler Expectation               |
-| ------------------- | -------- | -------- | ----------------------------- | --------------------------------- |
-| `job_id`            | string   | ✅       | Unique identifier cho task    | Trả về trong response để tracking |
-| `platform`          | string   | ✅       | "tiktok" hoặc "youtube"       | Xác định crawler nào xử lý        |
-| `task_type`         | string   | ✅       | Loại task                     | Quyết định logic xử lý            |
-| `keywords`          | string[] | ✅       | **Luôn chỉ 1 keyword**        | Search với keyword này            |
-| `limit_per_keyword` | int      | ✅       | Số video tối đa cần crawl     | **PHẢI respect limit này**        |
-| `include_comments`  | bool     | ✅       | Có crawl comments không       | Nếu true, crawl comments          |
-| `max_comments`      | int      | ✅       | Số comments tối đa/video      | **PHẢI respect limit này**        |
-| `download_media`    | bool     | ✅       | Có download video/audio không | Nếu true, download media          |
-| `time_range`        | int      | ✅       | Số ngày filter (từ now)       | Filter videos trong range         |
-| `max_attempts`      | int      | ✅       | Số lần retry tối đa           | Collector sẽ retry nếu fail       |
-| `attempt`           | int      | ✅       | Lần thử hiện tại              | Để tracking retry count           |
-
-### 2.4 Collector Guarantees (Outbound)
-
-| #   | Guarantee                 | Description                                            |
-| --- | ------------------------- | ------------------------------------------------------ |
-| 1   | **1 keyword per message** | Mỗi message chỉ chứa đúng 1 keyword trong array        |
-| 2   | **Limits từ config**      | Tất cả limit values được đọc từ config, không hardcode |
-| 3   | **Unique job_id**         | Format: `{projectID}-{source}-{index}`                 |
-| 4   | **Valid time_range**      | Luôn > 0, default 30 nếu không parse được              |
-| 5   | **Idempotent dispatch**   | Cùng event sẽ tạo cùng job_ids                         |
-
-### 2.5 Config Values (Collector sẽ gửi)
-
-**Production (`research_and_crawl`):**
-
-| Config Key                  | Default | Description       |
-| --------------------------- | ------- | ----------------- |
-| `DEFAULT_LIMIT_PER_KEYWORD` | 50      | Số video/keyword  |
-| `DEFAULT_MAX_COMMENTS`      | 100     | Số comments/video |
-| `DEFAULT_MAX_ATTEMPTS`      | 3       | Số lần retry      |
-| `INCLUDE_COMMENTS`          | true    | Crawl comments    |
-| `DOWNLOAD_MEDIA`            | false   | Download media    |
-
-**Dry-run (`dryrun_keyword`):**
-
-| Config Key                 | Default | Description                    |
-| -------------------------- | ------- | ------------------------------ |
-| `DRYRUN_LIMIT_PER_KEYWORD` | 3       | Số video/keyword (nhỏ để test) |
-| `DRYRUN_MAX_COMMENTS`      | 5       | Số comments/video              |
-
----
-
-## 3. INBOUND: Crawler → Collector
-
-### 3.1 Current Response Format (Existing)
-
-```json
-{
-  "success": true,
-  "payload": [
-    {
-      "meta": {
-        "id": "video123",
-        "platform": "tiktok",
-        "job_id": "proj123-brand-0",
-        "task_type": "research_and_crawl",
-        "crawled_at": "2024-01-15T10:35:00Z",
-        "published_at": "2024-01-10T08:00:00Z",
-        "permalink": "https://tiktok.com/@user/video/123",
-        "keyword_source": "brand",
-        "lang": "vi",
-        "region": "VN",
-        "pipeline_version": "1.0.0",
-        "fetch_status": "success",
-        "fetch_error": null
-      },
-      "content": { ... },
-      "interaction": { ... },
-      "author": { ... },
-      "comments": [ ... ]
-    }
-  ]
-}
-```
-
-### 3.2 Enhanced Response Format (Required)
-
-**Collector cần thêm các fields sau để tracking chính xác:**
-
-```json
-{
-  "success": true,
-  "task_type": "research_and_crawl",
-
-  "limit_info": {
-    "requested_limit": 50,
-    "applied_limit": 50,
-    "total_found": 30,
-    "platform_limited": true
-  },
-
-  "stats": {
-    "successful": 28,
-    "failed": 2,
-    "skipped": 0,
-    "completion_rate": 0.93
-  },
-
-  "payload": [ ... ]
-}
-```
-
-### 3.3 New Fields Definition
-
-| Field                         | Type  | Required | Description                            |
-| ----------------------------- | ----- | -------- | -------------------------------------- |
-| `limit_info.requested_limit`  | int   | ✅       | Limit được request từ Collector        |
-| `limit_info.applied_limit`    | int   | ✅       | Limit thực tế áp dụng (sau khi cap)    |
-| `limit_info.total_found`      | int   | ✅       | Số videos tìm được từ search           |
-| `limit_info.platform_limited` | bool  | ✅       | `true` nếu platform trả về < requested |
-| `stats.successful`            | int   | ✅       | Số videos crawl thành công             |
-| `stats.failed`                | int   | ✅       | Số videos crawl thất bại               |
-| `stats.skipped`               | int   | ✅       | Số videos bị skip (duplicate, etc.)    |
-| `stats.completion_rate`       | float | ✅       | `successful / total_found`             |
-
-### 3.4 Crawler Expectations (Response)
-
-| #   | Expectation                 | Description                                                                |
-| --- | --------------------------- | -------------------------------------------------------------------------- |
-| 1   | **Trả về job_id**           | Phải include job_id trong `payload[].meta.job_id`                          |
-| 2   | **Trả về task_type**        | Phải include task_type trong response root hoặc `payload[].meta.task_type` |
-| 3   | **Trả về limit_info**       | **MỚI** - Phải include thông tin về limits                                 |
-| 4   | **Trả về stats**            | **MỚI** - Phải include statistics                                          |
-| 5   | **Respect limits**          | Không crawl nhiều hơn `limit_per_keyword`                                  |
-| 6   | **Empty payload = success** | Nếu search không có kết quả, vẫn trả `success: true` với `payload: []`     |
-
-### 3.5 Response Scenarios
+### 2.3 Response Scenarios
 
 #### Scenario 1: Full Success (tìm đủ limit)
 
@@ -243,21 +97,17 @@ Document này định nghĩa contract giữa Collector (Dispatcher) và Crawler 
 {
   "success": true,
   "task_type": "research_and_crawl",
-  "limit_info": {
-    "requested_limit": 50,
-    "applied_limit": 50,
-    "total_found": 50,
-    "platform_limited": false
-  },
-  "stats": {
-    "successful": 50,
-    "failed": 0,
-    "skipped": 0,
-    "completion_rate": 1.0
-  },
-  "payload": [
-    /* 50 items */
-  ]
+  "job_id": "proj123-brand-0",
+  "platform": "tiktok",
+  "requested_limit": 50,
+  "applied_limit": 50,
+  "total_found": 50,
+  "platform_limited": false,
+  "successful": 50,
+  "failed": 0,
+  "skipped": 0,
+  "error_code": null,
+  "error_message": null
 }
 ```
 
@@ -267,221 +117,321 @@ Document này định nghĩa contract giữa Collector (Dispatcher) và Crawler 
 {
   "success": true,
   "task_type": "research_and_crawl",
-  "limit_info": {
-    "requested_limit": 50,
-    "applied_limit": 50,
-    "total_found": 30,
-    "platform_limited": true
-  },
-  "stats": {
-    "successful": 28,
-    "failed": 2,
-    "skipped": 0,
-    "completion_rate": 0.93
-  },
-  "payload": [
-    /* 28 items */
-  ]
+  "job_id": "proj123-brand-0",
+  "platform": "tiktok",
+  "requested_limit": 50,
+  "applied_limit": 50,
+  "total_found": 30,
+  "platform_limited": true,
+  "successful": 28,
+  "failed": 2,
+  "skipped": 0,
+  "error_code": null,
+  "error_message": null
 }
 ```
 
-#### Scenario 3: No Results
+#### Scenario 3: No Results (keyword không có video)
 
 ```json
 {
   "success": true,
   "task_type": "research_and_crawl",
-  "limit_info": {
-    "requested_limit": 50,
-    "applied_limit": 50,
-    "total_found": 0,
-    "platform_limited": true
-  },
-  "stats": {
-    "successful": 0,
-    "failed": 0,
-    "skipped": 0,
-    "completion_rate": 0
-  },
-  "payload": []
+  "job_id": "proj123-brand-0",
+  "platform": "tiktok",
+  "requested_limit": 50,
+  "applied_limit": 50,
+  "total_found": 0,
+  "platform_limited": true,
+  "successful": 0,
+  "failed": 0,
+  "skipped": 0,
+  "error_code": null,
+  "error_message": null
 }
 ```
 
-#### Scenario 4: Task Failed
+#### Scenario 4: Task Failed (error xảy ra)
 
 ```json
 {
   "success": false,
   "task_type": "research_and_crawl",
-  "error": {
-    "code": "SEARCH_FAILED",
-    "message": "TikTok API rate limited"
-  },
-  "limit_info": {
-    "requested_limit": 50,
-    "applied_limit": 50,
-    "total_found": 0,
-    "platform_limited": false
-  },
-  "stats": {
-    "successful": 0,
-    "failed": 0,
-    "skipped": 0,
-    "completion_rate": 0
-  },
-  "payload": []
+  "job_id": "proj123-brand-0",
+  "platform": "tiktok",
+  "requested_limit": 50,
+  "applied_limit": 50,
+  "total_found": 0,
+  "platform_limited": false,
+  "successful": 0,
+  "failed": 0,
+  "skipped": 0,
+  "error_code": "SEARCH_FAILED",
+  "error_message": "TikTok API rate limited"
+}
+```
+
+### 2.4 Error Codes
+
+| Code                     | Description           | Retryable |
+| ------------------------ | --------------------- | --------- |
+| `SEARCH_FAILED`          | Search API failed     | ✅ Yes    |
+| `RATE_LIMITED`           | Platform rate limit   | ✅ Yes    |
+| `RATE_LIMITED_PERMANENT` | Permanent rate limit  | ❌ No     |
+| `AUTH_FAILED`            | Authentication failed | ❌ No     |
+| `INVALID_KEYWORD`        | Keyword không hợp lệ  | ❌ No     |
+| `BLOCKED`                | IP/Account bị block   | ❌ No     |
+| `TIMEOUT`                | Request timeout       | ✅ Yes    |
+
+### 2.5 Validation Rules
+
+1. **Platform Limited Logic**: `platform_limited = (total_found < requested_limit)`
+2. **Job ID Format**: `{projectID}-{source}-{index}` (e.g., `proj123-brand-0`)
+3. **Task Type**: PHẢI là `"research_and_crawl"` cho project execution
+4. **Stats Consistency**: `successful + failed + skipped` = số items đã attempt
+
+---
+
+## 3. CONTRACT 2: Analytics → Collector (AnalyzeResultMessage)
+
+### 3.1 Message Structure (FLAT)
+
+```json
+{
+  "task_type": "analyze_result",
+  "project_id": "proj123",
+  "job_id": "proj123-analyze-batch-1",
+  "batch_size": 10,
+  "success_count": 8,
+  "error_count": 2
+}
+```
+
+### 3.2 Field Definitions
+
+| Field           | Type   | Required | Description                                    |
+| --------------- | ------ | -------- | ---------------------------------------------- |
+| `task_type`     | string | ✅       | **PHẢI là `"analyze_result"`** để routing đúng |
+| `project_id`    | string | ✅       | Project ID để identify state trong Redis       |
+| `job_id`        | string | ✅       | Job ID để tracking và logging                  |
+| `batch_size`    | int    | ✅       | Số items trong batch được gửi để analyze       |
+| `success_count` | int    | ✅       | Số items analyze thành công                    |
+| `error_count`   | int    | ✅       | Số items analyze thất bại                      |
+
+### 3.3 Response Scenarios
+
+#### Scenario 1: Full Success
+
+```json
+{
+  "task_type": "analyze_result",
+  "project_id": "proj123",
+  "job_id": "proj123-analyze-batch-1",
+  "batch_size": 10,
+  "success_count": 10,
+  "error_count": 0
+}
+```
+
+#### Scenario 2: Partial Success
+
+```json
+{
+  "task_type": "analyze_result",
+  "project_id": "proj123",
+  "job_id": "proj123-analyze-batch-1",
+  "batch_size": 10,
+  "success_count": 7,
+  "error_count": 3
+}
+```
+
+#### Scenario 3: All Failed
+
+```json
+{
+  "task_type": "analyze_result",
+  "project_id": "proj123",
+  "job_id": "proj123-analyze-batch-1",
+  "batch_size": 10,
+  "success_count": 0,
+  "error_count": 10
+}
+```
+
+### 3.4 Validation Rules
+
+1. **Task Type**: `task_type` PHẢI bằng `"analyze_result"`
+2. **Project ID Required**: `project_id` PHẢI non-empty
+3. **Count Consistency**: `success_count + error_count` SHOULD bằng `batch_size`
+4. **Non-negative Counts**: Tất cả counts >= 0
+
+---
+
+## 4. Collector Processing Logic
+
+### 4.1 Message Routing
+
+```go
+// Route message based on task_type
+switch msg.TaskType {
+case "research_and_crawl":
+    return handleCrawlerResult(ctx, msg)
+case "analyze_result":
+    return handleAnalyzeResult(ctx, msg)
+default:
+    return ErrUnknownTaskType
+}
+```
+
+### 4.2 Crawler Result Processing
+
+```go
+func handleCrawlerResult(ctx context.Context, msg CrawlerResultMessage) error {
+    // 1. Extract project_id từ job_id
+    projectID := extractProjectID(msg.JobID)  // "proj123-brand-0" → "proj123"
+
+    // 2. Update task-level counter
+    if msg.Success {
+        stateUC.IncrementTasksDone(ctx, projectID)
+    } else {
+        stateUC.IncrementTasksErrors(ctx, projectID)
+    }
+
+    // 3. Update item-level counters
+    if msg.Successful > 0 {
+        stateUC.IncrementItemsActualBy(ctx, projectID, msg.Successful)
+        stateUC.IncrementAnalyzeTotalBy(ctx, projectID, msg.Successful)
+    }
+    if msg.Failed > 0 {
+        stateUC.IncrementItemsErrorsBy(ctx, projectID, msg.Failed)
+    }
+
+    // 4. Log platform limitation warning
+    if msg.PlatformLimited {
+        log.Warnf("Platform limited: requested=%d, found=%d",
+            msg.RequestedLimit, msg.TotalFound)
+    }
+
+    // 5. Send progress webhook và check completion
+    sendProgressWebhook(ctx, projectID)
+    checkAndUpdateCompletion(ctx, projectID)
+}
+```
+
+### 4.3 Analytics Result Processing
+
+```go
+func handleAnalyzeResult(ctx context.Context, msg AnalyzeResultMessage) error {
+    // 1. Validate task_type
+    if msg.TaskType != "analyze_result" {
+        return ErrInvalidTaskType
+    }
+
+    // 2. Validate project_id
+    if msg.ProjectID == "" {
+        return ErrMissingProjectID
+    }
+
+    // 3. Update analyze counters
+    if msg.SuccessCount > 0 {
+        stateUC.IncrementAnalyzeDoneBy(ctx, msg.ProjectID, msg.SuccessCount)
+    }
+    if msg.ErrorCount > 0 {
+        stateUC.IncrementAnalyzeErrorsBy(ctx, msg.ProjectID, msg.ErrorCount)
+    }
+
+    // 4. Send progress webhook và check completion
+    sendProgressWebhook(ctx, msg.ProjectID)
+    checkAndUpdateCompletion(ctx, msg.ProjectID)
 }
 ```
 
 ---
 
-## 4. State Tracking Behavior
+## 5. State Tracking
 
-### 4.1 Collector State Updates
-
-**Khi nhận response từ Crawler:**
+### 5.1 Two-Phase Processing Model
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│  COLLECTOR STATE UPDATE LOGIC                                                │
+│                         TWO-PHASE PROCESSING                                 │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
-│  1. Nhận CrawlerResult                                                       │
+│  PHASE 1: CRAWL                          PHASE 2: ANALYZE                    │
+│  ┌────────────────────────┐              ┌────────────────────────┐          │
+│  │ Crawler → Collector    │              │ Analytics → Collector  │          │
+│  │                        │              │                        │          │
+│  │ Update:                │              │ Update:                │          │
+│  │ - tasks_done += 1      │              │ - analyze_done +=      │          │
+│  │ - items_actual +=      │              │     success_count      │          │
+│  │     successful         │              │ - analyze_errors +=    │          │
+│  │ - items_errors +=      │              │     error_count        │          │
+│  │     failed             │              │                        │          │
+│  │ - analyze_total +=     │              │                        │          │
+│  │     successful         │              │                        │          │
+│  └────────────────────────┘              └────────────────────────┘          │
 │                                                                              │
-│  2. Extract stats:                                                           │
-│     - successful = response.stats.successful                                 │
-│     - failed = response.stats.failed                                         │
-│     - platform_limited = response.limit_info.platform_limited                │
-│                                                                              │
-│  3. Update Redis state:                                                      │
-│     - tasks_done += 1  (mỗi response = 1 task hoàn thành)                    │
-│     - items_actual += successful                                             │
-│     - items_errors += failed                                                 │
-│                                                                              │
-│  4. Check completion:                                                        │
-│     - if (tasks_done + tasks_errors) >= tasks_total → crawl phase done       │
-│                                                                              │
-│  5. Log platform limitation (for monitoring):                                │
-│     - if platform_limited: log warning với requested vs found                │
+│  Completion Check:                                                           │
+│  - Crawl: tasks_done + tasks_errors >= tasks_total                           │
+│  - Analyze: analyze_done + analyze_errors >= analyze_total                   │
+│  - Project DONE: Crawl Complete AND Analyze Complete                         │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 4.2 State Structure (Redis)
+### 5.2 Redis State Structure
 
 ```json
 {
   "status": "PROCESSING",
-
   "tasks_total": 6,
   "tasks_done": 4,
   "tasks_errors": 0,
-
   "items_expected": 300,
   "items_actual": 180,
   "items_errors": 5,
-
   "analyze_total": 180,
   "analyze_done": 100,
   "analyze_errors": 2
 }
 ```
 
-| Field            | Description                       | Updated When           |
-| ---------------- | --------------------------------- | ---------------------- |
-| `tasks_total`    | Số tasks dispatch                 | Khi dispatch           |
-| `tasks_done`     | Số tasks hoàn thành               | Mỗi response (success) |
-| `tasks_errors`   | Số tasks failed                   | Mỗi response (failed)  |
-| `items_expected` | `tasks_total × limit_per_keyword` | Khi dispatch           |
-| `items_actual`   | Tổng `stats.successful`           | Mỗi response           |
-| `items_errors`   | Tổng `stats.failed`               | Mỗi response           |
-
----
-
-## 5. Error Handling Contract
-
-### 5.1 Retry Logic (Collector side)
-
-| Condition                                    | Action                                   |
-| -------------------------------------------- | ---------------------------------------- |
-| `success: false` + `attempt < max_attempts`  | Retry với `attempt += 1`                 |
-| `success: false` + `attempt >= max_attempts` | Mark as failed, không retry              |
-| `success: true` + `payload: []`              | **Không retry** - platform không có data |
-| Network error                                | Retry với backoff                        |
-
-### 5.2 Error Codes (Crawler should return)
-
-| Code              | Description           | Retryable             |
-| ----------------- | --------------------- | --------------------- |
-| `SEARCH_FAILED`   | Search API failed     | ✅ Yes                |
-| `RATE_LIMITED`    | Platform rate limit   | ✅ Yes (with backoff) |
-| `AUTH_FAILED`     | Authentication failed | ❌ No                 |
-| `INVALID_KEYWORD` | Keyword không hợp lệ  | ❌ No                 |
-| `CRAWL_PARTIAL`   | Một số videos fail    | ✅ Partial success    |
-| `TIMEOUT`         | Request timeout       | ✅ Yes                |
-
----
-
-## 6. Backward Compatibility
-
-### 6.1 Migration Path
-
-**Phase 1: Collector update (không break Crawler)**
-
-- Collector gửi message format cũ (không thay đổi)
-- Collector đọc response format cũ + mới (fallback logic)
-
-**Phase 2: Crawler update**
-
-- Crawler trả về response format mới với `limit_info` và `stats`
-- Collector đọc full response mới
-
-**Phase 3: Cleanup**
-
-- Remove fallback logic trong Collector
-
-### 6.2 Fallback Logic (Collector)
+### 5.3 Completion Logic
 
 ```go
-// Nếu response không có limit_info (old format)
-if response.LimitInfo == nil {
-    // Fallback: đếm items trong payload
-    itemCount := len(response.Payload)
-    stats = Stats{
-        Successful:     itemCount,
-        Failed:         0,
-        Skipped:        0,
-        CompletionRate: 1.0,
-    }
+func IsComplete(state *ProjectState) bool {
+    crawlComplete := (state.TasksDone + state.TasksErrors >= state.TasksTotal)
+    analyzeComplete := (state.AnalyzeDone + state.AnalyzeErrors >= state.AnalyzeTotal)
+    return crawlComplete && analyzeComplete
 }
 ```
 
 ---
 
-## 7. Summary Checklist
+## 6. Progress Webhook Payload
 
-### Crawler cần implement:
-
-- [ ] Respect `limit_per_keyword` - không crawl nhiều hơn
-- [ ] Respect `max_comments` - không crawl nhiều comments hơn
-- [ ] Trả về `limit_info` trong response
-- [ ] Trả về `stats` trong response
-- [ ] Set `platform_limited: true` khi search trả về < requested
-- [ ] Include `job_id` và `task_type` trong response
-- [ ] Return `success: true` với `payload: []` khi không có kết quả
-
-### Collector sẽ:
-
-- [ ] Gửi limits từ config (không hardcode)
-- [ ] Gửi đúng 1 keyword per message
-- [ ] Đọc `limit_info` và `stats` từ response
-- [ ] Track state ở cả task-level và item-level
-- [ ] Log warning khi `platform_limited: true`
-- [ ] Retry logic dựa trên error codes
+```json
+{
+  "project_id": "proj123",
+  "status": "PROCESSING",
+  "overall_progress_percent": 65.5,
+  "crawl": {
+    "tasks": { "total": 6, "done": 4, "errors": 0, "percent": 66.67 },
+    "items": { "expected": 300, "actual": 180, "errors": 5, "percent": 60.0 }
+  },
+  "analyze": {
+    "total": 180,
+    "done": 100,
+    "errors": 2,
+    "percent": 55.56
+  }
+}
+```
 
 ---
 
-## 8. Example Full Flow
+## 7. Example Full Flow
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -491,39 +441,90 @@ if response.LimitInfo == nil {
 │  INPUT:                                                                      │
 │  - project_id: "proj123"                                                     │
 │  - brand_keywords: ["iphone", "samsung"]                                     │
-│  - limit_per_keyword: 50 (from config)                                       │
+│  - limit_per_keyword: 50                                                     │
 │                                                                              │
-│  DISPATCH (4 messages):                                                      │
-│  ├── TikTok: { job_id: "proj123-brand-0", keywords: ["iphone"], limit: 50 }  │
-│  ├── TikTok: { job_id: "proj123-brand-1", keywords: ["samsung"], limit: 50 } │
-│  ├── YouTube: { job_id: "proj123-brand-0", keywords: ["iphone"], limit: 50 } │
-│  └── YouTube: { job_id: "proj123-brand-1", keywords: ["samsung"], limit: 50 }│
-│                                                                              │
-│  STATE AFTER DISPATCH:                                                       │
+│  DISPATCH (4 tasks):                                                         │
 │  - tasks_total: 4                                                            │
 │  - items_expected: 200 (4 × 50)                                              │
 │                                                                              │
-│  RESPONSES:                                                                  │
-│  ├── TikTok "iphone": found=50, successful=48, failed=2                      │
-│  ├── TikTok "samsung": found=30, successful=30, failed=0 (platform_limited)  │
-│  ├── YouTube "iphone": found=50, successful=50, failed=0                     │
-│  └── YouTube "samsung": found=50, successful=45, failed=5                    │
+│  CRAWLER MESSAGES:                                                           │
+│  ┌─────────────────────────────────────────────────────────────────────┐     │
+│  │ {                                                                    │     │
+│  │   "success": true,                                                   │     │
+│  │   "task_type": "research_and_crawl",                                 │     │
+│  │   "job_id": "proj123-brand-0",                                       │     │
+│  │   "platform": "tiktok",                                              │     │
+│  │   "requested_limit": 50, "applied_limit": 50,                        │     │
+│  │   "total_found": 50, "platform_limited": false,                      │     │
+│  │   "successful": 48, "failed": 2, "skipped": 0                        │     │
+│  │ }                                                                    │     │
+│  └─────────────────────────────────────────────────────────────────────┘     │
+│  → tasks_done=1, items_actual=48, items_errors=2, analyze_total=48           │
+│                                                                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐     │
+│  │ {                                                                    │     │
+│  │   "success": true,                                                   │     │
+│  │   "task_type": "research_and_crawl",                                 │     │
+│  │   "job_id": "proj123-brand-1",                                       │     │
+│  │   "platform": "tiktok",                                              │     │
+│  │   "requested_limit": 50, "applied_limit": 50,                        │     │
+│  │   "total_found": 30, "platform_limited": true,                       │     │
+│  │   "successful": 30, "failed": 0, "skipped": 0                        │     │
+│  │ }                                                                    │     │
+│  └─────────────────────────────────────────────────────────────────────┘     │
+│  → tasks_done=2, items_actual=78, items_errors=2, analyze_total=78           │
+│                                                                              │
+│  ... (2 more crawler messages for YouTube)                                   │
+│                                                                              │
+│  STATE AFTER CRAWL COMPLETE:                                                 │
+│  - tasks_total: 4, tasks_done: 4, tasks_errors: 0                            │
+│  - items_expected: 200, items_actual: 173, items_errors: 7                   │
+│  - analyze_total: 173                                                        │
+│                                                                              │
+│  ANALYTICS MESSAGES:                                                         │
+│  ┌─────────────────────────────────────────────────────────────────────┐     │
+│  │ {                                                                    │     │
+│  │   "task_type": "analyze_result",                                     │     │
+│  │   "project_id": "proj123",                                           │     │
+│  │   "job_id": "proj123-analyze-batch-1",                               │     │
+│  │   "batch_size": 50, "success_count": 48, "error_count": 2            │     │
+│  │ }                                                                    │     │
+│  └─────────────────────────────────────────────────────────────────────┘     │
+│  → analyze_done=48, analyze_errors=2                                         │
+│                                                                              │
+│  ... (more analytics messages)                                               │
 │                                                                              │
 │  FINAL STATE:                                                                │
-│  - tasks_total: 4                                                            │
-│  - tasks_done: 4                                                             │
-│  - items_expected: 200                                                       │
-│  - items_actual: 173 (48+30+50+45)                                           │
-│  - items_errors: 7 (2+0+0+5)                                                 │
-│  - completion: 86.5% (173/200)                                               │
+│  - tasks_done: 4, tasks_errors: 0                                            │
+│  - items_actual: 173, items_errors: 7                                        │
+│  - analyze_done: 171, analyze_errors: 2                                      │
+│  - Status: DONE                                                              │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 9. Related Documents
+## 8. Summary Checklist
 
-- `collector-limit-config-analysis.md` - Phân tích vấn đề và giải pháp Collector
-- `crawler-limit-optimization.md` - Phân tích vấn đề và giải pháp Crawler
-- `event-drivent.md` - Event flow documentation
+### Crawler Team:
+
+- [ ] Gửi flat message với tất cả fields ở root level
+- [ ] Include `job_id` và `platform` trực tiếp trong message
+- [ ] Set `task_type = "research_and_crawl"`
+- [ ] Set `platform_limited = true` khi `total_found < requested_limit`
+- [ ] **KHÔNG cần gửi payload content** - push trực tiếp sang Analytics
+
+### Analytics Team:
+
+- [ ] Gửi flat message với `task_type = "analyze_result"`
+- [ ] Include `project_id` trực tiếp (không để Collector parse từ job_id)
+- [ ] Report `success_count` và `error_count` chính xác
+
+### Collector:
+
+- [ ] Parse flat message format
+- [ ] Extract `project_id` từ `job_id` (format: `{projectID}-{source}-{index}`)
+- [ ] Update state counters atomically
+- [ ] Check completion dựa trên cả Crawl và Analyze phases
+- [ ] Log warning khi `platform_limited = true`

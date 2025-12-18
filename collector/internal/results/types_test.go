@@ -288,3 +288,164 @@ func TestMarshalCrawlerAuthorPreservesYouTubeFields(t *testing.T) {
 	assert.NotNil(t, unmarshaled.TotalViewCount)
 	assert.Equal(t, 1000000, *unmarshaled.TotalViewCount)
 }
+
+// ============================================================================
+// AnalyzeResultPayload Validation Tests
+// **Feature: project-state-contract-fix, Property 5: Analyze Payload Validation**
+// **Validates: Requirements 2.1, 2.2, 2.3**
+// ============================================================================
+
+// TestAnalyzeResultPayloadValidation_ValidPayload tests that valid payloads pass validation
+func TestAnalyzeResultPayloadValidation_ValidPayload(t *testing.T) {
+	payload := AnalyzeResultPayload{
+		ProjectID:    "proj123",
+		JobID:        "proj123-brand-0-analyze-batch-1",
+		TaskType:     TaskTypeAnalyzeResult,
+		BatchSize:    10,
+		SuccessCount: 8,
+		ErrorCount:   2,
+	}
+
+	err := payload.Validate()
+	assert.NoError(t, err)
+	assert.True(t, payload.IsValid())
+}
+
+// TestAnalyzeResultPayloadValidation_InvalidTaskType tests that invalid task_type fails validation
+func TestAnalyzeResultPayloadValidation_InvalidTaskType(t *testing.T) {
+	testCases := []struct {
+		name     string
+		taskType string
+	}{
+		{"empty task_type", ""},
+		{"wrong task_type", "research_and_crawl"},
+		{"typo in task_type", "analyze_results"},
+		{"uppercase task_type", "ANALYZE_RESULT"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			payload := AnalyzeResultPayload{
+				ProjectID:    "proj123",
+				JobID:        "job123",
+				TaskType:     tc.taskType,
+				BatchSize:    10,
+				SuccessCount: 10,
+				ErrorCount:   0,
+			}
+
+			err := payload.Validate()
+			assert.Error(t, err)
+			assert.Equal(t, ErrInvalidTaskType, err)
+			assert.False(t, payload.IsValid())
+		})
+	}
+}
+
+// TestAnalyzeResultPayloadValidation_MissingProjectID tests that empty project_id fails validation
+func TestAnalyzeResultPayloadValidation_MissingProjectID(t *testing.T) {
+	payload := AnalyzeResultPayload{
+		ProjectID:    "",
+		JobID:        "job123",
+		TaskType:     TaskTypeAnalyzeResult,
+		BatchSize:    10,
+		SuccessCount: 10,
+		ErrorCount:   0,
+	}
+
+	err := payload.Validate()
+	assert.Error(t, err)
+	assert.Equal(t, ErrMissingProjectID, err)
+}
+
+// TestAnalyzeResultPayloadValidation_NegativeCounts tests that negative counts fail validation
+func TestAnalyzeResultPayloadValidation_NegativeCounts(t *testing.T) {
+	testCases := []struct {
+		name         string
+		batchSize    int
+		successCount int
+		errorCount   int
+	}{
+		{"negative batch_size", -1, 10, 0},
+		{"negative success_count", 10, -1, 0},
+		{"negative error_count", 10, 0, -1},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			payload := AnalyzeResultPayload{
+				ProjectID:    "proj123",
+				JobID:        "job123",
+				TaskType:     TaskTypeAnalyzeResult,
+				BatchSize:    tc.batchSize,
+				SuccessCount: tc.successCount,
+				ErrorCount:   tc.errorCount,
+			}
+
+			err := payload.Validate()
+			assert.Error(t, err)
+			assert.Equal(t, ErrInvalidAnalyzeCounts, err)
+		})
+	}
+}
+
+// TestAnalyzeResultPayloadTotalProcessed tests TotalProcessed calculation
+func TestAnalyzeResultPayloadTotalProcessed(t *testing.T) {
+	testCases := []struct {
+		name         string
+		successCount int
+		errorCount   int
+		expected     int
+	}{
+		{"all success", 10, 0, 10},
+		{"all error", 0, 10, 10},
+		{"mixed", 7, 3, 10},
+		{"zero", 0, 0, 0},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			payload := AnalyzeResultPayload{
+				ProjectID:    "proj123",
+				JobID:        "job123",
+				TaskType:     TaskTypeAnalyzeResult,
+				BatchSize:    tc.expected,
+				SuccessCount: tc.successCount,
+				ErrorCount:   tc.errorCount,
+			}
+
+			assert.Equal(t, tc.expected, payload.TotalProcessed())
+		})
+	}
+}
+
+// TestAnalyzeResultPayloadUnmarshal tests JSON unmarshaling
+func TestAnalyzeResultPayloadUnmarshal(t *testing.T) {
+	jsonData := `{
+		"project_id": "proj123",
+		"job_id": "proj123-brand-0-analyze-batch-1",
+		"task_type": "analyze_result",
+		"batch_size": 10,
+		"success_count": 8,
+		"error_count": 2
+	}`
+
+	var payload AnalyzeResultPayload
+	err := json.Unmarshal([]byte(jsonData), &payload)
+
+	require.NoError(t, err)
+	assert.Equal(t, "proj123", payload.ProjectID)
+	assert.Equal(t, "proj123-brand-0-analyze-batch-1", payload.JobID)
+	assert.Equal(t, TaskTypeAnalyzeResult, payload.TaskType)
+	assert.Equal(t, 10, payload.BatchSize)
+	assert.Equal(t, 8, payload.SuccessCount)
+	assert.Equal(t, 2, payload.ErrorCount)
+	assert.NoError(t, payload.Validate())
+}
+
+// TestTaskTypeConstants tests that task type constants are correct
+func TestTaskTypeConstants(t *testing.T) {
+	assert.Equal(t, "analyze_result", TaskTypeAnalyzeResult)
+	assert.Equal(t, "research_and_crawl", TaskTypeResearchAndCrawl)
+	assert.Equal(t, "dryrun_keyword", TaskTypeDryrunKeyword)
+}

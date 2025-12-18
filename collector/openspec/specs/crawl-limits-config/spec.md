@@ -1,12 +1,12 @@
 # Spec: Crawl Limits Configuration
 
-## Overview
+## Purpose
 
-Capability này định nghĩa cách Collector Service quản lý crawl limits thông qua configuration thay vì hardcode, và track state ở cả task-level và item-level.
+Định nghĩa cách Collector Service quản lý crawl limits thông qua configuration thay vì hardcode, và track state ở cả task-level và item-level để đảm bảo progress tracking chính xác.
 
 ---
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Config-Driven Crawl Limits
 
@@ -192,10 +192,6 @@ THE Collector Service SHALL send progress webhooks with both task-level and item
   **And** it SHALL include `analyze` object (unchanged)
   **And** it SHALL include `overall_progress_percent`
 
----
-
-## MODIFIED Requirements
-
 ### Requirement: State Interface Methods
 
 THE State UseCase interface SHALL be extended with new methods for hybrid tracking.
@@ -223,10 +219,6 @@ THE State UseCase interface SHALL be extended with new methods for hybrid tracki
 **Then** it SHALL atomically increment `items_actual` by count
 **When** calling `IncrementItemsErrorsBy(ctx, projectID, count)`
 **Then** it SHALL atomically increment `items_errors` by count
-
----
-
-## REMOVED Requirements
 
 ### Requirement: Hardcoded Default Values
 
