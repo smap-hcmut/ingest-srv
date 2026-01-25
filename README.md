@@ -1,4 +1,4 @@
-# SMAP API - Dispatcher Service
+# SMAP Dispatcher Service
 
 This repository houses the **Dispatcher Service** for the SMAP data collection system. It serves as the central coordinator that receives high-level crawl requests, validates them, and distributes granular tasks to platform-specific workers via RabbitMQ.
 
@@ -8,13 +8,19 @@ The service follows a **Producer-Consumer** and **Fan-out** architecture pattern
 
 ```mermaid
 graph LR
-    A[BE Service] -- "CrawlRequest" --> B(RabbitMQ: Dispatch Queue)
+    A[Project Service] -- "project.created event" --> B[RabbitMQ: smap.events]
+    A2[Legacy API] -- "CrawlRequest" --> B2[RabbitMQ: collector.inbound]
     B --> C{SMAP Dispatcher}
+    B2 --> C
     C -- "Validate & Map" --> C
-    C -- "CollectorTask (YouTube)" --> D[RabbitMQ: YouTube Queue]
-    C -- "CollectorTask (TikTok)" --> E[RabbitMQ: TikTok Queue]
+    C -- "CollectorTask (YouTube)" --> D[RabbitMQ: youtube_exchange]
+    C -- "CollectorTask (TikTok)" --> E[RabbitMQ: tiktok_exchange]
     D --> F[YouTube Worker]
     E --> G[TikTok Worker]
+    F --> H[Results: youtube_result_queue]
+    G --> I[Results: tiktok_result_queue]
+    H --> C
+    I --> C
 ```
 
 ### Core Component
@@ -32,15 +38,15 @@ The core logic resides in `internal/dispatcher`.
 
 ### 1. Dispatch Flow
 
-The dispatch process (`internal/dispatcher/usecase/dispatch_uc.go`) follows these steps:
+The dispatch process (`internal/dispatcher/usecase/dispatch.go`) follows these steps:
 
-1.  **Receive Request**: Accepts a `CrawlRequest` containing `JobID`, `TaskType`, and a generic `Payload`.
-2.  **Platform Selection**: Determines which platforms to target based on configuration (default: all enabled platforms).
-3.  **Task Generation**: For each target platform:
-    - Creates a `CollectorTask` with a new trace ID and metadata.
-    - **Payload Mapping**: Converts the generic input payload into a strict, platform-specific struct (e.g., `YouTubeResearchKeywordPayload`) using the `Mapper` logic.
-    - **Routing**: Determines the correct RabbitMQ routing key for the platform.
-4.  **Publish**: Sends the `CollectorTask` to the platform's queue.
+1. **Receive Request**: Accepts a `CrawlRequest` containing `JobID`, `TaskType`, and a generic `Payload`.
+2. **Platform Selection**: Determines which platforms to target based on configuration (default: all enabled platforms).
+3. **Task Generation**: For each target platform:
+   - Creates a `CollectorTask` with a new trace ID and metadata.
+   - **Payload Mapping**: Converts the generic input payload into a strict, platform-specific struct (e.g., `YouTubeResearchKeywordPayload`) using the `Mapper` logic.
+   - **Routing**: Determines the correct RabbitMQ routing key for the platform.
+4. **Publish**: Sends the `CollectorTask` to the platform's queue.
 
 ### 2. Supported Task Types
 
@@ -60,24 +66,22 @@ The system supports three primary task types (`internal/models/task.go`):
 The project strictly follows **Clean Architecture** and **SOLID** principles:
 
 - **Clean Architecture**:
-
   - `delivery/`: Transport layer (RabbitMQ consumers, HTTP handlers).
   - `usecase/`: Pure business logic (Dispatching, Mapping).
   - `models/`: Domain entities and DTOs.
   - **Benefit**: The business logic is decoupled from the transport mechanism. We could easily switch from RabbitMQ to Kafka without changing the core dispatch logic.
 
 - **Dependency Injection (DI)**:
-
   - All components (UseCases, Repositories, Consumers) are initialized with their dependencies passed via constructors (`New...`).
   - **Benefit**: Makes testing easier (mocking dependencies) and dependencies explicit.
 
 - **Strategy/Factory Pattern**:
-  - The `mapPayload` function (`internal/dispatcher/usecase/mapper.go`) acts as a factory, selecting the correct payload structure and validation strategy based on the `Platform` and `TaskType`.
+  - The `mapPayload` function (`internal/dispatcher/usecase/util.go`) acts as a factory, selecting the correct payload structure and validation strategy based on the `Platform` and `TaskType`.
 
 ## 📂 Project Structure
 
-```
-smap-api/
+```text
+collector-srv/
 ├── cmd/
 │   └── consumer/     # RabbitMQ Consumer entry point
 ├── config/           # Configuration loading (Env)
@@ -86,8 +90,11 @@ smap-api/
 │   │   ├── delivery/ # RabbitMQ consumers/producers
 │   │   └── usecase/  # Business logic (Dispatch, Map)
 │   ├── consumer/     # Consumer server implementation
+│   ├── results/      # Result processing from workers
+│   ├── state/        # Redis state management
+│   ├── webhook/      # Progress webhook client
 │   └── models/       # Shared data structures (CrawlRequest, CollectorTask)
-├── pkg/              # Shared utilities (Logger, RabbitMQ, Mongo, etc.)
+├── pkg/              # Shared utilities (Logger, RabbitMQ, Redis, etc.)
 └── ...
 ```
 
@@ -95,16 +102,16 @@ smap-api/
 
 ### Prerequisites
 
-- Go 1.23+
+- Go 1.25.4+
 - RabbitMQ
-- MongoDB (for future persistence)
-- Redis (optional, for caching)
+- Redis (for state management, DB 1)
+- MongoDB (not yet implemented, reserved for future persistence)
 
 ### Configuration
 
-Copy `env.template` to `.env` and configure:
+Copy `template.env` to `.env` and configure:
 
-```ini
+```env
 # RabbitMQ
 AMQP_URL=amqp://guest:guest@localhost:5672/
 
@@ -150,14 +157,14 @@ make run-consumer
 
 ### Event-Driven Architecture
 
-The service now supports event-driven choreography with the Project Service. See `document/event-drivent.md` for full details.
+The service now supports event-driven choreography with the Project Service. See `openspec/project.md` for full details.
 
 #### SMAP Events Exchange
 
 - **Exchange**: `smap.events` (Type: `topic`)
 - **Consumed Routing Key**: `project.created`
 
-> **Note:** `data.collected` event is published by Crawler (Worker) services, not Collector.
+> **Note:** `data.collected` event is published by Crawler (Worker) services, not Dispatcher.
 
 #### Project Created Event (Consumed)
 
@@ -204,7 +211,7 @@ The service updates project state in Redis (DB 1) with key schema `smap:proj:{pr
 
 **Hybrid State Pipeline:**
 
-```
+```text
 Phase 1: CRAWL                              Phase 2: ANALYZE
 ┌─────────────────────────────────┐         ┌─────────────────────────┐
 │ Task-Level (completion check):  │         │ analyze_total: 450      │
@@ -217,7 +224,7 @@ Phase 1: CRAWL                              Phase 2: ANALYZE
 │   items_actual: 450             │
 │   items_errors: 50              │
 └─────────────────────────────────┘
-Crawler → Collector                         Analytics → Collector
+Crawler → Dispatcher                         Analytics → Dispatcher
 ```
 
 | Field            | Type   | Description                                |
@@ -248,7 +255,7 @@ Crawler → Collector                         Analytics → Collector
 
 The service calls Project Service webhook to notify progress:
 
-```
+```http
 POST /internal/progress/callback
 Header: X-Internal-Key: {internal_key}
 ```
@@ -310,7 +317,7 @@ External services (e.g., API Gateway, Scheduler) can still publish `CrawlRequest
 - **Queue**: `collector.inbound.queue`
 
 > [!NOTE]
-> The `collector.tiktok` and `collector.youtube` exchanges are **internal** and managed by the dispatcher. Do not publish to them directly.
+> The `tiktok_exchange` and `youtube_exchange` exchanges are **internal** and managed by the dispatcher. Do not publish to them directly.
 
 #### Payload Example (`CrawlRequest`)
 

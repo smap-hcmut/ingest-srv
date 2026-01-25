@@ -73,7 +73,7 @@ func main() {
 	}
 	defer srv.Close()
 
-	l.Info(ctx, "Starting SMAP Collector Service...")
+	l.Info(ctx, "Starting SMAP Dispatcher Service...")
 
 	if err := srv.Run(ctx); err != nil {
 		l.Fatalf(ctx, "consumer stopped with error: %v", err)

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-SMAP Collector Service (Dispatcher) là service trung tâm trong hệ thống SMAP data collection. Service này nhận các crawl request từ Project Service (qua RabbitMQ event `project.created`) hoặc từ legacy API, validate và phân phối các task chi tiết đến các platform-specific workers (YouTube, TikTok) thông qua RabbitMQ.
+SMAP Dispatcher Service là service trung tâm trong hệ thống SMAP data collection. Service này nhận các crawl request từ Project Service (qua RabbitMQ event `project.created`) hoặc từ legacy API, validate và phân phối các task chi tiết đến các platform-specific workers (YouTube, TikTok) thông qua RabbitMQ.
 
 **Core Responsibilities:**
 
@@ -13,7 +13,7 @@ SMAP Collector Service (Dispatcher) là service trung tâm trong hệ thống SM
 - Gọi progress webhook để notify Project Service
 - Nhận results từ workers và cập nhật state
 
-> **Note:** `data.collected` event được publish bởi Crawler (Worker) services, không phải Collector.
+> **Note:** `data.collected` event được publish bởi Crawler (Worker) services, không phải Dispatcher.
 
 ## Tech Stack
 
@@ -51,7 +51,7 @@ SMAP Collector Service (Dispatcher) là service trung tâm trong hệ thống SM
 
 **Clean Architecture Layers:**
 
-```
+```text
 cmd/consumer/          # Entry point
   ↓
 internal/consumer/     # Server orchestration
@@ -116,7 +116,7 @@ SMAP là hệ thống data collection và analysis cho social media platforms (Y
 
 1. **Project Creation** (Project Service): User tạo project với keywords
 2. **Project Execution** (Project Service): Publish `project.created` event
-3. **Task Dispatch** (Collector Service): Transform project → crawl tasks → workers
+3. **Task Dispatch** (Dispatcher Service): Transform project → crawl tasks → workers
 4. **Data Collection** (Workers): Crawl data từ platforms, upload MinIO
 5. **Data Event** (Workers): Publish `data.collected` event
 6. **Analysis** (Analytics Service): Fetch data từ MinIO và process
@@ -125,7 +125,7 @@ SMAP là hệ thống data collection và analysis cho social media platforms (Y
 
 - Exchange: `smap.events` (topic)
 - Routing Keys:
-  - `project.created`: Project Service → Collector Service
+  - `project.created`: Project Service → Dispatcher Service
   - `data.collected`: Crawler (Worker) → Analytics Service
   - `analysis.finished`: Analytics Service → Insight Service
   - `job.completed`: Analytics Service → Notification
@@ -176,7 +176,7 @@ SMAP là hệ thống data collection và analysis cho social media platforms (Y
   - Chỉ 2-3 webhook calls per project maximum
 - **State TTL**:
   - Default 7 days (168 hours)
-  - Configurable via `REDIS_STATE_TTL_HOURS`
+  - Currently hardcoded to `state.DefaultTTL` (not yet configurable via env vars)
 - **Fail-Fast Principle**:
   - RabbitMQ connection: Fail fast nếu không connect được
   - Redis connection: Fail fast nếu không connect được
@@ -188,17 +188,20 @@ SMAP là hệ thống data collection và analysis cho social media platforms (Y
 
 - **RabbitMQ**:
   - Exchange: `smap.events` (topic) - Event-driven architecture
-  - Exchange: `collector.inbound` (topic) - Legacy support
-  - Exchange: `collector.youtube`, `collector.tiktok` - Outbound to workers
+  - Exchange: `collector.inbound` (topic) - Legacy support (deprecated)
+  - Exchange: `youtube_exchange` (direct) - Outbound to YouTube workers
+  - Exchange: `tiktok_exchange` (direct) - Outbound to TikTok workers
   - Connection: `RABBITMQ_URL` env variable
 
 **State Storage:**
 
 - **Redis**:
-  - Host: `REDIS_STATE_HOST` (default: `localhost:6379`)
+  - Host: `REDIS_HOST` (default: `localhost:6379`)
   - DB: `REDIS_STATE_DB` (default: `1`)
-  - Pool size: `REDIS_STATE_POOL_SIZE` (default: `10`)
-  - TTL: `REDIS_STATE_TTL_HOURS` (default: `168` = 7 days)
+  - Pool size: `REDIS_POOL_SIZE` (default: `100`)
+  - Min idle conns: `REDIS_MIN_IDLE_CONNS` (default: `10`)
+  - Pool timeout: `REDIS_POOL_TIMEOUT` (default: `30`)
+  - TTL: Hardcoded to 7 days (168 hours) - not yet configurable
 
 **External Services:**
 
