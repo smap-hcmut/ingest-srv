@@ -1,0 +1,91 @@
+{
+    "uap_version": "1.0",
+    "event_id": "b6d6b1e2-9cf3-4e69-8fd0-5b1c8aab9f17",
+    "ingest": {
+        "project_id": "proj_vf8_monitor_01",
+        "entity": {
+            "entity_type": "product",
+            "entity_name": "VF8",
+            "brand": "VinFast"
+        },
+        "source": {
+            "source_id": "src_fb_01",
+            "source_type": "FACEBOOK",
+            "account_ref": {
+                "name": "VinFast Vietnam",
+                "id": "1234567890"
+            }
+        },
+        "batch": {
+            "batch_id": "batch_2026_02_07_001",
+            "mode": "SCHEDULED_CRAWL",
+            "received_at": "2026-02-07T10:00:00Z"
+        },
+        "trace": {
+            "raw_ref": "minio://raw/proj_vf8_monitor_01/facebook/2026-02-07/batch_001.jsonl",
+            "mapping_id": "map_fb_default_v3"
+        }
+    },
+    "content": {
+        "doc_id": "fb_post_987654321",
+        "doc_type": "post | comment | csv_record | etc.",
+        "parent": {                                 
+            "parent_id": null,
+            "parent_type": null
+        },
+        "url": "https://facebook.com/.../posts/987654321",
+        "language": "vi",
+        "published_at": "2026-02-07T09:55:00Z",
+        "author": {
+            "author_id": "fb_user_abc",
+            "display_name": "Nguyễn A",
+            "author_type": "user"
+        },
+        "text": "Xe đi êm nhưng pin sụt nhanh, giá hơi cao so với kỳ vọng.",
+        "attachments": [
+            {
+                "type": "image",
+                "url": "https://...",
+                "content": "hình ảnh về giá ô tô"
+            },
+            {
+                "type": "video",
+                "url": "https://...",
+                "content": "video đánh giá pin VF8, giá như này, pin như kia..."
+            }
+        ]
+    },
+    "signals": {
+        "engagement": {
+            "like_count": 120,
+            "comment_count": 34,
+            "share_count": 5,
+            "view_count": 1111,
+            "rating": null
+        },
+        "geo": {
+            "country": "VN",
+            "city": null
+        }
+    },
+    "context": {
+        "keywords_matched": [
+            "vf8",
+            "pin",
+            "giá"
+        ],
+        "campaign_id": "id_feb_campaign_2026_01"
+    },
+    "raw": {
+        "original_fields": {
+            "post_id": "987654321",
+            "author_name": "Nguyễn A",
+            "content": "Xe đi êm nhưng pin sụt nhanh, giá hơi cao so với kỳ vọng.",
+            "like": 120,
+            "comment": 34,
+            "share": 5,
+            "view": 1111,
+            "created_time": "2026-02-07T09:55:00Z"
+        }
+    }
+}

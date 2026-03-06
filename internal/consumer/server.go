@@ -2,60 +2,44 @@ package consumer
 
 import (
 	"context"
-
-	dispatcherConsumer "smap-collector/internal/dispatcher/delivery/rabbitmq/consumer"
-	dispatcherProducer "smap-collector/internal/dispatcher/delivery/rabbitmq/producer"
-	dispatcherUsecase "smap-collector/internal/dispatcher/usecase"
-	resultsConsumer "smap-collector/internal/results/delivery/rabbitmq/consumer"
-	resultsUsecase "smap-collector/internal/results/usecase"
-	stateRedis "smap-collector/internal/state/repository/redis"
-	stateUsecase "smap-collector/internal/state/usecase"
-	webhookUsecase "smap-collector/internal/webhook/usecase"
-	"smap-collector/pkg/project"
+	"time"
 )
 
-func (srv *Server) Run(ctx context.Context) error {
-	if ctx == nil {
-		ctx = context.Background()
+// Run starts consumer lifecycle and blocks until context is canceled.
+func (srv *ConsumerServer) Run(ctx context.Context) error {
+	srv.l.Info(ctx, "Starting Ingest Consumer Service...")
+
+	if srv.kafkaConsumer == nil {
+		srv.l.Warn(ctx, "Kafka consumer not initialized, consumer is running in idle mode")
+		<-ctx.Done()
+		srv.l.Info(ctx, "Consumer service stopped")
+		return nil
 	}
 
-	srv.l.Info(ctx, "consumer starting")
+	handler := NewNoopHandler(srv.l)
+	topics := []string{srv.kafkaConfig.Topic}
 
-	// 1. Init Producers
-	prod := dispatcherProducer.New(srv.l, srv.conn)
-	if err := prod.Run(); err != nil {
-		return err
-	}
+	go func() {
+		for {
+			err := srv.kafkaConsumer.ConsumeWithContext(ctx, topics, handler)
+			if err != nil && ctx.Err() == nil {
+				srv.l.Errorf(ctx, "Kafka consume error: %v", err)
+				time.Sleep(2 * time.Second)
+				continue
+			}
+			if ctx.Err() != nil {
+				return
+			}
+		}
+	}()
 
-	// 2. Init Microservice
-	projectClient := project.NewClient(srv.cfg.ProjectConfig, srv.l)
-
-	// 3. Init UseCases
-	stateRepo := stateRedis.NewRedisRepository(srv.l, srv.cfg.RedisClient)
-	stateUC := stateUsecase.NewUseCase(srv.l, stateRepo, srv.cfg.StateOptions)
-	webhookUC := webhookUsecase.NewUseCase(srv.l, projectClient)
-	dispatcherUC := dispatcherUsecase.NewUseCaseWithDeps(srv.l, prod, srv.cfg.DispatcherOptions, stateUC, webhookUC, srv.cfg.CrawlLimitsConfig)
-	resultsUC := resultsUsecase.NewUseCase(srv.l, projectClient, stateUC, webhookUC)
-	dispatchC := dispatcherConsumer.NewConsumer(srv.l, srv.conn, dispatcherUC)
-	resultsC := resultsConsumer.NewConsumer(srv.l, srv.conn, resultsUC)
-
-	dispatchC.Consume()
-	srv.l.Info(ctx, "Dispatcher consumer started (collector.inbound.tasks)")
-
-	dispatchC.ConsumeProjectEvents()
-	srv.l.Info(ctx, "Dispatcher consumer started (smap.events.project.created)")
-
-	resultsC.Consume()
-	srv.l.Info(ctx, "Dispatcher consumer started (results.inbound.data)")
-	srv.l.Info(ctx, "All consumers started")
 	<-ctx.Done()
+	srv.l.Info(context.Background(), "Shutdown signal received, closing consumer...")
 
-	return nil
-}
-
-// Close releases MQ resources.
-func (srv *Server) Close() {
-	if srv.conn != nil {
-		srv.conn.Close()
+	if err := srv.kafkaConsumer.Close(); err != nil {
+		srv.l.Errorf(context.Background(), "Failed to close kafka consumer: %v", err)
 	}
+
+	srv.l.Info(context.Background(), "Consumer service stopped gracefully")
+	return nil
 }

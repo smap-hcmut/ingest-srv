@@ -11,22 +11,10 @@ const (
 	expire = time.Hour * 24
 )
 
-func GenerateOTP() (string, error) {
+func GenerateOTP() (string, time.Time) {
 	otp := ""
-	for i := 0; i < length; i++ {
+	for range length {
 		otp += strconv.Itoa(rand.Intn(10))
 	}
-	return otp, nil
-}
-
-func GenerateOTPExpireAt() (time.Time, error) {
-	return time.Now().Add(expire), nil
-}
-
-func GenerateOTPExpireAtStr() (string, error) {
-	otpExpireAt, err := GenerateOTPExpireAt()
-	if err != nil {
-		return "", err
-	}
-	return DateTimeToStr(otpExpireAt), nil
+	return otp, time.Now().Add(expire)
 }

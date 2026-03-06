@@ -1,48 +1,76 @@
 package consumer
 
 import (
-	"errors"
+	"database/sql"
+	"fmt"
 
-	"smap-collector/config"
-	"smap-collector/internal/dispatcher"
-	"smap-collector/internal/state"
-	"smap-collector/pkg/discord"
-	pkgLog "smap-collector/pkg/log"
-	"smap-collector/pkg/rabbitmq"
-	pkgRedis "smap-collector/pkg/redis"
+	"ingest-srv/config"
+	"ingest-srv/pkg/kafka"
+	"ingest-srv/pkg/log"
+	"ingest-srv/pkg/minio"
+	"ingest-srv/pkg/rabbitmq"
+	"ingest-srv/pkg/redis"
 )
 
-type Server struct {
-	l    pkgLog.Logger
-	conn *rabbitmq.Connection
-	cfg  Config
-	disc *discord.DiscordWebhook
+// ConsumerServer is the ingest consumer orchestration server.
+type ConsumerServer struct {
+	l log.Logger
+
+	kafkaConfig   config.KafkaConfig
+	kafkaConsumer kafka.IConsumer
+
+	postgresDB *sql.DB
+	redis      redis.IRedis
+	minio      minio.MinIO
+	rabbitmq   rabbitmq.IRabbitMQ
 }
 
-// Config contains all dependencies for the consumer server.
+// Config holds dependencies for ConsumerServer.
 type Config struct {
-	Logger            pkgLog.Logger
-	AMQPConn          *rabbitmq.Connection
-	Discord           *discord.DiscordWebhook
-	DispatcherOptions dispatcher.Options
-	ProjectConfig     config.ProjectConfig
-	RedisClient       pkgRedis.Client
-	StateOptions      state.Options
-	CrawlLimitsConfig config.CrawlLimitsConfig
+	Logger log.Logger
+
+	KafkaConfig   config.KafkaConfig
+	KafkaConsumer kafka.IConsumer
+
+	PostgresDB *sql.DB
+	Redis      redis.IRedis
+	MinIO      minio.MinIO
+	RabbitMQ   rabbitmq.IRabbitMQ
 }
 
-func New(cfg Config) (*Server, error) {
-	if cfg.Logger == nil {
-		return nil, errors.New("logger is required")
-	}
-	if cfg.AMQPConn == nil {
-		return nil, errors.New("amqp connection is required")
+// New creates and validates consumer server.
+func New(cfg Config) (*ConsumerServer, error) {
+	srv := &ConsumerServer{
+		l: cfg.Logger,
+
+		kafkaConfig:   cfg.KafkaConfig,
+		kafkaConsumer: cfg.KafkaConsumer,
+
+		postgresDB: cfg.PostgresDB,
+		redis:      cfg.Redis,
+		minio:      cfg.MinIO,
+		rabbitmq:   cfg.RabbitMQ,
 	}
 
-	return &Server{
-		l:    cfg.Logger,
-		conn: cfg.AMQPConn,
-		cfg:  cfg,
-		disc: cfg.Discord,
-	}, nil
+	if err := srv.validate(); err != nil {
+		return nil, err
+	}
+
+	return srv, nil
+}
+
+func (srv *ConsumerServer) validate() error {
+	if srv.l == nil {
+		return fmt.Errorf("logger is required")
+	}
+	if len(srv.kafkaConfig.Brokers) == 0 {
+		return fmt.Errorf("kafka brokers are required")
+	}
+	if srv.kafkaConfig.GroupID == "" {
+		return fmt.Errorf("kafka group_id is required")
+	}
+	if srv.kafkaConfig.Topic == "" {
+		return fmt.Errorf("kafka topic is required")
+	}
+	return nil
 }
