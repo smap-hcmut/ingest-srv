@@ -15,11 +15,13 @@ import (
 	"github.com/aarondl/sqlboiler/v4/boil"
 	"github.com/aarondl/sqlboiler/v4/queries/qm"
 	"github.com/aarondl/sqlboiler/v4/types"
+	"github.com/google/uuid"
 )
 
 // CreateDataSource inserts a new data source into the database.
 func (r *implRepository) CreateDataSource(ctx context.Context, opt repository.CreateDataSourceOptions) (model.DataSource, error) {
 	row := &sqlboiler.DataSource{
+		ID:               uuid.NewString(),
 		ProjectID:        opt.ProjectID,
 		Name:             opt.Name,
 		SourceType:       sqlboiler.SourceType(opt.SourceType),
@@ -236,6 +238,9 @@ func (r *implRepository) UpdateDataSource(ctx context.Context, opt repository.Up
 	if opt.WebhookSecretEncrypted != "" {
 		row.WebhookSecretEncrypted = null.StringFrom(opt.WebhookSecretEncrypted)
 	}
+	if opt.ClearPausedAt {
+		row.PausedAt = null.Time{}
+	}
 
 	_, err = row.Update(ctx, r.db, boil.Infer())
 	if err != nil {
@@ -274,4 +279,18 @@ func (r *implRepository) ArchiveDataSource(ctx context.Context, id string) error
 	}
 
 	return nil
+}
+
+// CountActiveTargets returns the number of active crawl targets for a datasource.
+func (r *implRepository) CountActiveTargets(ctx context.Context, dataSourceID string) (int64, error) {
+	total, err := sqlboiler.CrawlTargets(
+		sqlboiler.CrawlTargetWhere.DataSourceID.EQ(dataSourceID),
+		sqlboiler.CrawlTargetWhere.IsActive.EQ(true),
+	).Count(ctx, r.db)
+	if err != nil {
+		r.l.Errorf(ctx, "datasource.repository.CountActiveTargets.Count: %v", err)
+		return 0, repository.ErrFailedToGet
+	}
+
+	return total, nil
 }

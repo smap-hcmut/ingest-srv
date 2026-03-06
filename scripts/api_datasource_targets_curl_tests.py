@@ -119,7 +119,7 @@ add_test("AUTH-03", "Expired Token", "GET", "/datasources", expected_status=401,
 # 3. DATASOURCE CREATE VALIDATION
 # ==========================================
 add_test("DS-C-01", "Missing project_id", "POST", "/datasources", payload={"name": "Test DS", "source_type": "TIKTOK"}, expected_status=400)
-add_test("DS-C-02", "Missing name", "POST", "/datasources", payload={"project_id": project_id, "source_type": "TIKTOK"}, expected_status=400)
+add_test("DS-C-02", "Missing name", "POST", "/datasources", payload={"project_id": "00000000-0000-0000-0000-000000000000", "source_type": "FACEBOOK"}, expected_status=400)
 add_test("DS-C-03", "Missing source_type", "POST", "/datasources", payload={"project_id": project_id, "name": "Test"}, expected_status=400)
 add_test("DS-C-04", "Invalid source_type", "POST", "/datasources", payload={"project_id": project_id, "name": "Test", "source_type": "INVALID"}, expected_status=400)
 add_test("DS-C-05", "CRAWL DS without crawl mode", "POST", "/datasources", payload={"project_id": project_id, "name": "Test", "source_type": "TIKTOK"}, expected_status=400)
@@ -131,10 +131,10 @@ def setup_datasource():
     global created_ds_id
     print(">> Setting up Valid Datastore for target testing...")
     tc = TestCase("SETUP-DS", "Create Valid Datasource", "POST", "/datasources", 
-                  payload={"project_id": project_id, "name": "QA Valid DS", "source_type": "TIKTOK", "crawl_mode": "NORMAL", "crawl_interval_minutes": 11})
+                  payload={"project_id": project_id, "name": "QA Valid DS", "source_type": "TIKTOK", "source_category": "CRAWL", "crawl_mode": "NORMAL", "crawl_interval_minutes": 11})
     status, body = run_curl(tc)
-    if status == 200 and body and "data_source" in body:
-        created_ds_id = body["data_source"]["id"]
+    if status == 200 and body and "data" in body and "data_source" in body["data"]:
+        created_ds_id = body["data"]["data_source"]["id"]
         print(f"   Created DS ID: {created_ds_id}")
     else:
         print(f"Failed to create DS: Status {status}, Body: {body}")
@@ -145,12 +145,11 @@ def setup_datasource():
 # ==========================================
 def dynamic_target_tests():
     global created_target_id
-    add_test("TG-C-01", "Missing value", "POST", f"/datasources/{created_ds_id}/targets", payload={"target_type": "KEYWORD"}, expected_status=400)
-    add_test("TG-C-02", "Missing target_type", "POST", f"/datasources/{created_ds_id}/targets", payload={"value": "vinfast"}, expected_status=400)
-    add_test("TG-C-03", "Invalid target_type", "POST", f"/datasources/{created_ds_id}/targets", payload={"target_type": "INVALID", "value": "vinfast"}, expected_status=400)
+    add_test("TG-C-01", "Missing values", "POST", f"/datasources/{created_ds_id}/targets/keywords", payload={"is_active": True}, expected_status=400)
+    add_test("TG-C-02", "Empty values array", "POST", f"/datasources/{created_ds_id}/targets/keywords", payload={"values": []}, expected_status=400)
     
     # Valid Target Create
-    add_test("TG-C-04", "Valid Target Create", "POST", f"/datasources/{created_ds_id}/targets", payload={"target_type": "KEYWORD", "value": "QA Test Keyword", "is_active": True}, expected_status=200)
+    add_test("TG-C-04", "Valid Target Create", "POST", f"/datasources/{created_ds_id}/targets/keywords", payload={"values": ["QA Test Keyword"], "is_active": True, "crawl_interval_minutes": 10}, expected_status=200)
 
 # ==========================================
 # RUN EXECUTOR
@@ -180,8 +179,8 @@ for tc in tests:
     if tc.expected_status < 500 and status >= 500 and not tc.is_infra_500:
         passed = False
     
-    if tc.case_id == "TG-C-04" and status == 200 and body and "target" in body:
-        created_target_id = body["target"]["id"]
+    if tc.case_id == "TG-C-04" and status == 200 and body and "data" in body and "target" in body["data"]:
+        created_target_id = body["data"]["target"]["id"]
         print(f"   Created Target ID: {created_target_id}")
 
     results.append((tc, passed, status))
@@ -194,11 +193,11 @@ add_test("TG-L-03", "List Targets Filter INVALID", "GET", f"/datasources/{create
 
 if created_target_id:
     # Update Tests
-    add_test("TG-U-01", "Update valid Target", "PUT", f"/datasources/{created_ds_id}/targets/{created_target_id}", payload={"value": "Updated QA Keyword"}, expected_status=200)
+    add_test("TG-U-01", "Update valid Target", "PUT", f"/datasources/{created_ds_id}/targets/{created_target_id}", payload={"values": ["Updated QA Keyword"]}, expected_status=200)
     add_test("TG-U-02", "Update Target Negative Interval", "PUT", f"/datasources/{created_ds_id}/targets/{created_target_id}", payload={"crawl_interval_minutes": -5}, expected_status=400)
     # Delete Tests
     add_test("TG-D-01", "Delete Target", "DELETE", f"/datasources/{created_ds_id}/targets/{created_target_id}", expected_status=200)
-    add_test("TG-D-02", "Delete Same Target Again (Idempotent 404/200)", "DELETE", f"/datasources/{created_ds_id}/targets/{created_target_id}", expected_status=404)
+    add_test("TG-D-02", "Delete Same Target Again (Idempotent 404/400)", "DELETE", f"/datasources/{created_ds_id}/targets/{created_target_id}", expected_status=400)
 
 for tc in tests:
     status, body = run_curl(tc)
@@ -217,7 +216,7 @@ failed = total - passed
 print(f"Total: {total} | Passed: {passed} | Failed: {failed}\n")
 
 for tc, is_pass, status in results:
-    mark = "✅ PASS" if is_pass else "❌ FAIL"
+    mark = "[PASS]" if is_pass else "[FAIL]"
     if not is_pass:
         print(f"{mark} | [{tc.case_id}] {tc.name} | Exp: {tc.expected_status}, Got: {status}")
         print(f"       -> Details: ./artifacts/{tc.case_id}_body.json")

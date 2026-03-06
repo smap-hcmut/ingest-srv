@@ -39,7 +39,7 @@ type DataSource struct {
 	DeletedAt              *time.Time       `json:"deleted_at,omitempty"`               // Soft delete marker, tránh xóa cứng khỏi lịch sử.
 
 	DryrunLastResult *DryrunResult `json:"dryrun_last_result,omitempty"` // Relation nông tới bản dry run gần nhất để giảm thêm query.
-	CrawlTargets     []CrawlTarget `json:"crawl_targets,omitempty"`      // Danh sách target crawl thuộc source để scheduler/dryrun làm việc per-target.
+	CrawlTargets     []CrawlTarget `json:"crawl_targets,omitempty"`      // Danh sách target-group crawl thuộc source để scheduler/dryrun làm việc per-group.
 }
 
 func NewDataSourceFromDB(db *sqlboiler.DataSource) *DataSource {

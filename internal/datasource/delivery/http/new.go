@@ -12,6 +12,7 @@ import (
 // Handler defines the HTTP handler interface for DataSource.
 type Handler interface {
 	RegisterRoutes(r *gin.RouterGroup, mw middleware.Middleware)
+	RegisterInternalRoutes(r *gin.RouterGroup, mw middleware.Middleware)
 }
 
 type handler struct {

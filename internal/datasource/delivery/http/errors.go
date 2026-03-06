@@ -21,16 +21,25 @@ var (
 	errListFailed          = pkgErrors.NewHTTPError(170012, "Failed to list data sources")
 	errUpdateNotAllowed    = pkgErrors.NewHTTPError(170013, "Cannot update config/mapping on an active source")
 	errWrongBody           = pkgErrors.NewHTTPError(170014, "Wrong request body")
+	errInvalidCrawlInterval = pkgErrors.NewHTTPError(170015, "Invalid crawl_interval_minutes; must be greater than 0")
+	errInvalidTransition   = pkgErrors.NewHTTPError(170016, "Invalid datasource lifecycle transition")
+	errActivateNotAllowed  = pkgErrors.NewHTTPError(170017, "Datasource cannot be activated in its current state")
+	errPauseNotAllowed     = pkgErrors.NewHTTPError(170018, "Datasource cannot be paused in its current state")
+	errResumeNotAllowed    = pkgErrors.NewHTTPError(170019, "Datasource cannot be resumed in its current state")
+	errCrawlModeNotAllowed = pkgErrors.NewHTTPError(170020, "Crawl mode update is not allowed for this datasource")
+	errInternal            = &pkgErrors.HTTPError{Code: 170999, Message: "Internal server error", StatusCode: 500}
 
 	// CrawlTarget errors — 170100+ range.
-	errTargetNotFound      = pkgErrors.NewHTTPError(170101, "Crawl target not found")
-	errTargetValueRequired = pkgErrors.NewHTTPError(170102, "Crawl target value is required")
-	errInvalidTargetType   = pkgErrors.NewHTTPError(170103, "Invalid target_type; must be KEYWORD, PROFILE, or POST_URL")
-	errSourceNotCrawl      = pkgErrors.NewHTTPError(170104, "Crawl targets can only be added to CRAWL sources")
-	errTargetCreateFailed  = pkgErrors.NewHTTPError(170105, "Failed to create crawl target")
-	errTargetUpdateFailed  = pkgErrors.NewHTTPError(170106, "Failed to update crawl target")
-	errTargetDeleteFailed  = pkgErrors.NewHTTPError(170107, "Failed to delete crawl target")
-	errTargetListFailed    = pkgErrors.NewHTTPError(170108, "Failed to list crawl targets")
+	errTargetNotFound        = pkgErrors.NewHTTPError(170101, "Crawl target not found")
+	errTargetValuesRequired = pkgErrors.NewHTTPError(170102, "Crawl target values are required")
+	errInvalidTargetType    = pkgErrors.NewHTTPError(170103, "Invalid target_type; must be KEYWORD, PROFILE, or POST_URL")
+	errSourceNotCrawl       = pkgErrors.NewHTTPError(170104, "Crawl targets can only be added to CRAWL sources")
+	errTargetCreateFailed   = pkgErrors.NewHTTPError(170105, "Failed to create crawl target")
+	errTargetUpdateFailed   = pkgErrors.NewHTTPError(170106, "Failed to update crawl target")
+	errTargetDeleteFailed   = pkgErrors.NewHTTPError(170107, "Failed to delete crawl target")
+	errTargetListFailed     = pkgErrors.NewHTTPError(170108, "Failed to list crawl targets")
+	errInvalidTargetInterval = pkgErrors.NewHTTPError(170109, "Invalid crawl_interval_minutes; must be greater than 0")
+	errTargetValuesMustBeURLs = pkgErrors.NewHTTPError(170110, "Crawl target values must be valid URLs")
 )
 
 // mapError maps UseCase domain errors to delivery HTTP errors.
@@ -62,12 +71,24 @@ func (h *handler) mapError(err error) error {
 		return errListFailed
 	case datasource.ErrUpdateNotAllowed:
 		return errUpdateNotAllowed
+	case datasource.ErrInvalidTransition:
+		return errInvalidTransition
+	case datasource.ErrActivateNotAllowed:
+		return errActivateNotAllowed
+	case datasource.ErrPauseNotAllowed:
+		return errPauseNotAllowed
+	case datasource.ErrResumeNotAllowed:
+		return errResumeNotAllowed
+	case datasource.ErrCrawlModeNotAllowed:
+		return errCrawlModeNotAllowed
 
 	// CrawlTarget errors
 	case datasource.ErrTargetNotFound:
 		return errTargetNotFound
-	case datasource.ErrTargetValueRequired:
-		return errTargetValueRequired
+	case datasource.ErrTargetValuesRequired:
+		return errTargetValuesRequired
+	case datasource.ErrTargetValuesMustBeURLs:
+		return errTargetValuesMustBeURLs
 	case datasource.ErrInvalidTargetType:
 		return errInvalidTargetType
 	case datasource.ErrSourceNotCrawl:
@@ -80,7 +101,9 @@ func (h *handler) mapError(err error) error {
 		return errTargetDeleteFailed
 	case datasource.ErrTargetListFailed:
 		return errTargetListFailed
+	case datasource.ErrInvalidTargetInterval:
+		return errInvalidTargetInterval
 	default:
-		panic(err)
+		return errInternal
 	}
 }

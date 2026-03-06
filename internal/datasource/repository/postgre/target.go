@@ -3,6 +3,7 @@ package postgre
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 
 	"ingest-srv/internal/datasource/repository"
 	"ingest-srv/internal/model"
@@ -11,14 +12,25 @@ import (
 	"github.com/aarondl/null/v8"
 	"github.com/aarondl/sqlboiler/v4/boil"
 	"github.com/aarondl/sqlboiler/v4/queries/qm"
+	"github.com/aarondl/sqlboiler/v4/types"
+	"github.com/google/uuid"
 )
+
+func marshalTargetValues(values []string) types.JSON {
+	encoded, err := json.Marshal(values)
+	if err != nil {
+		return types.JSON([]byte("[]"))
+	}
+	return types.JSON(encoded)
+}
 
 // CreateTarget inserts a new crawl target linked to a data source.
 func (r *implRepository) CreateTarget(ctx context.Context, opt repository.CreateTargetOptions) (model.CrawlTarget, error) {
 	row := &sqlboiler.CrawlTarget{
+		ID:           uuid.NewString(),
 		DataSourceID: opt.DataSourceID,
 		TargetType:   sqlboiler.TargetType(opt.TargetType),
-		Value:        opt.Value,
+		Values:       marshalTargetValues(opt.Values),
 		IsActive:     opt.IsActive,
 		Priority:     opt.Priority,
 	}
@@ -41,9 +53,12 @@ func (r *implRepository) CreateTarget(ctx context.Context, opt repository.Create
 	return *model.NewCrawlTargetFromDB(row), nil
 }
 
-// GetTarget fetches a single crawl target by ID.
-func (r *implRepository) GetTarget(ctx context.Context, id string) (model.CrawlTarget, error) {
-	row, err := sqlboiler.FindCrawlTarget(ctx, r.db, id)
+// GetTarget fetches a single crawl target by ID and datasource ownership.
+func (r *implRepository) GetTarget(ctx context.Context, opt repository.GetTargetOptions) (model.CrawlTarget, error) {
+	row, err := sqlboiler.CrawlTargets(
+		sqlboiler.CrawlTargetWhere.ID.EQ(opt.ID),
+		sqlboiler.CrawlTargetWhere.DataSourceID.EQ(opt.DataSourceID),
+	).One(ctx, r.db)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return model.CrawlTarget{}, repository.ErrTargetNotFound
@@ -85,7 +100,10 @@ func (r *implRepository) ListTargets(ctx context.Context, opt repository.ListTar
 
 // UpdateTarget updates a crawl target by ID. Only non-zero fields are applied.
 func (r *implRepository) UpdateTarget(ctx context.Context, opt repository.UpdateTargetOptions) (model.CrawlTarget, error) {
-	row, err := sqlboiler.FindCrawlTarget(ctx, r.db, opt.ID)
+	row, err := sqlboiler.CrawlTargets(
+		sqlboiler.CrawlTargetWhere.ID.EQ(opt.ID),
+		sqlboiler.CrawlTargetWhere.DataSourceID.EQ(opt.DataSourceID),
+	).One(ctx, r.db)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return model.CrawlTarget{}, repository.ErrTargetNotFound
@@ -94,8 +112,8 @@ func (r *implRepository) UpdateTarget(ctx context.Context, opt repository.Update
 		return model.CrawlTarget{}, repository.ErrTargetFailedToUpdate
 	}
 
-	if opt.Value != "" {
-		row.Value = opt.Value
+	if opt.Values != nil {
+		row.Values = marshalTargetValues(opt.Values)
 	}
 	if opt.Label != "" {
 		row.Label = null.StringFrom(opt.Label)
@@ -123,8 +141,11 @@ func (r *implRepository) UpdateTarget(ctx context.Context, opt repository.Update
 }
 
 // DeleteTarget hard-deletes a crawl target by ID.
-func (r *implRepository) DeleteTarget(ctx context.Context, id string) error {
-	row, err := sqlboiler.FindCrawlTarget(ctx, r.db, id)
+func (r *implRepository) DeleteTarget(ctx context.Context, opt repository.DeleteTargetOptions) error {
+	row, err := sqlboiler.CrawlTargets(
+		sqlboiler.CrawlTargetWhere.ID.EQ(opt.ID),
+		sqlboiler.CrawlTargetWhere.DataSourceID.EQ(opt.DataSourceID),
+	).One(ctx, r.db)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return repository.ErrTargetNotFound

@@ -1,10 +1,10 @@
 # Ingest Service – Implementation Plan
 
-**Phiên bản:** 1.3  
-**Ngày:** 05/03/2026  
+**Phiên bản:** 1.4  
+**Ngày:** 06/03/2026  
 **Tham chiếu chính:**
 
-- [ingest_project_schema_alignment_proposal.md](./ingest_project_schema_alignment_proposal.md) (v1.5)
+- [ingest_project_schema_alignment_proposal.md](./ingest_project_schema_alignment_proposal.md) (v1.6)
 - [master_proposal.md](../../../../project-srv/documents/master_proposal.md) (v3.0)
 - [cross-service master proposal](../../../../cross-service-docs/proposal_chuan_hoa_docs_3_service_v1.md)
 - [canonical RabbitMQ](../../../../scapper-srv/RABBITMQ.md)
@@ -21,10 +21,10 @@
 
 | Hạng mục | Trạng thái |
 |---|---|
-| HTTP runtime mount đầy đủ cho datasource/dryrun/internal APIs | Planned |
+| HTTP runtime mount cho datasource/dryrun/internal crawl-mode APIs | Implemented |
 | Scheduler per-target dựa trên `crawl_targets` | Planned |
 | Kafka lifecycle events end-to-end | Planned |
-| DB hỗ trợ `crawl_targets` + `target_id` trace fields | Pending migration |
+| DB hỗ trợ `crawl_targets` + `target_id` trace fields | Implemented |
 
 ## Deprecation Mapping
 
@@ -84,9 +84,12 @@ ingest-srv/
 | `GET`    | `/datasources/:id`                   | Chi tiết source                                      |
 | `PUT`    | `/datasources/:id`                   | Update metadata/config theo state guard              |
 | `DELETE` | `/datasources/:id`                   | Soft delete                                          |
-| `POST`   | `/datasources/:id/targets`           | Thêm crawl target (keyword/profile/post_url)         |
+| `POST`   | `/datasources/:id/targets/keywords`  | Tạo grouped keyword target với `values[]`            |
+| `POST`   | `/datasources/:id/targets/profiles`  | Tạo grouped profile target với `values[]` URL        |
+| `POST`   | `/datasources/:id/targets/posts`     | Tạo grouped post target với `values[]` URL           |
 | `GET`    | `/datasources/:id/targets`           | List targets của source                              |
-| `PUT`    | `/datasources/:id/targets/:tid`      | Update target (value, interval, is_active)           |
+| `GET`    | `/datasources/:id/targets/:tid`      | Chi tiết grouped target                              |
+| `PUT`    | `/datasources/:id/targets/:tid`      | Update grouped target (`values[]`, interval, state)  |
 | `DELETE` | `/datasources/:id/targets/:tid`      | Xóa target                                           |
 | `POST`   | `/datasources/file-upload`           | TODO: Upload file, lưu MinIO, tạo source FILE_UPLOAD |
 | `POST`   | `/datasources/:id/mapping/preview`   | TODO: Phân tích sample và gợi ý mapping              |
@@ -100,11 +103,18 @@ ingest-srv/
 
 - Source tạo mới luôn ở `PENDING`.
 - `COMPLETED` chỉ áp dụng cho `FILE_UPLOAD` (one-shot).
-- `CRAWL` source được phép tạo ở `PENDING` khi chưa có target; nhưng để lên `READY`/`ACTIVE` bắt buộc phải có ít nhất 1 `crawl_target` và `crawl_mode`.
-- Mỗi `crawl_target` có `crawl_interval_minutes` riêng; không truyền → kế thừa từ `data_sources.crawl_interval_minutes`.
+- `CRAWL` source được phép tạo ở `PENDING` khi chưa có target; nhưng để lên `READY`/`ACTIVE` bắt buộc phải có ít nhất 1 `crawl_target` active và `crawl_mode`.
+- 1 `crawl_target` hiện là **1 grouped execution unit**:
+  - `KEYWORD`: `values[]` là nhiều keyword dùng chung 1 interval
+  - `PROFILE`: `values[]` là nhiều profile URL dùng chung 1 interval
+  - `POST_URL`: `values[]` là nhiều post URL dùng chung 1 interval
+- grouped target create hiện bắt buộc `crawl_interval_minutes > 0`; không còn implicit inheritance ở HTTP contract hiện tại.
 - Effective interval = `target.crawl_interval_minutes × mode_multiplier(source.crawl_mode)`.
 - Mode multiplier: `NORMAL = 1.0`, `CRISIS = 0.2`, `SLEEP = 5.0`.
 - `crawl_mode_defaults` chỉ dùng làm default/fallback config (seed), không dùng để ghi đè interval runtime của target.
+- `POST /datasources/:id/targets/keywords` sẽ trim + de-duplicate exact duplicate keywords trước khi persist.
+- `POST /datasources/:id/targets/profiles` và `/posts` yêu cầu mọi phần tử trong `values[]` phải là URL hợp lệ.
+- `PUT /datasources/:id/targets/:tid` thay `values[]` theo kiểu full replace nếu client gửi field này.
 - `WEBHOOK` source ở `READY`/`ACTIVE` phải có `webhook_id` + `webhook_secret_encrypted`.
 - Đổi `crawl_mode` phải ghi log vào `crawl_mode_changes`.
 - `project_id` là logical FK — không validate qua DB, chỉ validate tồn tại khi cần (HTTP call tới project-srv).
@@ -126,7 +136,7 @@ ingest-srv/
 
 ### Module 2: Dry Run & Onboarding (`dryrun`)
 
-**Trách nhiệm:** Chạy thử source trước khi activate, hỗ trợ preview/confirm mapping cho passive source, lưu kết quả sample.
+**Trách nhiệm:** Chạy dry run validation-only trước khi activate, hỗ trợ preview/confirm mapping cho passive source, lưu kết quả sample/control-plane.
 
 **Endpoints:**
 
@@ -141,14 +151,15 @@ ingest-srv/
 **Business Rules:**
 
 - Dry run chỉ chạy khi source ở `PENDING` hoặc `READY`.
-- Kết quả SUCCESS → source chuyển `READY`, cập nhật `dryrun_last_result_id`.
+- Phase 2 hiện là **control-plane only**: không publish RabbitMQ, không tạo `external_task`, không gọi crawler thật.
+- Kết quả pass hiện trả `WARNING` → source chuyển `READY`, cập nhật `dryrun_last_result_id`.
 - Kết quả WARNING → source vẫn `READY` nhưng hiển thị warning.
 - Kết quả FAILED → source vẫn `PENDING`, user phải sửa config.
-- Dry run cho CRAWL source: thực hiện **per-target** (mỗi `crawl_target` có thể dry run riêng). Tạo `external_task` với `scheduled_job_id = NULL`, `target_id` set.
+- Dry run cho CRAWL source: thực hiện **per-target-group**; request phải có `target_id`.
 - Dry run cho FILE_UPLOAD: TODO - parse sample từ file đã upload.
 - Với `FILE_UPLOAD` và `WEBHOOK`, preview/confirm mapping cập nhật trực tiếp `data_sources.mapping_rules` trong V1. (TODO)
 - Mapping preview/confirm chỉ áp dụng cho source `PASSIVE`; source `CRAWL` không dùng flow này.
-- Ghi `dryrun_results` với `sample_data` JSONB và `target_id` (nullable) để biết dry run cho target nào.
+- Ghi `dryrun_results` với `target_id` (nullable) để biết dry run cho grouped target nào.
 
 **Kafka Events phát ra:**
 
@@ -322,7 +333,7 @@ raw_batch (RECEIVED)
 
 ### Phase 1: Foundation — Data Source CRUD + Crawl Targets
 
-**Mục tiêu:** User có thể tạo source, thêm/sửa/xóa crawl targets (keywords/profiles/links), xem danh sách.
+**Mục tiêu:** User có thể tạo source, thêm/sửa/xóa grouped crawl targets (keywords/profiles/links), xem danh sách.
 
 **Modules:** `datasource` (CRUD + targets)
 
@@ -332,9 +343,16 @@ raw_batch (RECEIVED)
 - [x] Repository layer (sqlboiler queries)
 - [x] UseCase layer (business logic + validation)
 - [x] Delivery/Handler layer (HTTP handlers + Swagger)
-- [ ] Crawl targets CRUD: POST/GET/PUT/DELETE `/datasources/:id/targets`
+- [x] Crawl targets CRUD:
+  - `POST /datasources/:id/targets/keywords`
+  - `POST /datasources/:id/targets/profiles`
+  - `POST /datasources/:id/targets/posts`
+  - `GET /datasources/:id/targets`
+  - `GET /datasources/:id/targets/:tid`
+  - `PUT /datasources/:id/targets/:tid`
+  - `DELETE /datasources/:id/targets/:tid`
 - [ ] Crawl targets repository + usecase + handler
-- [ ] Per-target `crawl_interval_minutes` with datasource default inheritance
+- [x] Grouped target `values[]` + shared `crawl_interval_minutes`
 - [ ] DB migration: `crawl_targets` table + indexes
 - [ ] Swagger documentation
 - [ ] Unit tests cho usecase layer

@@ -11,7 +11,7 @@ type ScheduledJob struct {
 	ID           string          `json:"id"`                              // Định danh của một lần scheduler quyết định chạy source.
 	SourceID     string          `json:"source_id"`                       // Source mà job này phục vụ.
 	ProjectID    string          `json:"project_id"`                      // Denormalized để query job theo project không cần join.
-	TargetID     string          `json:"target_id,omitempty"`             // Target tương ứng khi scheduler chạy per-target.
+	TargetID     string          `json:"target_id,omitempty"`             // Target-group tương ứng khi scheduler chạy per-target-group.
 	Status       JobStatus       `json:"status"`                          // Trạng thái runtime hiện tại của job.
 	TriggerType  TriggerType     `json:"trigger_type"`                    // Cho biết job sinh ra do lịch, event hay thao tác tay.
 	CronExpr     string          `json:"cron_expr,omitempty"`             // Snapshot cron gốc để audit/debug lịch chạy.

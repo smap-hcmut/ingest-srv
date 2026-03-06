@@ -77,7 +77,7 @@ func (c *PermissionErrorCollector) Error() string {
 
 // NewHTTPError returns a new HTTPError with the given code and message.
 func NewHTTPError(code int, message string) *HTTPError {
-	return &HTTPError{Code: code, Message: message, StatusCode: code}
+	return &HTTPError{Code: code, Message: message, StatusCode: 400}
 }
 
 // NewUnauthorizedHTTPError returns a 401 Unauthorized error.

@@ -16,4 +16,5 @@ var (
 	ErrTargetFailedToUpdate = errors.New("datasource.repository: failed to update target")
 	ErrTargetFailedToDelete = errors.New("datasource.repository: failed to delete target")
 	ErrTargetFailedToList   = errors.New("datasource.repository: failed to list targets")
+	ErrCrawlModeChangeFailedToInsert = errors.New("datasource.repository: failed to insert crawl mode change")
 )

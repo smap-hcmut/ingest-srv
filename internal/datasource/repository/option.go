@@ -70,6 +70,7 @@ type UpdateDataSourceOptions struct {
 	CrawlIntervalMinutes   *int // pointer to distinguish 0 from unset
 	WebhookID              string
 	WebhookSecretEncrypted string
+	ClearPausedAt          bool
 }
 
 // --- CrawlTarget Options ---
@@ -78,12 +79,18 @@ type UpdateDataSourceOptions struct {
 type CreateTargetOptions struct {
 	DataSourceID         string
 	TargetType           string
-	Value                string
+	Values               []string
 	Label                string
 	PlatformMeta         json.RawMessage
 	IsActive             bool
 	Priority             int
 	CrawlIntervalMinutes int // 0 = use DB default (11)
+}
+
+// GetTargetOptions contains filters for getting a single target with ownership check.
+type GetTargetOptions struct {
+	DataSourceID string
+	ID           string
 }
 
 // ListTargetsOptions contains filters for listing crawl targets of a data source.
@@ -96,11 +103,32 @@ type ListTargetsOptions struct {
 // UpdateTargetOptions contains data for updating a crawl target.
 // Only non-zero/non-empty fields are applied.
 type UpdateTargetOptions struct {
+	DataSourceID         string
 	ID                   string
-	Value                string
+	Values               []string
 	Label                string
 	PlatformMeta         json.RawMessage
 	IsActive             *bool
 	Priority             *int
 	CrawlIntervalMinutes *int
+}
+
+// DeleteTargetOptions contains ownership-aware data for deleting a crawl target.
+type DeleteTargetOptions struct {
+	DataSourceID string
+	ID           string
+}
+
+// CreateCrawlModeChangeOptions contains data needed to insert a crawl mode audit row.
+type CreateCrawlModeChangeOptions struct {
+	SourceID            string
+	ProjectID           string
+	TriggerType         string
+	FromMode            string
+	ToMode              string
+	FromIntervalMinutes int
+	ToIntervalMinutes   int
+	Reason              string
+	EventRef            string
+	TriggeredBy         string
 }

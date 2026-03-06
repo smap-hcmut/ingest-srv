@@ -6,6 +6,9 @@ import (
 	datasourceHandler "ingest-srv/internal/datasource/delivery/http"
 	datasourceRepo "ingest-srv/internal/datasource/repository/postgre"
 	datasourceUC "ingest-srv/internal/datasource/usecase"
+	dryrunHandler "ingest-srv/internal/dryrun/delivery/http"
+	dryrunRepo "ingest-srv/internal/dryrun/repository/postgre"
+	dryrunUC "ingest-srv/internal/dryrun/usecase"
 
 	"ingest-srv/internal/middleware"
 	"ingest-srv/pkg/response"
@@ -27,10 +30,16 @@ func (srv HTTPServer) mapHandlers() error {
 
 	dataSRepo := datasourceRepo.New(srv.l, srv.postgresDB)
 	dataUC := datasourceUC.New(srv.l, dataSRepo)
-	datasourceHandler := datasourceHandler.New(srv.l, dataUC, srv.discord)
+	datasourceHTTP := datasourceHandler.New(srv.l, dataUC, srv.discord)
+	dryrunResultRepo := dryrunRepo.New(srv.l, srv.postgresDB)
+	dryrunUseCase := dryrunUC.New(srv.l, dryrunResultRepo, dataSRepo)
+	dryrunHTTP := dryrunHandler.New(srv.l, dryrunUseCase, srv.discord)
 
 	api := srv.gin.Group("/api/v1")
-	datasourceHandler.RegisterRoutes(api, mw)
+	datasourceHTTP.RegisterRoutes(api, mw)
+	dryrunHTTP.RegisterRoutes(api, mw)
+	ingestAPI := srv.gin.Group("/api/v1/ingest")
+	datasourceHTTP.RegisterInternalRoutes(ingestAPI, mw)
 
 	return nil
 }

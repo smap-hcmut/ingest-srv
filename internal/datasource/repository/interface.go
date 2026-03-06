@@ -18,11 +18,13 @@ type Repository interface {
 	ListDataSources(ctx context.Context, opt ListDataSourcesOptions) ([]model.DataSource, error)
 	UpdateDataSource(ctx context.Context, opt UpdateDataSourceOptions) (model.DataSource, error)
 	ArchiveDataSource(ctx context.Context, id string) error
+	CountActiveTargets(ctx context.Context, dataSourceID string) (int64, error)
+	CreateCrawlModeChange(ctx context.Context, opt CreateCrawlModeChangeOptions) (model.CrawlModeChange, error)
 
 	// CrawlTarget sub-resource operations.
 	CreateTarget(ctx context.Context, opt CreateTargetOptions) (model.CrawlTarget, error)
-	GetTarget(ctx context.Context, id string) (model.CrawlTarget, error)
+	GetTarget(ctx context.Context, opt GetTargetOptions) (model.CrawlTarget, error)
 	ListTargets(ctx context.Context, opt ListTargetsOptions) ([]model.CrawlTarget, error)
 	UpdateTarget(ctx context.Context, opt UpdateTargetOptions) (model.CrawlTarget, error)
-	DeleteTarget(ctx context.Context, id string) error
+	DeleteTarget(ctx context.Context, opt DeleteTargetOptions) error
 }

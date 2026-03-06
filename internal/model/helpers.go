@@ -32,6 +32,27 @@ func jsonRawFromNull(src null.JSON) json.RawMessage {
 	return cloneJSONRaw(src.JSON)
 }
 
+func stringSliceFromTypesJSON(src types.JSON) []string {
+	if len(src) == 0 {
+		return nil
+	}
+
+	var values []string
+	if err := json.Unmarshal(src, &values); err == nil {
+		return values
+	}
+
+	var single string
+	if err := json.Unmarshal(src, &single); err == nil {
+		if single == "" {
+			return nil
+		}
+		return []string{single}
+	}
+
+	return nil
+}
+
 // stringFromNull flattens nullable strings for API/domain structs that prefer empty string over null.String.
 func stringFromNull(src null.String) string {
 	if !src.Valid {

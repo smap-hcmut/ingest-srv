@@ -274,7 +274,7 @@ CREATE TABLE schema_ingest.crawl_targets (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     data_source_id UUID NOT NULL REFERENCES schema_ingest.data_sources(id) ON DELETE CASCADE,
     target_type schema_ingest.target_type NOT NULL,
-    value TEXT NOT NULL,
+    values JSONB NOT NULL,
     label TEXT,
     platform_meta JSONB,
     is_active BOOLEAN NOT NULL DEFAULT true,

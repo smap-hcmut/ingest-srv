@@ -11,7 +11,7 @@ type CrawlTarget struct {
 	ID                   string          `json:"id"`                               // Định danh target để trace dryrun/job/task theo đơn vị crawl cụ thể.
 	DataSourceID         string          `json:"data_source_id"`                   // Source owner của target này.
 	TargetType           TargetType      `json:"target_type"`                      // Loại target (keyword/profile/post_url) quyết định cách build request.
-	Value                string          `json:"value"`                            // Giá trị target gốc (keyword/link/profile id...).
+	Values               []string        `json:"values"`                           // Nhóm giá trị crawl dùng chung một interval và cùng được thực thi như một execution unit.
 	Label                string          `json:"label,omitempty"`                  // Nhãn hiển thị cho UI để dễ phân biệt target.
 	PlatformMeta         json.RawMessage `json:"platform_meta,omitempty"`          // Metadata mở rộng theo platform/action.
 	IsActive             bool            `json:"is_active"`                        // Cho phép bật/tắt target mà không xóa lịch sử.
@@ -41,7 +41,7 @@ func newCrawlTargetFromDB(db *sqlboiler.CrawlTarget, withRelations bool) *CrawlT
 		ID:                   db.ID,
 		DataSourceID:         db.DataSourceID,
 		TargetType:           TargetType(db.TargetType),
-		Value:                db.Value,
+		Values:               stringSliceFromTypesJSON(db.Values),
 		Label:                stringFromNull(db.Label),
 		PlatformMeta:         jsonRawFromNull(db.PlatformMeta),
 		IsActive:             db.IsActive,

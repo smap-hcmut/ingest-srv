@@ -65,13 +65,56 @@ type UpdateOutput struct {
 	DataSource model.DataSource
 }
 
+// ActivateInput transitions a datasource into ACTIVE when preconditions are met.
+type ActivateInput struct {
+	ID string
+}
+
+// ActivateOutput is the output after activating a datasource.
+type ActivateOutput struct {
+	DataSource model.DataSource
+}
+
+// PauseInput transitions a datasource into PAUSED.
+type PauseInput struct {
+	ID string
+}
+
+// PauseOutput is the output after pausing a datasource.
+type PauseOutput struct {
+	DataSource model.DataSource
+}
+
+// ResumeInput transitions a datasource from PAUSED back to ACTIVE.
+type ResumeInput struct {
+	ID string
+}
+
+// ResumeOutput is the output after resuming a datasource.
+type ResumeOutput struct {
+	DataSource model.DataSource
+}
+
+// UpdateCrawlModeInput changes crawl_mode for a crawl datasource.
+type UpdateCrawlModeInput struct {
+	ID          string
+	CrawlMode   string
+	TriggerType string
+	Reason      string
+	EventRef    string
+}
+
+// UpdateCrawlModeOutput is the output after changing crawl_mode.
+type UpdateCrawlModeOutput struct {
+	DataSource model.DataSource
+}
+
 // --- CrawlTarget Types ---
 
-// CreateTargetInput is the input for creating a crawl target.
-type CreateTargetInput struct {
+// CreateTargetGroupInput is the shared input for creating a grouped crawl target.
+type CreateTargetGroupInput struct {
 	DataSourceID         string
-	TargetType           string
-	Value                string
+	Values               []string
 	Label                string
 	PlatformMeta         json.RawMessage
 	IsActive             bool
@@ -82,6 +125,12 @@ type CreateTargetInput struct {
 // CreateTargetOutput is the output after creating a crawl target.
 type CreateTargetOutput struct {
 	Target model.CrawlTarget
+}
+
+// DetailTargetInput is the input for getting crawl target detail.
+type DetailTargetInput struct {
+	DataSourceID string
+	ID           string
 }
 
 // DetailTargetOutput is the output for getting target detail.
@@ -103,8 +152,9 @@ type ListTargetsOutput struct {
 
 // UpdateTargetInput is the input for updating a crawl target.
 type UpdateTargetInput struct {
+	DataSourceID         string
 	ID                   string
-	Value                string
+	Values               []string
 	Label                string
 	PlatformMeta         json.RawMessage
 	IsActive             *bool
@@ -115,4 +165,10 @@ type UpdateTargetInput struct {
 // UpdateTargetOutput is the output after updating a crawl target.
 type UpdateTargetOutput struct {
 	Target model.CrawlTarget
+}
+
+// DeleteTargetInput is the input for deleting a crawl target.
+type DeleteTargetInput struct {
+	DataSourceID string
+	ID           string
 }

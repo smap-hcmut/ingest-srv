@@ -1,7 +1,7 @@
 # INGEST SERVICE - QUICK NOTES
 
-**Phiên bản:** 1.3  
-**Ngày cập nhật:** 05/03/2026
+**Phiên bản:** 1.4  
+**Ngày cập nhật:** 06/03/2026
 
 ## Document Status
 
@@ -13,7 +13,7 @@
 
 | Hạng mục | Trạng thái |
 |---|---|
-| Data source CRUD runtime routes | Planned (module có, runtime chưa mount đầy đủ) |
+| Data source + dryrun + internal crawl-mode runtime routes | Implemented |
 | Scheduler per-target với `crawl_targets` | Planned |
 | Kafka project lifecycle consume/publish nghiệp vụ | Planned |
 | Scapper task APIs (`/api/v1/tasks/...`) | Implemented ở `scapper-srv` |
@@ -40,7 +40,7 @@ graph TD
     F -->|accept| G["mapping_rules saved<br/>source → READY"]
     F -->|reject/edit| E
 
-    H --> I["Dry run preview<br/>→ xem post crawl được"]
+    H --> I["Dry run validation-only<br/>→ preview readiness"]
     I --> J["User accept"]
     J --> K["source → READY"]
     K --> L["project.activated<br/>→ source ACTIVE"]
@@ -85,7 +85,11 @@ Kết luận nhanh:
 
 ### API layer (user-facing)
 - CRUD `datasource` (crawl + file upload + webhook).
-- User config crawl targets cho từng `datasource` (`KEYWORD`, `PROFILE`, `POST_URL`).
+- User config grouped crawl targets cho từng `datasource`:
+  - `POST /datasources/:id/targets/keywords`
+  - `POST /datasources/:id/targets/profiles`
+  - `POST /datasources/:id/targets/posts`
+- Mỗi `crawl_target` hiện chứa `values[]` dùng chung 1 `crawl_interval_minutes`.
 - Nhận file upload (excel/json/csv/...) + lưu MinIO.
 - Trigger/confirm mapping để clean về 1 chuẩn duy nhất (UAP).
 
@@ -101,19 +105,19 @@ Ghi chú contract:
 - `documents/resource/ingest-intergrate-3rdparty/RABBITMQ.md` là bản mirror (derived) phục vụ team ingest theo dõi.
 
 ### Scheduler
-- Scheduler chạy theo **per-target**, không còn per-datasource.
-- Mỗi `crawl_target` có `crawl_interval_minutes` riêng.
+- Scheduler chạy theo **per-target-group**, không còn per-datasource.
+- Mỗi `crawl_target` có `values[]` và 1 `crawl_interval_minutes` chung cho cả group.
 - Mỗi lần tick:
   - query `crawl_targets.next_crawl_at`
   - tính `effective_interval = target_interval x mode_multiplier(source.crawl_mode)`
   - pub task qua RabbitMQ
   - cập nhật `crawl_targets.next_crawl_at`, `last_crawl_at`
-- `data_sources.crawl_interval_minutes` chỉ còn là default khi tạo target mới.
-- Dry run cho crawl cũng chạy theo **per-target** để preview kết quả cho từng keyword/profile/post_url trước khi source được đưa vào `READY`.
+- `data_sources.crawl_interval_minutes` hiện không còn là implicit fallback ở public grouped-target create API; client phải gửi interval rõ cho target group.
+- Dry run cho crawl hiện chạy theo **per-target-group** và là validation-only; pass sẽ trả `WARNING` rồi đưa source vào `READY`.
 
 ### Crisis feedback loop
 - Flow: Ingest -> Analysis -> Project (detect crisis) -> Ingest (crawl nhanh hơn).
-- Ingest phải nhận lệnh chuyển mode `NORMAL/SLEEP/CRISIS` và đổi effective interval per-target ngay.
+- Ingest phải nhận lệnh chuyển mode `NORMAL/SLEEP/CRISIS`; hiện tại phase 2 mới persist mode + audit, còn scheduler apply runtime nằm ở phase sau.
 
 ### Future capability
 - AI-assisted schema mapping cho file upload đa định dạng:
@@ -128,9 +132,9 @@ Ghi chú contract:
 - Luôn giữ `raw.original_fields` + `trace.raw_ref` để audit/reprocess.
 - Chốt 1 topic tên thống nhất cho input Analysis (tránh lệch `smap.collector.output` vs `analytics.uap.received`).
 - Endpoint namespace chuẩn dùng `datasources`.
-- `crawl_targets` là đơn vị scheduling chính cho crawl flow.
-- `dryrun_results.target_id` và `external_tasks.target_id` được dùng để trace đúng target trong flow crawl.
-- Precedence interval khi tạo target: `target.input_interval` -> `data_sources.crawl_interval_minutes` -> `crawl_mode_defaults` (default/fallback).
+- `crawl_targets` là đơn vị scheduling chính cho crawl flow, nhưng mỗi record giờ là 1 **grouped target**.
+- `dryrun_results.target_id` dùng để trace đúng grouped target trong dry run flow; `external_tasks.target_id` là contract runtime tương lai khi phase scheduler/crawler được hiện thực.
+- Public create contract hiện yêu cầu interval ngay trên grouped target, không còn precedence fallback ở boundary API.
 - Idempotency bắt buộc:
   - RabbitMQ theo `task_id`
   - Raw batch theo `(source_id, batch_id)` (fallback `checksum`)

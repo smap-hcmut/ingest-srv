@@ -11,7 +11,7 @@ type DryrunResult struct {
 	ID           string          `json:"id"`                        // Định danh của một lần dry run để tra cứu/audit.
 	SourceID     string          `json:"source_id"`                 // Source được đem đi dry run.
 	ProjectID    string          `json:"project_id"`                // Denormalized để query lịch sử dry run theo project.
-	TargetID     string          `json:"target_id,omitempty"`       // Target tương ứng khi dry run per-target; null với FILE_UPLOAD/WEBHOOK.
+	TargetID     string          `json:"target_id,omitempty"`       // Target-group tương ứng khi dry run per-target; null với FILE_UPLOAD/WEBHOOK.
 	JobID        string          `json:"job_id,omitempty"`          // Correlation id tới execution nội bộ hoặc task bên ngoài.
 	Status       DryrunStatus    `json:"status"`                    // Kết quả cuối cùng của dry run.
 	SampleCount  int             `json:"sample_count"`              // Số mẫu thực tế lấy được để đánh giá source có usable hay không.

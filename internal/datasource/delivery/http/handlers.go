@@ -1,6 +1,7 @@
 package http
 
 import (
+	"ingest-srv/internal/model"
 	"ingest-srv/pkg/response"
 
 	"github.com/gin-gonic/gin"
@@ -15,7 +16,7 @@ import (
 // @Success 200 {object} createResp
 // @Failure 400 {object} response.Resp
 // @Failure 500 {object} response.Resp
-// @Router /sources [post]
+// @Router /datasources [post]
 func (h *handler) Create(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -44,7 +45,7 @@ func (h *handler) Create(c *gin.Context) {
 // @Success 200 {object} detailResp
 // @Failure 400 {object} response.Resp
 // @Failure 500 {object} response.Resp
-// @Router /sources/{id} [get]
+// @Router /datasources/{id} [get]
 func (h *handler) Detail(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -80,7 +81,7 @@ func (h *handler) Detail(c *gin.Context) {
 // @Success 200 {object} listResp
 // @Failure 400 {object} response.Resp
 // @Failure 500 {object} response.Resp
-// @Router /sources [get]
+// @Router /datasources [get]
 func (h *handler) List(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -111,7 +112,7 @@ func (h *handler) List(c *gin.Context) {
 // @Success 200 {object} updateResp
 // @Failure 400 {object} response.Resp
 // @Failure 500 {object} response.Resp
-// @Router /sources/{id} [put]
+// @Router /datasources/{id} [put]
 func (h *handler) Update(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -140,7 +141,7 @@ func (h *handler) Update(c *gin.Context) {
 // @Success 200 {object} response.Resp
 // @Failure 400 {object} response.Resp
 // @Failure 500 {object} response.Resp
-// @Router /sources/{id} [delete]
+// @Router /datasources/{id} [delete]
 func (h *handler) Archive(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -160,32 +161,125 @@ func (h *handler) Archive(c *gin.Context) {
 	response.OK(c, nil)
 }
 
-// --- CrawlTarget Handlers ---
-
-// @Summary Create a crawl target
-// @Description Create a new crawl target under a data source
-// @Tags CrawlTarget
+// @Summary Update datasource crawl mode
+// @Description Internal API to update crawl mode for a datasource
+// @Tags DataSource
 // @Accept json
 // @Produce json
 // @Param id path string true "Data Source ID"
-// @Param body body createTargetReq true "Create target request"
-// @Success 200 {object} createTargetResp
+// @Param body body updateCrawlModeReq true "Update crawl mode request"
+// @Success 200 {object} updateCrawlModeResp
 // @Failure 400 {object} response.Resp
 // @Failure 500 {object} response.Resp
-// @Router /datasources/{id}/targets [post]
-func (h *handler) CreateTarget(c *gin.Context) {
+// @Router /ingest/datasources/{id}/crawl-mode [put]
+func (h *handler) UpdateCrawlMode(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	req, err := h.processCreateTargetReq(c)
+	req, err := h.processUpdateCrawlModeReq(c)
 	if err != nil {
-		h.l.Warnf(ctx, "datasource.delivery.CreateTarget.processCreateTargetReq: %v", err)
+		h.l.Warnf(ctx, "datasource.delivery.UpdateCrawlMode.processUpdateCrawlModeReq: %v", err)
 		response.Error(c, err, h.discord)
 		return
 	}
 
-	o, err := h.uc.CreateTarget(ctx, req.toInput())
+	o, err := h.uc.UpdateCrawlMode(ctx, req.toInput())
 	if err != nil {
-		h.l.Errorf(ctx, "datasource.delivery.CreateTarget.uc.CreateTarget: %v", err)
+		h.l.Errorf(ctx, "datasource.delivery.UpdateCrawlMode.uc.UpdateCrawlMode: id=%s err=%v", req.ID, err)
+		response.Error(c, h.mapError(err), h.discord)
+		return
+	}
+
+	response.OK(c, h.newUpdateCrawlModeResp(o))
+}
+
+// --- CrawlTarget Handlers ---
+
+// @Summary Create grouped keyword target
+// @Description Create a new grouped keyword target under a data source
+// @Tags CrawlTarget
+// @Accept json
+// @Produce json
+// @Param id path string true "Data Source ID"
+// @Param body body createTargetGroupReq true "Create target request"
+// @Success 200 {object} createTargetResp
+// @Failure 400 {object} response.Resp
+// @Failure 500 {object} response.Resp
+// @Router /datasources/{id}/targets/keywords [post]
+func (h *handler) CreateKeywordTarget(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	req, err := h.processCreateTargetGroupReq(c, string(model.TargetTypeKeyword))
+	if err != nil {
+		h.l.Warnf(ctx, "datasource.delivery.CreateKeywordTarget.processCreateTargetGroupReq: %v", err)
+		response.Error(c, err, h.discord)
+		return
+	}
+
+	o, err := h.uc.CreateKeywordTarget(ctx, req.toInput(model.TargetTypeKeyword))
+	if err != nil {
+		h.l.Errorf(ctx, "datasource.delivery.CreateKeywordTarget.uc.CreateKeywordTarget: %v", err)
+		response.Error(c, h.mapError(err), h.discord)
+		return
+	}
+
+	response.OK(c, h.newCreateTargetResp(o))
+}
+
+// @Summary Create grouped profile target
+// @Description Create a new grouped profile target under a data source
+// @Tags CrawlTarget
+// @Accept json
+// @Produce json
+// @Param id path string true "Data Source ID"
+// @Param body body createTargetGroupReq true "Create target request"
+// @Success 200 {object} createTargetResp
+// @Failure 400 {object} response.Resp
+// @Failure 500 {object} response.Resp
+// @Router /datasources/{id}/targets/profiles [post]
+func (h *handler) CreateProfileTarget(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	req, err := h.processCreateTargetGroupReq(c, string(model.TargetTypeProfile))
+	if err != nil {
+		h.l.Warnf(ctx, "datasource.delivery.CreateProfileTarget.processCreateTargetGroupReq: %v", err)
+		response.Error(c, err, h.discord)
+		return
+	}
+
+	o, err := h.uc.CreateProfileTarget(ctx, req.toInput(model.TargetTypeProfile))
+	if err != nil {
+		h.l.Errorf(ctx, "datasource.delivery.CreateProfileTarget.uc.CreateProfileTarget: %v", err)
+		response.Error(c, h.mapError(err), h.discord)
+		return
+	}
+
+	response.OK(c, h.newCreateTargetResp(o))
+}
+
+// @Summary Create grouped post target
+// @Description Create a new grouped post target under a data source
+// @Tags CrawlTarget
+// @Accept json
+// @Produce json
+// @Param id path string true "Data Source ID"
+// @Param body body createTargetGroupReq true "Create target request"
+// @Success 200 {object} createTargetResp
+// @Failure 400 {object} response.Resp
+// @Failure 500 {object} response.Resp
+// @Router /datasources/{id}/targets/posts [post]
+func (h *handler) CreatePostTarget(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	req, err := h.processCreateTargetGroupReq(c, string(model.TargetTypePostURL))
+	if err != nil {
+		h.l.Warnf(ctx, "datasource.delivery.CreatePostTarget.processCreateTargetGroupReq: %v", err)
+		response.Error(c, err, h.discord)
+		return
+	}
+
+	o, err := h.uc.CreatePostTarget(ctx, req.toInput(model.TargetTypePostURL))
+	if err != nil {
+		h.l.Errorf(ctx, "datasource.delivery.CreatePostTarget.uc.CreatePostTarget: %v", err)
 		response.Error(c, h.mapError(err), h.discord)
 		return
 	}
@@ -222,6 +316,36 @@ func (h *handler) ListTargets(c *gin.Context) {
 	}
 
 	response.OK(c, h.newListTargetsResp(o))
+}
+
+// @Summary Get crawl target detail
+// @Description Return crawl target info by ID under a data source
+// @Tags CrawlTarget
+// @Produce json
+// @Param id path string true "Data Source ID"
+// @Param target_id path string true "Target ID"
+// @Success 200 {object} detailTargetResp
+// @Failure 400 {object} response.Resp
+// @Failure 500 {object} response.Resp
+// @Router /datasources/{id}/targets/{target_id} [get]
+func (h *handler) DetailTarget(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	req, err := h.processDetailTargetReq(c)
+	if err != nil {
+		h.l.Warnf(ctx, "datasource.delivery.DetailTarget.processDetailTargetReq: %v", err)
+		response.Error(c, err, h.discord)
+		return
+	}
+
+	o, err := h.uc.DetailTarget(ctx, req.toInput())
+	if err != nil {
+		h.l.Errorf(ctx, "datasource.delivery.DetailTarget.uc.DetailTarget: id=%s err=%v", req.ID, err)
+		response.Error(c, h.mapError(err), h.discord)
+		return
+	}
+
+	response.OK(c, h.newDetailTargetResp(o))
 }
 
 // @Summary Update a crawl target
@@ -276,7 +400,7 @@ func (h *handler) DeleteTarget(c *gin.Context) {
 		return
 	}
 
-	if err := h.uc.DeleteTarget(ctx, req.ID); err != nil {
+	if err := h.uc.DeleteTarget(ctx, req.toInput()); err != nil {
 		h.l.Errorf(ctx, "datasource.delivery.DeleteTarget.uc.DeleteTarget: id=%s err=%v", req.ID, err)
 		response.Error(c, h.mapError(err), h.discord)
 		return

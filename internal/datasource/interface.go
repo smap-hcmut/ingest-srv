@@ -11,11 +11,22 @@ type UseCase interface {
 	List(ctx context.Context, input ListInput) (ListOutput, error)
 	Update(ctx context.Context, input UpdateInput) (UpdateOutput, error)
 	Archive(ctx context.Context, id string) error
+	Activate(ctx context.Context, input ActivateInput) (ActivateOutput, error)
+	Pause(ctx context.Context, input PauseInput) (PauseOutput, error)
+	Resume(ctx context.Context, input ResumeInput) (ResumeOutput, error)
+	UpdateCrawlMode(ctx context.Context, input UpdateCrawlModeInput) (UpdateCrawlModeOutput, error)
 
 	// CrawlTarget sub-resource operations.
-	CreateTarget(ctx context.Context, input CreateTargetInput) (CreateTargetOutput, error)
-	DetailTarget(ctx context.Context, id string) (DetailTargetOutput, error)
+	CrawlTargetUseCase
+}
+
+
+type CrawlTargetUseCase interface {
+	CreateKeywordTarget(ctx context.Context, input CreateTargetGroupInput) (CreateTargetOutput, error)
+	CreateProfileTarget(ctx context.Context, input CreateTargetGroupInput) (CreateTargetOutput, error)
+	CreatePostTarget(ctx context.Context, input CreateTargetGroupInput) (CreateTargetOutput, error)
+	DetailTarget(ctx context.Context, input DetailTargetInput) (DetailTargetOutput, error)
 	ListTargets(ctx context.Context, input ListTargetsInput) (ListTargetsOutput, error)
 	UpdateTarget(ctx context.Context, input UpdateTargetInput) (UpdateTargetOutput, error)
-	DeleteTarget(ctx context.Context, id string) error
+	DeleteTarget(ctx context.Context, input DeleteTargetInput) error
 }

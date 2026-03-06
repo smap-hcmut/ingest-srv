@@ -2,6 +2,8 @@ package http
 
 import (
 	"encoding/json"
+	"net/url"
+	"strings"
 	"time"
 
 	"ingest-srv/internal/datasource"
@@ -13,7 +15,7 @@ import (
 
 // createReq represents data source creation request.
 type createReq struct {
-	ProjectID            string          `json:"project_id" binding:"required" example:"550e8400-e29b-41d4-a716-446655440000"`
+	ProjectID            string          `json:"project_id" binding:"required,uuid" example:"550e8400-e29b-41d4-a716-446655440000"`
 	Name                 string          `json:"name" binding:"required" example:"TikTok VinFast Crawler"`
 	Description          string          `json:"description" example:"Crawl TikTok posts about VinFast"`
 	SourceType           string          `json:"source_type" binding:"required" example:"TIKTOK" enums:"TIKTOK,FACEBOOK,YOUTUBE,FILE_UPLOAD,WEBHOOK"`
@@ -26,29 +28,54 @@ type createReq struct {
 }
 
 func (r createReq) validate() error {
-	if r.ProjectID == "" {
+	if strings.TrimSpace(r.ProjectID) == "" {
 		return errProjectIDRequired
 	}
-	if r.Name == "" {
+	if strings.TrimSpace(r.Name) == "" {
 		return errNameRequired
 	}
-	if r.SourceType == "" {
+	if strings.TrimSpace(r.SourceType) == "" {
 		return errSourceTypeRequired
+	}
+
+	sourceType := strings.TrimSpace(r.SourceType)
+	if !isValidSourceType(sourceType) {
+		return errInvalidSourceType
+	}
+
+	category := strings.TrimSpace(r.SourceCategory)
+	if category != "" && !isValidSourceCategory(category) {
+		return errInvalidCategory
+	}
+	if category == "" {
+		category = inferSourceCategory(sourceType)
+	}
+
+	if strings.TrimSpace(r.CrawlMode) != "" && !isValidCrawlMode(strings.TrimSpace(r.CrawlMode)) {
+		return errInvalidCrawlMode
+	}
+	if r.CrawlIntervalMinutes < 0 {
+		return errInvalidCrawlInterval
+	}
+	if category == string(model.SourceCategoryCrawl) {
+		if strings.TrimSpace(r.CrawlMode) == "" || r.CrawlIntervalMinutes <= 0 {
+			return errCrawlConfigRequired
+		}
 	}
 	return nil
 }
 
 func (r createReq) toInput() datasource.CreateInput {
 	return datasource.CreateInput{
-		ProjectID:            r.ProjectID,
-		Name:                 r.Name,
+		ProjectID:            strings.TrimSpace(r.ProjectID),
+		Name:                 strings.TrimSpace(r.Name),
 		Description:          r.Description,
-		SourceType:           r.SourceType,
-		SourceCategory:       r.SourceCategory,
+		SourceType:           strings.TrimSpace(r.SourceType),
+		SourceCategory:       strings.TrimSpace(r.SourceCategory),
 		Config:               r.Config,
 		AccountRef:           r.AccountRef,
 		MappingRules:         r.MappingRules,
-		CrawlMode:            r.CrawlMode,
+		CrawlMode:            strings.TrimSpace(r.CrawlMode),
 		CrawlIntervalMinutes: r.CrawlIntervalMinutes,
 	}
 }
@@ -58,8 +85,15 @@ type detailReq struct {
 	ID string
 }
 
+func (r detailReq) validate() error {
+	if strings.TrimSpace(r.ID) == "" {
+		return errWrongBody
+	}
+	return nil
+}
+
 func (r detailReq) toInput() string {
-	return r.ID
+	return strings.TrimSpace(r.ID)
 }
 
 // listReq binds query params for listing data sources.
@@ -73,14 +107,27 @@ type listReq struct {
 	Name           string `form:"name"`
 }
 
+func (r listReq) validate() error {
+	if strings.TrimSpace(r.SourceType) != "" && !isValidSourceType(strings.TrimSpace(r.SourceType)) {
+		return errInvalidSourceType
+	}
+	if strings.TrimSpace(r.SourceCategory) != "" && !isValidSourceCategory(strings.TrimSpace(r.SourceCategory)) {
+		return errInvalidCategory
+	}
+	if strings.TrimSpace(r.CrawlMode) != "" && !isValidCrawlMode(strings.TrimSpace(r.CrawlMode)) {
+		return errInvalidCrawlMode
+	}
+	return nil
+}
+
 func (r listReq) toInput() datasource.ListInput {
 	return datasource.ListInput{
-		ProjectID:      r.ProjectID,
-		Status:         r.Status,
-		SourceType:     r.SourceType,
-		SourceCategory: r.SourceCategory,
-		CrawlMode:      r.CrawlMode,
-		Name:           r.Name,
+		ProjectID:      strings.TrimSpace(r.ProjectID),
+		Status:         strings.TrimSpace(r.Status),
+		SourceType:     strings.TrimSpace(r.SourceType),
+		SourceCategory: strings.TrimSpace(r.SourceCategory),
+		CrawlMode:      strings.TrimSpace(r.CrawlMode),
+		Name:           strings.TrimSpace(r.Name),
 		Paginator:      r.PaginateQuery,
 	}
 }
@@ -97,8 +144,8 @@ type updateReq struct {
 
 func (r updateReq) toInput() datasource.UpdateInput {
 	return datasource.UpdateInput{
-		ID:           r.ID,
-		Name:         r.Name,
+		ID:           strings.TrimSpace(r.ID),
+		Name:         strings.TrimSpace(r.Name),
 		Description:  r.Description,
 		Config:       r.Config,
 		AccountRef:   r.AccountRef,
@@ -111,8 +158,15 @@ type archiveReq struct {
 	ID string
 }
 
+func (r archiveReq) validate() error {
+	if strings.TrimSpace(r.ID) == "" {
+		return errWrongBody
+	}
+	return nil
+}
+
 func (r archiveReq) toInput() string {
-	return r.ID
+	return strings.TrimSpace(r.ID)
 }
 
 // --- Response DTOs ---
@@ -169,6 +223,41 @@ type updateResp struct {
 	DataSource dataSourceResp `json:"data_source"`
 }
 
+type updateCrawlModeReq struct {
+	ID          string `json:"-"`
+	CrawlMode   string `json:"crawl_mode" binding:"required" example:"NORMAL" enums:"SLEEP,NORMAL,CRISIS"`
+	TriggerType string `json:"trigger_type" binding:"required" example:"MANUAL" enums:"MANUAL,SCHEDULED,PROJECT_EVENT,CRISIS_EVENT,WEBHOOK_PUSH"`
+	Reason      string `json:"reason,omitempty" example:"manual reset after crisis"`
+	EventRef    string `json:"event_ref,omitempty" example:"incident-20260306-001"`
+}
+
+func (r updateCrawlModeReq) validate() error {
+	if strings.TrimSpace(r.ID) == "" {
+		return errWrongBody
+	}
+	if !isValidCrawlMode(strings.TrimSpace(r.CrawlMode)) {
+		return errInvalidCrawlMode
+	}
+	if !isValidTriggerType(strings.TrimSpace(r.TriggerType)) {
+		return errCrawlModeNotAllowed
+	}
+	return nil
+}
+
+func (r updateCrawlModeReq) toInput() datasource.UpdateCrawlModeInput {
+	return datasource.UpdateCrawlModeInput{
+		ID:          strings.TrimSpace(r.ID),
+		CrawlMode:   strings.TrimSpace(r.CrawlMode),
+		TriggerType: strings.TrimSpace(r.TriggerType),
+		Reason:      strings.TrimSpace(r.Reason),
+		EventRef:    strings.TrimSpace(r.EventRef),
+	}
+}
+
+type updateCrawlModeResp struct {
+	DataSource dataSourceResp `json:"data_source"`
+}
+
 // --- Response Mappers ---
 
 func (h *handler) newCreateResp(o datasource.CreateOutput) createResp {
@@ -192,6 +281,10 @@ func (h *handler) newListResp(o datasource.ListOutput) listResp {
 
 func (h *handler) newUpdateResp(o datasource.UpdateOutput) updateResp {
 	return updateResp{DataSource: toDataSourceResp(o.DataSource)}
+}
+
+func (h *handler) newUpdateCrawlModeResp(o datasource.UpdateCrawlModeOutput) updateCrawlModeResp {
+	return updateCrawlModeResp{DataSource: toDataSourceResp(o.DataSource)}
 }
 
 // --- Internal Mapper ---
@@ -254,13 +347,100 @@ func formatTimePtr(t *time.Time) *string {
 	return &s
 }
 
+func isValidSourceType(value string) bool {
+	switch model.SourceType(value) {
+	case model.SourceTypeTikTok, model.SourceTypeFacebook, model.SourceTypeYouTube,
+		model.SourceTypeFileUpload, model.SourceTypeWebhook:
+		return true
+	default:
+		return false
+	}
+}
+
+func isValidSourceCategory(value string) bool {
+	switch model.SourceCategory(value) {
+	case model.SourceCategoryCrawl, model.SourceCategoryPassive:
+		return true
+	default:
+		return false
+	}
+}
+
+func inferSourceCategory(sourceType string) string {
+	switch model.SourceType(sourceType) {
+	case model.SourceTypeFileUpload, model.SourceTypeWebhook:
+		return string(model.SourceCategoryPassive)
+	default:
+		return string(model.SourceCategoryCrawl)
+	}
+}
+
+func isValidCrawlMode(value string) bool {
+	switch model.CrawlMode(value) {
+	case model.CrawlModeSleep, model.CrawlModeNormal, model.CrawlModeCrisis:
+		return true
+	default:
+		return false
+	}
+}
+
+func isValidTargetType(value string) bool {
+	switch model.TargetType(value) {
+	case model.TargetTypeKeyword, model.TargetTypeProfile, model.TargetTypePostURL:
+		return true
+	default:
+		return false
+	}
+}
+
+func isValidTriggerType(value string) bool {
+	switch model.TriggerType(value) {
+	case model.TriggerTypeManual, model.TriggerTypeScheduled, model.TriggerTypeProjectEvent,
+		model.TriggerTypeCrisisEvent, model.TriggerTypeWebhookPush:
+		return true
+	default:
+		return false
+	}
+}
+
+func normalizeRequestValues(values []string, dedupe bool) []string {
+	if values == nil {
+		return nil
+	}
+	items := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			continue
+		}
+		if dedupe {
+			if _, ok := seen[trimmed]; ok {
+				continue
+			}
+			seen[trimmed] = struct{}{}
+		}
+		items = append(items, trimmed)
+	}
+	return items
+}
+
+func validateRequestURLValues(values []string) error {
+	for _, value := range values {
+		parsed, err := url.ParseRequestURI(value)
+		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+			return errTargetValuesMustBeURLs
+		}
+	}
+	return nil
+}
+
 // --- CrawlTarget Request DTOs ---
 
-// createTargetReq represents crawl target creation request.
-type createTargetReq struct {
+// createTargetGroupReq represents grouped crawl target creation request.
+type createTargetGroupReq struct {
 	DataSourceID         string          `json:"-"`
-	TargetType           string          `json:"target_type" binding:"required" example:"KEYWORD" enums:"KEYWORD,PROFILE,POST_URL"`
-	Value                string          `json:"value" binding:"required" example:"vinfast"`
+	Values               []string        `json:"values" binding:"required" example:"vinfast"`
 	Label                string          `json:"label" example:"VinFast keyword"`
 	PlatformMeta         json.RawMessage `json:"platform_meta,omitempty"`
 	IsActive             bool            `json:"is_active" example:"true"`
@@ -268,11 +448,29 @@ type createTargetReq struct {
 	CrawlIntervalMinutes int             `json:"crawl_interval_minutes" example:"11"`
 }
 
-func (r createTargetReq) toInput() datasource.CreateTargetInput {
-	return datasource.CreateTargetInput{
-		DataSourceID:         r.DataSourceID,
-		TargetType:           r.TargetType,
-		Value:                r.Value,
+func (r createTargetGroupReq) validate(targetType model.TargetType) error {
+	if strings.TrimSpace(r.DataSourceID) == "" {
+		return errWrongBody
+	}
+	values := normalizeRequestValues(r.Values, targetType == model.TargetTypeKeyword)
+	if len(values) == 0 {
+		return errTargetValuesRequired
+	}
+	if targetType == model.TargetTypeProfile || targetType == model.TargetTypePostURL {
+		if err := validateRequestURLValues(values); err != nil {
+			return err
+		}
+	}
+	if r.CrawlIntervalMinutes <= 0 {
+		return errInvalidTargetInterval
+	}
+	return nil
+}
+
+func (r createTargetGroupReq) toInput(targetType model.TargetType) datasource.CreateTargetGroupInput {
+	return datasource.CreateTargetGroupInput{
+		DataSourceID:         strings.TrimSpace(r.DataSourceID),
+		Values:               normalizeRequestValues(r.Values, targetType == model.TargetTypeKeyword),
 		Label:                r.Label,
 		PlatformMeta:         r.PlatformMeta,
 		IsActive:             r.IsActive,
@@ -288,18 +486,49 @@ type listTargetsReq struct {
 	IsActive     *bool  `form:"is_active"`
 }
 
+func (r listTargetsReq) validate() error {
+	if strings.TrimSpace(r.DataSourceID) == "" {
+		return errWrongBody
+	}
+	if strings.TrimSpace(r.TargetType) != "" && !isValidTargetType(strings.TrimSpace(r.TargetType)) {
+		return errInvalidTargetType
+	}
+	return nil
+}
+
 func (r listTargetsReq) toInput() datasource.ListTargetsInput {
 	return datasource.ListTargetsInput{
-		DataSourceID: r.DataSourceID,
-		TargetType:   r.TargetType,
+		DataSourceID: strings.TrimSpace(r.DataSourceID),
+		TargetType:   strings.TrimSpace(r.TargetType),
 		IsActive:     r.IsActive,
+	}
+}
+
+// detailTargetReq extracts datasource + target identity from path params.
+type detailTargetReq struct {
+	DataSourceID string
+	ID           string
+}
+
+func (r detailTargetReq) validate() error {
+	if strings.TrimSpace(r.DataSourceID) == "" || strings.TrimSpace(r.ID) == "" {
+		return errWrongBody
+	}
+	return nil
+}
+
+func (r detailTargetReq) toInput() datasource.DetailTargetInput {
+	return datasource.DetailTargetInput{
+		DataSourceID: strings.TrimSpace(r.DataSourceID),
+		ID:           strings.TrimSpace(r.ID),
 	}
 }
 
 // updateTargetReq represents crawl target update request.
 type updateTargetReq struct {
+	DataSourceID         string          `json:"-"`
 	ID                   string          `json:"-"`
-	Value                string          `json:"value" example:"vinfast updated"`
+	Values               []string        `json:"values,omitempty"`
 	Label                string          `json:"label" example:"Updated label"`
 	PlatformMeta         json.RawMessage `json:"platform_meta,omitempty"`
 	IsActive             *bool           `json:"is_active,omitempty"`
@@ -307,10 +536,24 @@ type updateTargetReq struct {
 	CrawlIntervalMinutes *int            `json:"crawl_interval_minutes,omitempty"`
 }
 
+func (r updateTargetReq) validate() error {
+	if strings.TrimSpace(r.DataSourceID) == "" || strings.TrimSpace(r.ID) == "" {
+		return errWrongBody
+	}
+	if r.Values != nil && len(normalizeRequestValues(r.Values, false)) == 0 {
+		return errTargetValuesRequired
+	}
+	if r.CrawlIntervalMinutes != nil && *r.CrawlIntervalMinutes <= 0 {
+		return errInvalidTargetInterval
+	}
+	return nil
+}
+
 func (r updateTargetReq) toInput() datasource.UpdateTargetInput {
 	return datasource.UpdateTargetInput{
-		ID:                   r.ID,
-		Value:                r.Value,
+		DataSourceID:         strings.TrimSpace(r.DataSourceID),
+		ID:                   strings.TrimSpace(r.ID),
+		Values:               normalizeRequestValues(r.Values, false),
 		Label:                r.Label,
 		PlatformMeta:         r.PlatformMeta,
 		IsActive:             r.IsActive,
@@ -321,7 +564,26 @@ func (r updateTargetReq) toInput() datasource.UpdateTargetInput {
 
 // deleteTargetReq extracts target_id from path param.
 type deleteTargetReq struct {
-	ID string
+	DataSourceID string
+	ID           string
+}
+
+func (r deleteTargetReq) validate() error {
+	if strings.TrimSpace(r.DataSourceID) == "" || strings.TrimSpace(r.ID) == "" {
+		return errWrongBody
+	}
+	return nil
+}
+
+func (r deleteTargetReq) toInput() datasource.DeleteTargetInput {
+	return datasource.DeleteTargetInput{
+		DataSourceID: strings.TrimSpace(r.DataSourceID),
+		ID:           strings.TrimSpace(r.ID),
+	}
+}
+
+type detailTargetResp struct {
+	Target crawlTargetResp `json:"target"`
 }
 
 // --- CrawlTarget Response DTOs ---
@@ -331,7 +593,7 @@ type crawlTargetResp struct {
 	ID                   string          `json:"id" example:"660e8400-e29b-41d4-a716-446655440002"`
 	DataSourceID         string          `json:"data_source_id" example:"550e8400-e29b-41d4-a716-446655440001"`
 	TargetType           string          `json:"target_type" example:"KEYWORD"`
-	Value                string          `json:"value" example:"vinfast"`
+	Values               []string        `json:"values"`
 	Label                string          `json:"label,omitempty"`
 	PlatformMeta         json.RawMessage `json:"platform_meta,omitempty"`
 	IsActive             bool            `json:"is_active" example:"true"`
@@ -372,6 +634,10 @@ func (h *handler) newListTargetsResp(o datasource.ListTargetsOutput) listTargets
 	return listTargetsResp{Targets: items}
 }
 
+func (h *handler) newDetailTargetResp(o datasource.DetailTargetOutput) detailTargetResp {
+	return detailTargetResp{Target: toCrawlTargetResp(o.Target)}
+}
+
 func (h *handler) newUpdateTargetResp(o datasource.UpdateTargetOutput) updateTargetResp {
 	return updateTargetResp{Target: toCrawlTargetResp(o.Target)}
 }
@@ -381,7 +647,7 @@ func toCrawlTargetResp(t model.CrawlTarget) crawlTargetResp {
 		ID:                   t.ID,
 		DataSourceID:         t.DataSourceID,
 		TargetType:           string(t.TargetType),
-		Value:                t.Value,
+		Values:               t.Values,
 		Label:                t.Label,
 		IsActive:             t.IsActive,
 		Priority:             t.Priority,

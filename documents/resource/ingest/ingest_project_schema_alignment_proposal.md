@@ -1,7 +1,7 @@
 # Đề xuất schema ingest-srv tương thích ingest-srv và project-srv
 
-**Phiên bản:** 1.5  
-**Ngày cập nhật:** 05/03/2026
+**Phiên bản:** 1.6  
+**Ngày cập nhật:** 06/03/2026
 
 ## 0. Document Status
 
@@ -14,8 +14,8 @@
 | Hạng mục | Trạng thái |
 |---|---|
 | `data_sources`, `dryrun_results`, `scheduled_jobs`, `external_tasks`, `raw_batches`, `crawl_mode_changes` | Implemented trong migration v1 hiện tại |
-| `crawl_targets` | Pending migration |
-| `target_id` nullable cho `dryrun_results`, `scheduled_jobs`, `external_tasks` | Pending migration |
+| `crawl_targets` | Implemented trong migration v1 hiện tại |
+| `target_id` nullable cho `dryrun_results`, `scheduled_jobs`, `external_tasks` | Implemented trong migration v1 hiện tại |
 
 ### 0.2 Deprecation Mapping
 
@@ -301,7 +301,7 @@ Dùng để lưu:
 - `dryrun_status`: theo dõi kết quả dry run cho crawl source trước khi activate chính thức.
 - `dryrun_last_result_id`: trỏ tới kết quả dry run gần nhất để UI/API truy xuất nhanh.
 - `crawl_mode`: trạng thái crawl hiện tại (`SLEEP`, `NORMAL`, `CRISIS`) phục vụ adaptive crawl. Áp dụng ở **level datasource**, ảnh hưởng tất cả `crawl_targets` thuộc source này thông qua mode multiplier.
-- `crawl_interval_minutes`: giá trị **default** dùng khi tạo `crawl_target` mới mà user không truyền interval riêng. Scheduling thực tế dựa trên `crawl_targets.crawl_interval_minutes`.
+- `crawl_interval_minutes`: giá trị default ở level source; scheduler thực tế dựa trên `crawl_targets.crawl_interval_minutes`. Public grouped-target create API hiện vẫn yêu cầu interval rõ ở target group.
 - `next_crawl_at`: **deprecated** — scheduling per-target nằm ở `crawl_targets.next_crawl_at`.
 - `last_crawl_at`: **deprecated** — tracking per-target nằm ở `crawl_targets.last_crawl_at`.
 - `last_success_at`: **deprecated** — tracking per-target nằm ở `crawl_targets.last_success_at`.
@@ -506,10 +506,10 @@ Dùng để lưu:
 
 Khuyến nghị field chính:
 
-- `id`: định danh duy nhất per-target.
+- `id`: định danh duy nhất per-target-group.
 - `data_source_id`: liên kết target thuộc source nào.
 - `target_type`: loại target (`KEYWORD`, `PROFILE`, `POST_URL`).
-- `value`: giá trị target (từ khóa, URL profile, URL post).
+- `values`: mảng giá trị target trong cùng 1 execution unit; ví dụ nhiều keyword hoặc nhiều URL dùng chung interval.
 - `label`: display label cho UI.
 - `platform_meta`: metadata platform-specific dạng JSONB (profile_id, hashtag_id...).
 - `is_active`: tạm tắt target mà không xóa, scheduler bỏ qua target `is_active = false`.
@@ -528,12 +528,12 @@ Ghi chú thiết kế:
 - Scheduler query `crawl_targets.next_crawl_at WHERE is_active = true` thay vì `data_sources.next_crawl_at`.
 - Effective interval tại runtime = `target.crawl_interval_minutes × mode_multiplier(source.crawl_mode)`.
 - Mode multiplier: `NORMAL = 1.0`, `CRISIS = 0.2`, `SLEEP = 5.0`.
-- `crawl_mode` nằm ở **level datasource** (ảnh hưởng tất cả targets cùng lúc), không per-target.
-- Khi tạo target mới: `crawl_interval_minutes = input.interval ?? source.crawl_interval_minutes ?? crawl_mode_defaults(mode)`.
+- `crawl_mode` nằm ở **level datasource** (ảnh hưởng tất cả target-groups cùng lúc), không per-target.
+- Ở level schema/business, target mới có thể lấy default từ source nếu orchestration nội bộ chọn làm vậy; tuy nhiên public grouped-target create API hiện yêu cầu `crawl_interval_minutes` ngay trên request target.
 - `crawl_mode_defaults` chỉ dùng làm default/fallback để seed cấu hình; runtime scheduling không dùng bảng này để ghi đè interval đã chốt trên target.
 - Index đề xuất: `(data_source_id)` và `(next_crawl_at) WHERE is_active = true`.
 
-> **Ghi chú về API contract**: CRUD endpoints cho `crawl_targets` (`POST/GET/PUT/DELETE /datasources/:id/targets`) được mô tả chi tiết trong `ingest_plan.md` (Module 1 – Data Source Management). Schema proposal chỉ định nghĩa cấu trúc bảng và business rules, không định nghĩa HTTP contract.
+> **Ghi chú về API contract**: Public create endpoints cho `crawl_targets` hiện là `POST /datasources/:id/targets/keywords|profiles|posts`; list/detail/update/delete vẫn nằm dưới `/datasources/:id/targets`. Schema proposal chỉ định nghĩa cấu trúc bảng và business rules, không định nghĩa toàn bộ HTTP contract.
 
 ### 7.8 Các bảng defer khỏi V1
 
@@ -704,10 +704,10 @@ Ví dụ:
 
 ### 9.3 Dry run cho crawl source
 
-- Crawl source thực hiện dry run **per-target**: mỗi `crawl_target` có thể chạy dry run riêng.
-- Kết quả lưu ở `dryrun_results` với `target_id` gắn với target cụ thể.
-- Trong runtime, dry run có thể tạo `external_tasks` với `scheduled_job_id = NULL` và `target_id` set.
-- Dry run thành công thì source được chuyển sang `READY`.
+- Crawl source thực hiện dry run **per-target-group**: mỗi `crawl_target` có thể chạy dry run riêng.
+- Kết quả lưu ở `dryrun_results` với `target_id` gắn với grouped target cụ thể.
+- Phase 2 hiện là **control-plane only**: dry run không tạo `external_tasks`, không publish RabbitMQ, không gọi crawler thật.
+- Dry run pass hiện trả `WARNING` và source được chuyển sang `READY`.
 
 ### 9.4 Activate project
 
@@ -725,7 +725,7 @@ Ví dụ:
 
 ### 9.6 Manual trigger hoặc replay
 
-- API hoặc internal action có thể tạo `external_tasks` trực tiếp.
+- API hoặc internal action có thể tạo `external_tasks` trực tiếp trong phase scheduler/crawler sau này.
 - Trường hợp này không bắt buộc phải có `scheduled_jobs`.
 - `external_tasks.scheduled_job_id = NULL`.
 - Replay chỉ re-run parse/publish trên `raw_batches` đã tồn tại, không tạo raw batch mới.
@@ -760,8 +760,8 @@ Ví dụ:
 ### 10.1 Source lifecycle
 
 - tạo `TIKTOK` source -> `PENDING`
-- thêm crawl targets vào source
-- dry run per-target success -> `READY`
+- thêm grouped crawl targets vào source
+- dry run per-target-group pass (`WARNING`) -> `READY`
 - activate -> `ACTIVE` và tất cả targets có `next_crawl_at`
 - pause/resume source hoạt động đúng (tất cả targets dừng/tiếp)
 - `FILE_UPLOAD` source có thể đi tới `COMPLETED`
@@ -771,7 +771,7 @@ Ví dụ:
 
 - scheduled crawl tạo `external_task` với `scheduled_job_id != NULL`
 - manual trigger tạo `external_task` với `scheduled_job_id = NULL`
-- dry run tạo `external_task` với `scheduled_job_id = NULL`
+- dry run **chưa** tạo `external_task` trong Phase 2
 - replay tạo `external_task` với `scheduled_job_id = NULL`
 
 ### 10.3 `mapping_rules`
@@ -823,15 +823,15 @@ Ví dụ:
 
 ### 10.7 `crawl_targets`
 
-- tạo target KEYWORD cho TIKTOK source -> `crawl_interval_minutes` kế thừa từ datasource nếu không truyền
-- tạo target với interval riêng -> dùng giá trị truyền vào
+- tạo grouped target KEYWORD cho TIKTOK source với `values[]` + `crawl_interval_minutes`
+- tạo grouped target PROFILE/POST yêu cầu mọi phần tử trong `values[]` là URL hợp lệ
 - tạm tắt target (`is_active = false`) -> scheduler bỏ qua target này
 - bật lại target -> `next_crawl_at` được tính lại
 - effective interval = `crawl_interval_minutes × mode_multiplier`
 - NORMAL mode: multiplier = 1.0
 - CRISIS mode: multiplier = 0.2 -> interval giảm 5 lần
 - SLEEP mode: multiplier = 5.0 -> interval tăng 5 lần
-- dry run per-target lưu `dryrun_results.target_id` đúng
+- dry run per-target-group lưu `dryrun_results.target_id` đúng
 
 ---
 

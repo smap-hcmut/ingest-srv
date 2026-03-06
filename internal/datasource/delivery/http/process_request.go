@@ -1,6 +1,8 @@
 package http
 
 import (
+	"ingest-srv/internal/model"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -20,7 +22,12 @@ func (h *handler) processCreateReq(c *gin.Context) (createReq, error) {
 
 // processDetailReq extracts path param for detail.
 func (h *handler) processDetailReq(c *gin.Context) (detailReq, error) {
-	return detailReq{ID: c.Param("id")}, nil
+	req := detailReq{ID: c.Param("id")}
+	if err := req.validate(); err != nil {
+		h.l.Warnf(c.Request.Context(), "datasource.delivery.processDetailReq.validate: %v", err)
+		return req, err
+	}
+	return req, nil
 }
 
 // processListReq binds query params for listing.
@@ -29,6 +36,10 @@ func (h *handler) processListReq(c *gin.Context) (listReq, error) {
 	if err := c.ShouldBindQuery(&req); err != nil {
 		h.l.Warnf(c.Request.Context(), "datasource.delivery.processListReq.ShouldBindQuery: %v", err)
 		return req, errWrongBody
+	}
+	if err := req.validate(); err != nil {
+		h.l.Warnf(c.Request.Context(), "datasource.delivery.processListReq.validate: %v", err)
+		return req, err
 	}
 	return req, nil
 }
@@ -41,24 +52,52 @@ func (h *handler) processUpdateReq(c *gin.Context) (updateReq, error) {
 		return req, errWrongBody
 	}
 	req.ID = c.Param("id")
+	if detailErr := (detailReq{ID: req.ID}).validate(); detailErr != nil {
+		h.l.Warnf(c.Request.Context(), "datasource.delivery.processUpdateReq.validatePath: %v", detailErr)
+		return req, detailErr
+	}
 	return req, nil
 }
 
 // processArchiveReq extracts path param for archive.
 func (h *handler) processArchiveReq(c *gin.Context) (archiveReq, error) {
-	return archiveReq{ID: c.Param("id")}, nil
+	req := archiveReq{ID: c.Param("id")}
+	if err := req.validate(); err != nil {
+		h.l.Warnf(c.Request.Context(), "datasource.delivery.processArchiveReq.validate: %v", err)
+		return req, err
+	}
+	return req, nil
+}
+
+// processUpdateCrawlModeReq binds internal crawl-mode update requests.
+func (h *handler) processUpdateCrawlModeReq(c *gin.Context) (updateCrawlModeReq, error) {
+	var req updateCrawlModeReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.l.Warnf(c.Request.Context(), "datasource.delivery.processUpdateCrawlModeReq.ShouldBindJSON: %v", err)
+		return req, errWrongBody
+	}
+	req.ID = c.Param("id")
+	if err := req.validate(); err != nil {
+		h.l.Warnf(c.Request.Context(), "datasource.delivery.processUpdateCrawlModeReq.validate: %v", err)
+		return req, err
+	}
+	return req, nil
 }
 
 // --- CrawlTarget Request Processors ---
 
-// processCreateTargetReq binds JSON + path param for creating a target.
-func (h *handler) processCreateTargetReq(c *gin.Context) (createTargetReq, error) {
-	var req createTargetReq
+// processCreateTargetGroupReq binds JSON + path param for creating a grouped target.
+func (h *handler) processCreateTargetGroupReq(c *gin.Context, targetType string) (createTargetGroupReq, error) {
+	var req createTargetGroupReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.l.Warnf(c.Request.Context(), "datasource.delivery.processCreateTargetReq.ShouldBindJSON: %v", err)
+		h.l.Warnf(c.Request.Context(), "datasource.delivery.processCreateTargetGroupReq.ShouldBindJSON: %v", err)
 		return req, errWrongBody
 	}
 	req.DataSourceID = c.Param("id")
+	if err := req.validate(model.TargetType(targetType)); err != nil {
+		h.l.Warnf(c.Request.Context(), "datasource.delivery.processCreateTargetGroupReq.validate: %v", err)
+		return req, err
+	}
 	return req, nil
 }
 
@@ -70,6 +109,23 @@ func (h *handler) processListTargetsReq(c *gin.Context) (listTargetsReq, error) 
 		return req, errWrongBody
 	}
 	req.DataSourceID = c.Param("id")
+	if err := req.validate(); err != nil {
+		h.l.Warnf(c.Request.Context(), "datasource.delivery.processListTargetsReq.validate: %v", err)
+		return req, err
+	}
+	return req, nil
+}
+
+// processDetailTargetReq extracts datasource + target ids from path params.
+func (h *handler) processDetailTargetReq(c *gin.Context) (detailTargetReq, error) {
+	req := detailTargetReq{
+		DataSourceID: c.Param("id"),
+		ID:           c.Param("target_id"),
+	}
+	if err := req.validate(); err != nil {
+		h.l.Warnf(c.Request.Context(), "datasource.delivery.processDetailTargetReq.validate: %v", err)
+		return req, err
+	}
 	return req, nil
 }
 
@@ -80,11 +136,24 @@ func (h *handler) processUpdateTargetReq(c *gin.Context) (updateTargetReq, error
 		h.l.Warnf(c.Request.Context(), "datasource.delivery.processUpdateTargetReq.ShouldBindJSON: %v", err)
 		return req, errWrongBody
 	}
+	req.DataSourceID = c.Param("id")
 	req.ID = c.Param("target_id")
+	if err := req.validate(); err != nil {
+		h.l.Warnf(c.Request.Context(), "datasource.delivery.processUpdateTargetReq.validate: %v", err)
+		return req, err
+	}
 	return req, nil
 }
 
 // processDeleteTargetReq extracts target_id from path param.
 func (h *handler) processDeleteTargetReq(c *gin.Context) (deleteTargetReq, error) {
-	return deleteTargetReq{ID: c.Param("target_id")}, nil
+	req := deleteTargetReq{
+		DataSourceID: c.Param("id"),
+		ID:           c.Param("target_id"),
+	}
+	if err := req.validate(); err != nil {
+		h.l.Warnf(c.Request.Context(), "datasource.delivery.processDeleteTargetReq.validate: %v", err)
+		return req, err
+	}
+	return req, nil
 }

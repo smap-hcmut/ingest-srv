@@ -18,6 +18,7 @@ import (
 	"github.com/aarondl/sqlboiler/v4/queries"
 	"github.com/aarondl/sqlboiler/v4/queries/qm"
 	"github.com/aarondl/sqlboiler/v4/queries/qmhelper"
+	"github.com/aarondl/sqlboiler/v4/types"
 	"github.com/aarondl/strmangle"
 	"github.com/friendsofgo/errors"
 )
@@ -27,7 +28,7 @@ type CrawlTarget struct {
 	ID                   string      `boil:"id" json:"id" toml:"id" yaml:"id"`
 	DataSourceID         string      `boil:"data_source_id" json:"data_source_id" toml:"data_source_id" yaml:"data_source_id"`
 	TargetType           TargetType  `boil:"target_type" json:"target_type" toml:"target_type" yaml:"target_type"`
-	Value                string      `boil:"value" json:"value" toml:"value" yaml:"value"`
+	Values               types.JSON  `boil:"values" json:"values" toml:"values" yaml:"values"`
 	Label                null.String `boil:"label" json:"label,omitempty" toml:"label" yaml:"label,omitempty"`
 	PlatformMeta         null.JSON   `boil:"platform_meta" json:"platform_meta,omitempty" toml:"platform_meta" yaml:"platform_meta,omitempty"`
 	IsActive             bool        `boil:"is_active" json:"is_active" toml:"is_active" yaml:"is_active"`
@@ -49,7 +50,7 @@ var CrawlTargetColumns = struct {
 	ID                   string
 	DataSourceID         string
 	TargetType           string
-	Value                string
+	Values               string
 	Label                string
 	PlatformMeta         string
 	IsActive             string
@@ -66,7 +67,7 @@ var CrawlTargetColumns = struct {
 	ID:                   "id",
 	DataSourceID:         "data_source_id",
 	TargetType:           "target_type",
-	Value:                "value",
+	Values:               "values",
 	Label:                "label",
 	PlatformMeta:         "platform_meta",
 	IsActive:             "is_active",
@@ -85,7 +86,7 @@ var CrawlTargetTableColumns = struct {
 	ID                   string
 	DataSourceID         string
 	TargetType           string
-	Value                string
+	Values               string
 	Label                string
 	PlatformMeta         string
 	IsActive             string
@@ -102,7 +103,7 @@ var CrawlTargetTableColumns = struct {
 	ID:                   "crawl_targets.id",
 	DataSourceID:         "crawl_targets.data_source_id",
 	TargetType:           "crawl_targets.target_type",
-	Value:                "crawl_targets.value",
+	Values:               "crawl_targets.values",
 	Label:                "crawl_targets.label",
 	PlatformMeta:         "crawl_targets.platform_meta",
 	IsActive:             "crawl_targets.is_active",
@@ -152,6 +153,27 @@ func (w whereHelperTargetType) NIN(slice []TargetType) qm.QueryMod {
 		values = append(values, value)
 	}
 	return qm.WhereNotIn(fmt.Sprintf("%s NOT IN ?", w.field), values...)
+}
+
+type whereHelpertypes_JSON struct{ field string }
+
+func (w whereHelpertypes_JSON) EQ(x types.JSON) qm.QueryMod {
+	return qmhelper.Where(w.field, qmhelper.EQ, x)
+}
+func (w whereHelpertypes_JSON) NEQ(x types.JSON) qm.QueryMod {
+	return qmhelper.Where(w.field, qmhelper.NEQ, x)
+}
+func (w whereHelpertypes_JSON) LT(x types.JSON) qm.QueryMod {
+	return qmhelper.Where(w.field, qmhelper.LT, x)
+}
+func (w whereHelpertypes_JSON) LTE(x types.JSON) qm.QueryMod {
+	return qmhelper.Where(w.field, qmhelper.LTE, x)
+}
+func (w whereHelpertypes_JSON) GT(x types.JSON) qm.QueryMod {
+	return qmhelper.Where(w.field, qmhelper.GT, x)
+}
+func (w whereHelpertypes_JSON) GTE(x types.JSON) qm.QueryMod {
+	return qmhelper.Where(w.field, qmhelper.GTE, x)
 }
 
 type whereHelpernull_JSON struct{ field string }
@@ -215,7 +237,7 @@ var CrawlTargetWhere = struct {
 	ID                   whereHelperstring
 	DataSourceID         whereHelperstring
 	TargetType           whereHelperTargetType
-	Value                whereHelperstring
+	Values               whereHelpertypes_JSON
 	Label                whereHelpernull_String
 	PlatformMeta         whereHelpernull_JSON
 	IsActive             whereHelperbool
@@ -232,7 +254,7 @@ var CrawlTargetWhere = struct {
 	ID:                   whereHelperstring{field: "\"schema_ingest\".\"crawl_targets\".\"id\""},
 	DataSourceID:         whereHelperstring{field: "\"schema_ingest\".\"crawl_targets\".\"data_source_id\""},
 	TargetType:           whereHelperTargetType{field: "\"schema_ingest\".\"crawl_targets\".\"target_type\""},
-	Value:                whereHelperstring{field: "\"schema_ingest\".\"crawl_targets\".\"value\""},
+	Values:               whereHelpertypes_JSON{field: "\"schema_ingest\".\"crawl_targets\".\"values\""},
 	Label:                whereHelpernull_String{field: "\"schema_ingest\".\"crawl_targets\".\"label\""},
 	PlatformMeta:         whereHelpernull_JSON{field: "\"schema_ingest\".\"crawl_targets\".\"platform_meta\""},
 	IsActive:             whereHelperbool{field: "\"schema_ingest\".\"crawl_targets\".\"is_active\""},
@@ -341,8 +363,8 @@ func (r *crawlTargetR) GetTargetScheduledJobs() ScheduledJobSlice {
 type crawlTargetL struct{}
 
 var (
-	crawlTargetAllColumns            = []string{"id", "data_source_id", "target_type", "value", "label", "platform_meta", "is_active", "priority", "crawl_interval_minutes", "next_crawl_at", "last_crawl_at", "last_success_at", "last_error_at", "last_error_message", "created_at", "updated_at"}
-	crawlTargetColumnsWithoutDefault = []string{"data_source_id", "target_type", "value"}
+	crawlTargetAllColumns            = []string{"id", "data_source_id", "target_type", "values", "label", "platform_meta", "is_active", "priority", "crawl_interval_minutes", "next_crawl_at", "last_crawl_at", "last_success_at", "last_error_at", "last_error_message", "created_at", "updated_at"}
+	crawlTargetColumnsWithoutDefault = []string{"data_source_id", "target_type", "values"}
 	crawlTargetColumnsWithDefault    = []string{"id", "label", "platform_meta", "is_active", "priority", "crawl_interval_minutes", "next_crawl_at", "last_crawl_at", "last_success_at", "last_error_at", "last_error_message", "created_at", "updated_at"}
 	crawlTargetPrimaryKeyColumns     = []string{"id"}
 	crawlTargetGeneratedColumns      = []string{}
