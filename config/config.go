@@ -113,6 +113,7 @@ type DiscordConfig struct {
 type SchedulerConfig struct {
 	HeartbeatCron string
 	Timezone      string
+	HeartbeatLimit int
 }
 
 // Load loads configuration using Viper.
@@ -205,6 +206,7 @@ func Load() (*Config, error) {
 
 	cfg.Scheduler.HeartbeatCron = viper.GetString("scheduler.heartbeat_cron")
 	cfg.Scheduler.Timezone = viper.GetString("scheduler.timezone")
+	cfg.Scheduler.HeartbeatLimit = viper.GetInt("scheduler.heartbeat_limit")
 
 	if err := validate(cfg); err != nil {
 		return nil, err
@@ -263,6 +265,7 @@ func setDefaults() {
 
 	viper.SetDefault("scheduler.heartbeat_cron", "*/1 * * * *")
 	viper.SetDefault("scheduler.timezone", "Asia/Ho_Chi_Minh")
+	viper.SetDefault("scheduler.heartbeat_limit", 20)
 }
 
 func validate(cfg *Config) error {
@@ -332,6 +335,9 @@ func validate(cfg *Config) error {
 	}
 	if cfg.Scheduler.HeartbeatCron == "" {
 		return fmt.Errorf("scheduler.heartbeat_cron is required")
+	}
+	if cfg.Scheduler.HeartbeatLimit <= 0 {
+		return fmt.Errorf("scheduler.heartbeat_limit must be greater than 0")
 	}
 
 	return nil

@@ -74,3 +74,4 @@ discord:
 scheduler:
   heartbeat_cron: "*/1 * * * *"
   timezone: "Asia/Ho_Chi_Minh"
+  heartbeat_limit: 20

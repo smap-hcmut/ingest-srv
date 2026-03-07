@@ -135,15 +135,16 @@ sequenceDiagram
     ING->>MQ: publish crawl task (task_id)
     MQ->>SCP: deliver task
     SCP->>MIN: upload raw result
-    SCP->>MQ: publish crawl response (task_id, raw_ref)
-    MQ->>ING: deliver response
+    SCP->>MQ: publish completion to ingest_task_completions (task_id, raw_ref)
+    MQ->>ING: deliver completion envelope
     ING->>ING: update external_task
     ING->>ING: create raw_batch
 ```
 
 ### Contract cần giữ
 
-- contract RabbitMQ canonical nằm ở `../scapper-srv/RABBITMQ.md`
+- contract RabbitMQ request/completion canonical nằm ở `../scapper-srv/RABBITMQ.md`
+- runtime boundary, MinIO naming, idempotency canonical nằm ở `documents/plan/scapper_ingest_shared_runtime_contract_proposal.md`
 - `task_id` là correlation key chính
 - duplicate response theo cùng `task_id` phải xử lý idempotent
 

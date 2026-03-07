@@ -1,54 +1,66 @@
 package scheduler
 
 import (
-	"fmt"
+	"database/sql"
+	"errors"
 
 	"ingest-srv/config"
 	"ingest-srv/pkg/cron"
 	"ingest-srv/pkg/discord"
 	"ingest-srv/pkg/log"
+	"ingest-srv/pkg/rabbitmq"
 )
 
-// Scheduler represents ingest scheduler runtime.
 type Scheduler struct {
-	cron    cron.Cron
-	l       log.Logger
-	cfg     config.SchedulerConfig
-	discord discord.IDiscord
+	cron       cron.Cron
+	l          log.Logger
+	db         *sql.DB
+	conn       rabbitmq.IRabbitMQ
+	cfg        config.SchedulerConfig
+	discordApp discord.IDiscord
 }
 
-// Config is dependency bag for scheduler.
 type Config struct {
-	Logger  log.Logger
-	Config  config.SchedulerConfig
-	Discord discord.IDiscord
+	DB        *sql.DB
+	AMQPConn  rabbitmq.IRabbitMQ
+	Scheduler config.SchedulerConfig
+	Discord   discord.IDiscord
 }
 
-// New creates scheduler instance.
-func New(cfg Config) (*Scheduler, error) {
-	s := &Scheduler{
-		cron:    cron.New(),
-		l:       cfg.Logger,
-		cfg:     cfg.Config,
-		discord: cfg.Discord,
+// New creates scheduler runtime.
+func New(l log.Logger, cfg Config) (Scheduler, error) {
+	s := Scheduler{
+		cron:       cron.New(),
+		l:          l,
+		db:         cfg.DB,
+		conn:       cfg.AMQPConn,
+		cfg:        cfg.Scheduler,
+		discordApp: cfg.Discord,
 	}
-
 	if err := s.validate(); err != nil {
-		return nil, err
+		return Scheduler{}, err
 	}
-
 	return s, nil
 }
 
-func (s *Scheduler) validate() error {
-	if s.l == nil {
-		return fmt.Errorf("logger is required")
+func (s Scheduler) validate() error {
+	requiredDeps := []struct {
+		ok  bool
+		msg string
+	}{
+		{s.l != nil, "logger is required"},
+		{s.db != nil, "database is required"},
+		{s.conn != nil, "amqp connection is required"},
+		{s.cfg.HeartbeatCron != "", "scheduler heartbeat cron is required"},
+		{s.cfg.Timezone != "", "scheduler timezone is required"},
+		{s.cfg.HeartbeatLimit > 0, "scheduler heartbeat limit must be greater than 0"},
 	}
-	if s.cfg.HeartbeatCron == "" {
-		return fmt.Errorf("scheduler heartbeat cron is required")
+
+	for _, dep := range requiredDeps {
+		if !dep.ok {
+			return errors.New(dep.msg)
+		}
 	}
-	if s.cfg.Timezone == "" {
-		return fmt.Errorf("scheduler timezone is required")
-	}
+
 	return nil
 }

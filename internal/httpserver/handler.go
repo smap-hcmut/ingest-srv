@@ -9,6 +9,10 @@ import (
 	dryrunHandler "ingest-srv/internal/dryrun/delivery/http"
 	dryrunRepo "ingest-srv/internal/dryrun/repository/postgre"
 	dryrunUC "ingest-srv/internal/dryrun/usecase"
+	executionHandler "ingest-srv/internal/execution/delivery/http"
+	executionProducer "ingest-srv/internal/execution/delivery/rabbitmq/producer"
+	executionRepo "ingest-srv/internal/execution/repository/postgre"
+	executionUC "ingest-srv/internal/execution/usecase"
 
 	"ingest-srv/internal/middleware"
 	"ingest-srv/pkg/response"
@@ -34,12 +38,20 @@ func (srv HTTPServer) mapHandlers() error {
 	dryrunResultRepo := dryrunRepo.New(srv.l, srv.postgresDB)
 	dryrunUseCase := dryrunUC.New(srv.l, dryrunResultRepo, dataSRepo)
 	dryrunHTTP := dryrunHandler.New(srv.l, dryrunUseCase, srv.discord)
+	execRepo := executionRepo.New(srv.l, srv.postgresDB)
+	execProducer := executionProducer.New(srv.l, srv.rabbitmq)
+	if err := execProducer.Run(); err != nil {
+		return err
+	}
+	execUseCase := executionUC.New(srv.l, execRepo, srv.minio, execProducer)
+	execHTTP := executionHandler.New(srv.l, execUseCase, srv.discord)
 
 	api := srv.gin.Group("/api/v1")
 	datasourceHTTP.RegisterRoutes(api, mw)
 	dryrunHTTP.RegisterRoutes(api, mw)
 	ingestAPI := srv.gin.Group("/api/v1/ingest")
 	datasourceHTTP.RegisterInternalRoutes(ingestAPI, mw)
+	execHTTP.RegisterInternalRoutes(ingestAPI, mw)
 
 	return nil
 }

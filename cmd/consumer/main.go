@@ -8,11 +8,9 @@ import (
 	"syscall"
 
 	"ingest-srv/config"
-	configKafka "ingest-srv/config/kafka"
 	configMinio "ingest-srv/config/minio"
 	configPostgre "ingest-srv/config/postgre"
 	configRabbit "ingest-srv/config/rabbitmq"
-	configRedis "ingest-srv/config/redis"
 	"ingest-srv/internal/consumer"
 	"ingest-srv/pkg/log"
 )
@@ -42,14 +40,6 @@ func main() {
 		defer configPostgre.Disconnect(ctx, postgresDB)
 	}
 
-	redisClient, err := configRedis.Connect(ctx, cfg.Redis)
-	if err != nil {
-		logger.Errorf(ctx, "Redis connect failed: %v", err)
-		redisClient = nil
-	} else {
-		defer configRedis.Disconnect()
-	}
-
 	minioClient, err := configMinio.Connect(ctx, &cfg.MinIO)
 	if err != nil {
 		logger.Errorf(ctx, "MinIO connect failed: %v", err)
@@ -66,32 +56,19 @@ func main() {
 		defer configRabbit.Disconnect()
 	}
 
-	kafkaConsumer, err := configKafka.ConnectConsumer(cfg.Kafka)
-	if err != nil {
-		logger.Errorf(ctx, "Kafka consumer connect failed, service will run idle: %v", err)
-		kafkaConsumer = nil
-	} else {
-		defer configKafka.DisconnectConsumer()
-	}
-
-	srv, err := consumer.New(consumer.Config{
-		Logger: logger,
-
-		KafkaConfig:   cfg.Kafka,
-		KafkaConsumer: kafkaConsumer,
-
-		PostgresDB: postgresDB,
-		Redis:      redisClient,
-		MinIO:      minioClient,
-		RabbitMQ:   rabbitConn,
-	})
-	if err != nil {
-		logger.Errorf(ctx, "Failed to initialize consumer server: %v", err)
+	if postgresDB == nil || minioClient == nil || rabbitConn == nil {
+		logger.Errorf(ctx, "Execution completion consumer requires postgres, minio, and rabbitmq")
 		os.Exit(1)
 	}
 
-	if err := srv.Run(ctx); err != nil {
-		logger.Errorf(ctx, "Consumer server error: %v", err)
+	consumerSrv := consumer.NewServer(logger, consumer.ServerConfig{
+		Conn:  rabbitConn,
+		DB:    postgresDB,
+		MinIO: minioClient,
+	})
+
+	if err := consumerSrv.Run(ctx); err != nil {
+		logger.Errorf(ctx, "Execution completion consumer error: %v", err)
 		os.Exit(1)
 	}
 }

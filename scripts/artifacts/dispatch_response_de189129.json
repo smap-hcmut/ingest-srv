@@ -1,0 +1,12 @@
+{
+  "error_code": 0,
+  "message": "Success",
+  "data": {
+    "scheduled_job_id": "a33b1158-33e3-487c-b356-49151514cfcc",
+    "external_task_id": "0e9a7ac6-e0cb-46ff-9e25-ba6da4880cea",
+    "task_id": "de189129-ca0c-4a8f-afac-ba0a28265e91",
+    "queue": "tiktok_tasks",
+    "action": "full_flow",
+    "status": "RUNNING"
+  }
+}
