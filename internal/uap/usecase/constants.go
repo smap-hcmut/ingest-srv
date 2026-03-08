@@ -5,6 +5,7 @@ const (
 	uapContentType      string = "application/x-ndjson"
 	uapArtifactsKey     string = "uap_artifacts"
 	uapArtifactsVersion string = "v1"
+	uapKafkaPublishKey  string = "kafka_publish"
 	uapTypePost         string = "POST"
 	uapTypeComment      string = "COMMENT"
 	uapTypeReply        string = "REPLY"

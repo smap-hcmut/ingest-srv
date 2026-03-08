@@ -8,6 +8,7 @@ import (
 	"syscall"
 
 	"ingest-srv/config"
+	configKafka "ingest-srv/config/kafka"
 	configMinio "ingest-srv/config/minio"
 	configPostgre "ingest-srv/config/postgre"
 	configRabbit "ingest-srv/config/rabbitmq"
@@ -56,6 +57,16 @@ func main() {
 		defer configRabbit.Disconnect()
 	}
 
+	kafkaCfg := cfg.Kafka
+	kafkaCfg.Topic = cfg.Kafka.UAPTopic
+	kafkaProducer, err := configKafka.ConnectProducer(kafkaCfg)
+	if err != nil {
+		logger.Warnf(ctx, "Kafka producer connect failed, UAP publish will be disabled: %v", err)
+		kafkaProducer = nil
+	} else {
+		defer configKafka.DisconnectProducer()
+	}
+
 	if postgresDB == nil || minioClient == nil || rabbitConn == nil {
 		logger.Errorf(ctx, "Execution completion consumer requires postgres, minio, and rabbitmq")
 		os.Exit(1)
@@ -66,6 +77,8 @@ func main() {
 		DB:        postgresDB,
 		MinIO:     minioClient,
 		UAPBucket: cfg.MinIO.Bucket,
+		Kafka:     kafkaProducer,
+		UAPTopic:  cfg.Kafka.UAPTopic,
 	})
 
 	if err := consumerSrv.Run(ctx); err != nil {

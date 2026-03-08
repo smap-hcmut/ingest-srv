@@ -17,7 +17,13 @@ type ParseAndStoreRawBatchInput struct {
 	StoragePath     string
 	BatchID         string
 	RawMetadata     json.RawMessage
+	RequestPayload  json.RawMessage
 	CompletionTime  time.Time
+}
+
+type PublishUAPInput struct {
+	Key   []byte
+	Value []byte
 }
 
 type UAPRecord struct {

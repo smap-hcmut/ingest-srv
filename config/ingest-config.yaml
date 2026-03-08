@@ -53,6 +53,7 @@ kafka:
   brokers:
     - "kafka.tantai.dev:9094"
   topic: "ingest.events"
+  uap_topic: "smap.collector.output"
   group_id: "ingest-consumer"
 
 rabbitmq:

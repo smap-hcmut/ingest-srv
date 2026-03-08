@@ -14,17 +14,28 @@ type implUseCase struct {
 	repo         repo.Repository
 	minio        minio.MinIO
 	outputBucket string
+	publisher    uap.Publisher
+	uapTopic     string
 	now          func() time.Time
 }
 
 var _ uap.UseCase = (*implUseCase)(nil)
 
-func New(l log.Logger, repository repo.Repository, minioClient minio.MinIO, outputBucket string) uap.UseCase {
+func New(
+	l log.Logger,
+	repository repo.Repository,
+	minioClient minio.MinIO,
+	outputBucket string,
+	publisher uap.Publisher,
+	uapTopic string,
+) uap.UseCase {
 	return &implUseCase{
 		l:            l,
 		repo:         repository,
 		minio:        minioClient,
 		outputBucket: outputBucket,
+		publisher:    publisher,
+		uapTopic:     uapTopic,
 		now:          func() time.Time { return time.Now().UTC() },
 	}
 }

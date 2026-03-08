@@ -74,9 +74,10 @@ type MinIOConfig struct {
 }
 
 type KafkaConfig struct {
-	Brokers []string
-	Topic   string
-	GroupID string
+	Brokers  []string
+	Topic    string
+	UAPTopic string
+	GroupID  string
 }
 
 type RabbitMQConfig struct {
@@ -175,6 +176,7 @@ func Load() (*Config, error) {
 
 	cfg.Kafka.Brokers = viper.GetStringSlice("kafka.brokers")
 	cfg.Kafka.Topic = viper.GetString("kafka.topic")
+	cfg.Kafka.UAPTopic = viper.GetString("kafka.uap_topic")
 	cfg.Kafka.GroupID = viper.GetString("kafka.group_id")
 
 	cfg.RabbitMQ.URL = viper.GetString("rabbitmq.url")
@@ -251,6 +253,7 @@ func setDefaults() {
 
 	viper.SetDefault("kafka.brokers", []string{"kafka.tantai.dev:9094"})
 	viper.SetDefault("kafka.topic", "ingest.events")
+	viper.SetDefault("kafka.uap_topic", "smap.collector.output")
 	viper.SetDefault("kafka.group_id", "ingest-consumer")
 
 	viper.SetDefault("rabbitmq.url", "amqp://admin:21042004@172.16.21.206:5672/")
@@ -321,6 +324,9 @@ func validate(cfg *Config) error {
 	}
 	if cfg.Kafka.Topic == "" {
 		return fmt.Errorf("kafka.topic is required")
+	}
+	if cfg.Kafka.UAPTopic == "" {
+		return fmt.Errorf("kafka.uap_topic is required")
 	}
 	if cfg.Kafka.GroupID == "" {
 		return fmt.Errorf("kafka.group_id is required")

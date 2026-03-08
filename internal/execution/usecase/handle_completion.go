@@ -117,6 +117,7 @@ func (uc *implUseCase) HandleCompletion(ctx context.Context, input execution.Han
 				StoragePath:    rawBatch.StoragePath,
 				BatchID:        rawBatch.BatchID,
 				RawMetadata:    rawBatch.RawMetadata,
+				RequestPayload: completionCtx.ExternalTask.RequestPayload,
 				CompletionTime: completedAt,
 			})
 			if parseErr != nil {

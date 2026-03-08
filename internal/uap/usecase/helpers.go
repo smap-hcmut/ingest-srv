@@ -142,7 +142,7 @@ func validateParseAndStoreRawBatchInput(input uap.ParseAndStoreRawBatchInput) er
 	return nil
 }
 
-func flattenTikTokFullFlow(rawBytes []byte, input uap.ParseAndStoreRawBatchInput) ([]uap.UAPRecord, error) {
+func flattenTikTokFullFlow(rawBytes []byte, input uap.ParseAndStoreRawBatchInput, onRecord func(uap.UAPRecord)) ([]uap.UAPRecord, error) {
 	var envelope rawTikTokFullFlowEnvelope
 	if err := json.Unmarshal(rawBytes, &envelope); err != nil {
 		return nil, uap.ErrParseRawPayload
@@ -155,6 +155,9 @@ func flattenTikTokFullFlow(rawBytes []byte, input uap.ParseAndStoreRawBatchInput
 			continue
 		}
 		records = append(records, postRecord)
+		if onRecord != nil {
+			onRecord(postRecord)
+		}
 
 		for _, comment := range bundle.Comments.Comments {
 			commentRecord, commentID := mapTikTokComment(comment, input, rootID)
@@ -162,6 +165,9 @@ func flattenTikTokFullFlow(rawBytes []byte, input uap.ParseAndStoreRawBatchInput
 				continue
 			}
 			records = append(records, commentRecord)
+			if onRecord != nil {
+				onRecord(commentRecord)
+			}
 
 			for _, reply := range comment.ReplyComments {
 				replyRecord := mapTikTokReply(reply, input, rootID, commentID)
@@ -169,6 +175,9 @@ func flattenTikTokFullFlow(rawBytes []byte, input uap.ParseAndStoreRawBatchInput
 					continue
 				}
 				records = append(records, replyRecord)
+				if onRecord != nil {
+					onRecord(replyRecord)
+				}
 			}
 		}
 	}
@@ -401,7 +410,7 @@ func uploadChunk(ctx context.Context, client minioPkg.MinIO, bucket, projectID, 
 	}, nil
 }
 
-func mergeRawMetadata(existing json.RawMessage, parts []artifactPart, totalRecords int) (json.RawMessage, error) {
+func mergeRawMetadata(existing json.RawMessage, parts []artifactPart, totalRecords int, publishStats *kafkaPublishStats) (json.RawMessage, error) {
 	root := make(map[string]interface{})
 	if len(existing) > 0 {
 		if err := json.Unmarshal(existing, &root); err != nil {
@@ -428,11 +437,29 @@ func mergeRawMetadata(existing json.RawMessage, parts []artifactPart, totalRecor
 		"parts":         partPayload,
 	}
 
+	if publishStats != nil {
+		root[uapKafkaPublishKey] = map[string]interface{}{
+			"topic":           strings.TrimSpace(publishStats.Topic),
+			"attempted_count": publishStats.AttemptedCount,
+			"success_count":   publishStats.SuccessCount,
+			"failed_count":    publishStats.FailedCount,
+			"last_error":      strings.TrimSpace(publishStats.LastError),
+		}
+	}
+
 	return json.Marshal(root)
 }
 
-func failRawBatch(ctx context.Context, uc *implUseCase, input uap.ParseAndStoreRawBatchInput, errMessage, publishErr string, parts []artifactPart, totalRecords int) error {
-	metadata, _ := mergeRawMetadata(input.RawMetadata, parts, totalRecords)
+func failRawBatch(
+	ctx context.Context,
+	uc *implUseCase,
+	input uap.ParseAndStoreRawBatchInput,
+	errMessage, publishErr string,
+	parts []artifactPart,
+	totalRecords int,
+	publishStats *kafkaPublishStats,
+) error {
+	metadata, _ := mergeRawMetadata(input.RawMetadata, parts, totalRecords, publishStats)
 	if err := uc.repo.MarkRawBatchFailed(ctx, repo.MarkRawBatchFailedOptions{
 		RawBatchID:   input.RawBatchID,
 		ErrorMessage: errMessage,

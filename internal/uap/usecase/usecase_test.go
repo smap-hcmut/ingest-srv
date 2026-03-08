@@ -1,6 +1,7 @@
 package usecase
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 	"time"
@@ -116,7 +117,7 @@ func TestFlattenTikTokFullFlow(t *testing.T) {
 		CompletionTime: time.Date(2026, time.March, 8, 4, 0, 0, 0, time.UTC),
 	}
 
-	records, err := flattenTikTokFullFlow(raw, input)
+	records, err := flattenTikTokFullFlow(raw, input, nil)
 	if err != nil {
 		t.Fatalf("flattenTikTokFullFlow() error = %v", err)
 	}
@@ -190,7 +191,13 @@ func TestMergeRawMetadata(t *testing.T) {
 			StoragePath:   "uap-batches/project-1/source-1/batch-1/part-00001.jsonl",
 			RecordCount:   20,
 		},
-	}, 20)
+	}, 20, &kafkaPublishStats{
+		Topic:          "smap.collector.output",
+		AttemptedCount: 20,
+		SuccessCount:   19,
+		FailedCount:    1,
+		LastError:      "boom",
+	})
 	if err != nil {
 		t.Fatalf("mergeRawMetadata() error = %v", err)
 	}
@@ -213,4 +220,97 @@ func TestMergeRawMetadata(t *testing.T) {
 	if int(artifacts["total_parts"].(float64)) != 1 {
 		t.Fatalf("unexpected total_parts: %#v", artifacts["total_parts"])
 	}
+
+	publish, ok := root[uapKafkaPublishKey].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected kafka_publish map")
+	}
+	if publish["topic"] != "smap.collector.output" {
+		t.Fatalf("unexpected publish topic: %#v", publish["topic"])
+	}
+	if int(publish["failed_count"].(float64)) != 1 {
+		t.Fatalf("unexpected failed_count: %#v", publish["failed_count"])
+	}
+}
+
+func TestPublishPayloadUsesCurrentUAPRecord(t *testing.T) {
+	record := uap.UAPRecord{
+		Identity: uap.UAPIdentity{
+			UAPID:    "tt_p_7601",
+			OriginID: "7601",
+			UAPType:  uapTypePost,
+			Platform: tikTokPlatform,
+			URL:      "https://www.tiktok.com/@demo/video/7601",
+			TaskID:   "task-1",
+		},
+		Hierarchy: uap.UAPHierarchy{
+			RootID: "tt_p_7601",
+			Depth:  0,
+		},
+		Content: uap.UAPContent{Text: "video text", Language: "vi", TikTokKeywords: []string{"vinfast"}},
+		Author: uap.UAPAuthor{
+			ID:       "author-1",
+			Username: "demo_author",
+			Nickname: "Demo Author",
+		},
+		Engagement: uap.UAPEngagement{
+			Likes:         intPtr(10),
+			CommentsCount: intPtr(5),
+			Shares:        intPtr(2),
+			Views:         intPtr(100),
+			Bookmarks:     intPtr(3),
+		},
+		Media: []uap.UAPMedia{
+			{
+				Type:        "video",
+				DownloadURL: "https://example.com/video.mp4",
+			},
+		},
+		Temporal: uap.UAPTemporal{
+			PostedAt: "2026-03-08T00:00:00Z",
+		},
+	}
+
+	input := uap.ParseAndStoreRawBatchInput{
+		RawBatchID: "raw-batch-1",
+	}
+
+	spy := &spyPublisher{}
+	stats := &kafkaPublishStats{Topic: "smap.collector.output"}
+	uc := &implUseCase{publisher: spy, uapTopic: "smap.collector.output"}
+
+	publishRecord(context.Background(), uc, record, input, stats)
+
+	if stats.AttemptedCount != 1 || stats.SuccessCount != 1 || stats.FailedCount != 0 {
+		t.Fatalf("unexpected publish stats: %#v", stats)
+	}
+	if string(spy.lastKey) != "tt_p_7601" {
+		t.Fatalf("unexpected kafka key: %s", string(spy.lastKey))
+	}
+
+	var payload uap.UAPRecord
+	if err := json.Unmarshal(spy.lastValue, &payload); err != nil {
+		t.Fatalf("unmarshal payload error = %v", err)
+	}
+	if payload.Identity.UAPID != record.Identity.UAPID {
+		t.Fatalf("unexpected payload uap_id: %s", payload.Identity.UAPID)
+	}
+	if payload.Content.Text != record.Content.Text {
+		t.Fatalf("unexpected payload text: %s", payload.Content.Text)
+	}
+}
+
+type spyPublisher struct {
+	lastKey   []byte
+	lastValue []byte
+}
+
+func (s *spyPublisher) Publish(_ context.Context, input uap.PublishUAPInput) error {
+	s.lastKey = input.Key
+	s.lastValue = input.Value
+	return nil
+}
+
+func (s *spyPublisher) Close() error {
+	return nil
 }

@@ -45,6 +45,7 @@ kafka:
   brokers:
     - "127.0.0.1:9092"
   topic: "ingest.events"
+  uap_topic: "smap.collector.output"
   group_id: "ingest-consumer-local"
 
 rabbitmq:

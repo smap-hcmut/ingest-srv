@@ -4,6 +4,7 @@ import (
 	"database/sql"
 
 	"ingest-srv/pkg/log"
+	"ingest-srv/pkg/kafka"
 	"ingest-srv/pkg/minio"
 	"ingest-srv/pkg/rabbitmq"
 )
@@ -15,6 +16,8 @@ type Server struct {
 	db        *sql.DB
 	minio     minio.MinIO
 	uapBucket string
+	kafka     kafka.IProducer
+	uapTopic  string
 }
 
 type ServerConfig struct {
@@ -22,6 +25,8 @@ type ServerConfig struct {
 	DB        *sql.DB
 	MinIO     minio.MinIO
 	UAPBucket string
+	Kafka     kafka.IProducer
+	UAPTopic  string
 }
 
 // NewServer creates a new consumer server.
@@ -32,5 +37,7 @@ func NewServer(l log.Logger, config ServerConfig) Server {
 		db:        config.DB,
 		minio:     config.MinIO,
 		uapBucket: config.UAPBucket,
+		kafka:     config.Kafka,
+		uapTopic:  config.UAPTopic,
 	}
 }
