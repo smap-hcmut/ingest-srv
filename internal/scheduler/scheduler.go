@@ -50,7 +50,7 @@ func (s Scheduler) registerJobs() error {
 		return err
 	}
 
-	execUC := executionUC.New(s.l, execRepo, nil, execProducer)
+	execUC := executionUC.New(s.l, execRepo, nil, execProducer, nil)
 
 	jobHandlers := []interface {
 		Register() []cron.JobInfo

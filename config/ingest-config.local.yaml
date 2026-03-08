@@ -72,6 +72,6 @@ discord:
   webhook_url: ""
 
 scheduler:
-  heartbeat_cron: "*/1 * * * *"
+  heartbeat_cron: "*/5 * * * * *"
   timezone: "Asia/Ho_Chi_Minh"
   heartbeat_limit: 20

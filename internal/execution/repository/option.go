@@ -17,11 +17,6 @@ type DueTarget struct {
 	Target model.CrawlTarget
 }
 
-type DispatchRecord struct {
-	ScheduledJob model.ScheduledJob
-	ExternalTask model.ExternalTask
-}
-
 type CompletionContext struct {
 	ExternalTask model.ExternalTask
 }
@@ -33,33 +28,45 @@ type ClaimTargetOptions struct {
 	NextCrawlAt time.Time
 }
 
-type CreateDispatchOptions struct {
+type CreateScheduledJobOptions struct {
 	Source         model.DataSource
 	Target         model.CrawlTarget
-	TaskID         string
-	Queue          string
-	Action         string
 	TriggerType    model.TriggerType
 	ScheduledFor   time.Time
 	CronExpr       string
-	RequestPayload json.RawMessage
 	JobPayload     json.RawMessage
 	CreatedAt      time.Time
 }
 
-type MarkDispatchPublishedOptions struct {
-	ExternalTaskID string
+type CreateExternalTaskOptions struct {
+	Source         model.DataSource
+	Target         model.CrawlTarget
 	ScheduledJobID string
+	TaskID         string
+	Queue          string
+	Action         string
+	RequestPayload json.RawMessage
+	CreatedAt      time.Time
+}
+
+type MarkExternalTaskPublishedOptions struct {
+	ExternalTaskID string
 	PublishedAt    time.Time
 }
 
-type MarkDispatchFailedOptions struct {
-	SourceID       string
-	TargetID       string
+type MarkExternalTaskFailedOptions struct {
 	ExternalTaskID string
-	ScheduledJobID string
 	ErrorMessage   string
 	FailedAt       time.Time
+}
+
+type FinalizeScheduledJobOptions struct {
+	ScheduledJobID string
+	SourceID       string
+	TargetID       string
+	Status         model.JobStatus
+	ErrorMessage   string
+	CompletedAt    *time.Time
 }
 
 type CompleteTaskSuccessOptions struct {

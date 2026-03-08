@@ -43,7 +43,7 @@ func (srv HTTPServer) mapHandlers() error {
 	if err := execProducer.Run(); err != nil {
 		return err
 	}
-	execUseCase := executionUC.New(srv.l, execRepo, srv.minio, execProducer)
+	execUseCase := executionUC.New(srv.l, execRepo, srv.minio, execProducer, nil)
 	execHTTP := executionHandler.New(srv.l, execUseCase, srv.discord)
 
 	api := srv.gin.Group("/api/v1")

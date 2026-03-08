@@ -44,6 +44,10 @@ run-consumer-local:
 	@echo "Running consumer with local docker-compose infrastructure config"
 	@$(RUN_WITH_LOCAL_CONFIG) go run cmd/consumer/main.go
 
+run-sched:
+	@echo "Running the scheduler"
+	@go run cmd/scheduler/main.go
+
 run-scheduler-local:
 	@echo "Running scheduler with local docker-compose infrastructure config"
 	@$(RUN_WITH_LOCAL_CONFIG) go run cmd/scheduler/main.go

@@ -3,19 +3,28 @@ package cron
 import (
 	"errors"
 
-	"github.com/robfig/cron/v3"
+	robfigcron "github.com/robfig/cron/v3"
 )
 
 type HandleFunc func()
 
 type Cron struct {
-	cron        *cron.Cron
+	cron        *robfigcron.Cron
 	funcWrapper func(HandleFunc)
 }
 
 // Initialize returns a new CronJob
 func New() Cron {
-	c := cron.New()
+	parser := robfigcron.NewParser(
+		robfigcron.SecondOptional |
+			robfigcron.Minute |
+			robfigcron.Hour |
+			robfigcron.Dom |
+			robfigcron.Month |
+			robfigcron.Dow |
+			robfigcron.Descriptor,
+	)
+	c := robfigcron.New(robfigcron.WithParser(parser))
 	return Cron{
 		cron: c,
 	}

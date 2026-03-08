@@ -131,8 +131,9 @@ sequenceDiagram
     participant SCP as scapper-srv
     participant MIN as MinIO
 
-    SCH->>ING: tạo scheduled_job / external_task
-    ING->>MQ: publish crawl task (task_id)
+    SCH->>ING: tạo scheduled_job
+    ING->>ING: fan out external_tasks per keyword
+    ING->>MQ: publish crawl tasks (task_id)
     MQ->>SCP: deliver task
     SCP->>MIN: upload raw result
     SCP->>MQ: publish completion to ingest_task_completions (task_id, raw_ref)
@@ -338,7 +339,7 @@ stateDiagram-v2
 flowchart LR
     DS[data_source] --> CT[crawl_target]
     CT --> SJ[scheduled_job]
-    SJ --> ET[external_task]
+    SJ --> ET[external_tasks]
     ET --> RB[raw_batch]
     RB --> UAP[UAP event]
 ```
@@ -382,8 +383,8 @@ sequenceDiagram
 
     SCH->>DS: query target đến hạn
     SCH->>ING: create scheduled_job
-    ING->>ING: create external_task
-    ING->>MQ: publish task
+    ING->>ING: fan out external_tasks
+    ING->>MQ: publish tasks
     MQ->>SCP: deliver task
     SCP->>MIN: upload raw
     SCP->>MQ: publish response

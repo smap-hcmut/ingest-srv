@@ -48,11 +48,11 @@ func (r *implRepository) HasRawBatch(ctx context.Context, sourceID, batchID stri
 	return exists, nil
 }
 
-func (r *implRepository) CompleteTaskSuccess(ctx context.Context, opt repository.CompleteTaskSuccessOptions) error {
+func (r *implRepository) CompleteTaskSuccess(ctx context.Context, opt repository.CompleteTaskSuccessOptions) (model.RawBatch, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		r.l.Errorf(ctx, "execution.repository.CompleteTaskSuccess.BeginTx: %v", err)
-		return repository.ErrCompleteTask
+		return model.RawBatch{}, repository.ErrCompleteTask
 	}
 	defer rollbackTx(tx)
 
@@ -83,30 +83,31 @@ func (r *implRepository) CompleteTaskSuccess(ctx context.Context, opt repository
 
 	if err := row.Insert(ctx, tx, boil.Infer()); err != nil {
 		if isUniqueViolation(err) {
-			return repository.ErrRawBatchAlreadyExists
+			return model.RawBatch{}, repository.ErrRawBatchAlreadyExists
 		}
 		r.l.Errorf(ctx, "execution.repository.CompleteTaskSuccess.InsertRawBatch: %v", err)
-		return repository.ErrCompleteTask
+		return model.RawBatch{}, repository.ErrCompleteTask
 	}
 
 	if err := r.updateTaskSuccess(ctx, tx, opt.CompletionContext.ExternalTask.ID, opt.CompletedAt); err != nil {
-		return err
+		return model.RawBatch{}, err
 	}
-	if err := r.updateJobSuccess(ctx, tx, opt.CompletionContext.ExternalTask.ScheduledJobID, opt.CompletedAt); err != nil {
-		return err
+	if err := r.recomputeScheduledJobStatus(ctx, tx, opt.CompletionContext.ExternalTask.ScheduledJobID, opt.CompletedAt); err != nil {
+		return model.RawBatch{}, err
 	}
 	if err := r.updateTargetSuccess(ctx, tx, opt.CompletionContext.ExternalTask.TargetID, opt.CompletedAt); err != nil {
-		return err
+		return model.RawBatch{}, err
 	}
 	if err := r.updateSourceSuccess(ctx, tx, opt.CompletionContext.ExternalTask.SourceID, opt.CompletedAt); err != nil {
-		return err
+		return model.RawBatch{}, err
 	}
 
 	if err := tx.Commit(); err != nil {
 		r.l.Errorf(ctx, "execution.repository.CompleteTaskSuccess.Commit: %v", err)
-		return repository.ErrCompleteTask
+		return model.RawBatch{}, repository.ErrCompleteTask
 	}
-	return nil
+
+	return *model.NewRawBatchFromDB(row), nil
 }
 
 func (r *implRepository) CompleteTaskError(ctx context.Context, opt repository.CompleteTaskErrorOptions) error {
@@ -120,7 +121,7 @@ func (r *implRepository) CompleteTaskError(ctx context.Context, opt repository.C
 	if err := r.updateTaskFailure(ctx, tx, opt.CompletionContext.ExternalTask.ID, opt.ErrorMessage, opt.CompletedAt); err != nil {
 		return err
 	}
-	if err := r.updateJobFailure(ctx, tx, opt.CompletionContext.ExternalTask.ScheduledJobID, opt.ErrorMessage, opt.CompletedAt); err != nil {
+	if err := r.recomputeScheduledJobStatus(ctx, tx, opt.CompletionContext.ExternalTask.ScheduledJobID, opt.CompletedAt); err != nil {
 		return err
 	}
 	if err := r.updateTargetFailure(ctx, tx, opt.CompletionContext.ExternalTask.TargetID, opt.ErrorMessage, opt.CompletedAt); err != nil {

@@ -27,6 +27,8 @@ Chosen direction:
 - `ingest-srv` creates one `raw_batch` per successful `external_task`
 - `ingest-srv` parses raw into UAP and publishes to Kafka for analysis
 
+For grouped TikTok keyword targets, one target dispatch may create many `external_tasks`; each successful task still maps to exactly one `raw_batch`.
+
 This document does **not** replace the canonical wire/runtime docs above. It explains how ingest should consume that contract.
 
 ## 2. Runtime Boundary
@@ -135,16 +137,17 @@ Recommended object path:
 
 Examples:
 
-- `crawl-raw/tiktok/search/2026/03/07/1111-2222.json`
+- `crawl-raw/tiktok/full_flow/2026/03/07/1111-2222.json`
 - `crawl-raw/facebook/post_detail/2026/03/07/3333-4444.json`
 
 ### 5.2 Optional parsed artifact
 
 Recommended path for parsed UAP batch artifact:
 
-`uap-batches/{project_id}/{source_id}/{batch_id}.jsonl`
+`uap-batches/{project_id}/{source_id}/{batch_id}/part-00001.jsonl`
 
 This artifact is optional but recommended for replay, audit, and downstream troubleshooting.
+For high-volume batches, parsed output may be chunked into multiple `part-xxxxx.jsonl` files.
 
 ### 5.3 Storage rules
 

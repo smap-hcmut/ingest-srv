@@ -61,11 +61,11 @@ Biến grouped `crawl_target` từ record control-plane thành **execution unit 
 
 Một `crawl_target` là một execution unit duy nhất:
 
-- `KEYWORD` -> 1 task nhận `keywords[]`
+- `KEYWORD` -> 1 logical dispatch của grouped target, nhưng runtime có thể fan-out thành nhiều `external_tasks`
 - `PROFILE` -> 1 task nhận `urls[]` hoặc contract profile batch tương ứng
 - `POST_URL` -> 1 task nhận `urls[]` / `parse_ids[]` / `video_ids[]` tùy platform adapter
 
-Scheduler, `scheduled_jobs`, `external_tasks`, `raw_batches`, health timestamps và error tracking đều bám theo `target_id` của grouped target.
+Scheduler, `scheduled_jobs`, `external_tasks`, `raw_batches`, health timestamps và error tracking đều bám theo `target_id` của grouped target. Một `scheduled_job` có thể sinh nhiều `external_tasks`.
 
 ### 4.2 Phase 3 chỉ làm crawl runtime, chưa parse/publish UAP
 
@@ -89,6 +89,8 @@ Mặc định, mỗi response envelope thành công từ crawler sẽ tạo:
 
 - 1 `external_task` được complete
 - 1 `raw_batch` chứa **full raw envelope/result**
+
+Với grouped keyword fan-out, một `crawl_target` có thể sinh nhiều `external_tasks`; mỗi `external_task` thành công vẫn tạo đúng 1 `raw_batch`.
 
 Parser Phase 4 sẽ đọc raw batch này để tách tiếp thành nhiều post/comment/reply records.
 
@@ -123,7 +125,7 @@ Mục tiêu là:
 
 #### Nhóm enable ngay nếu contract canonical đã đủ rõ
 
-- TikTok `KEYWORD` -> `search` với `keywords[]`
+- TikTok `KEYWORD` -> `full_flow`, fan-out 1 task cho mỗi keyword trong grouped target
 - TikTok `POST_URL` -> `post_detail` với `urls[]`
 - Facebook `POST_URL` -> `post_detail` nếu upstream đã có `parse_ids[]`/URL adapter rõ
 
@@ -186,10 +188,10 @@ Không tạo một runtime path riêng biệt khác logic scheduler.
 `crawl_targets`  
 -> claim due target  
 -> create `scheduled_job`  
--> build request payload  
--> create `external_task`  
--> publish RabbitMQ  
--> mark publish timestamps/status  
+-> build request payload(s)  
+-> create `external_tasks`  
+-> publish RabbitMQ task(s)  
+-> mark publish timestamps/status per task  
 -> update target/source runtime timestamps
 
 ### 5.2 Consumer lane
@@ -333,7 +335,7 @@ Unique key:
    - payload builders
    - publish client
 2. Chốt mapping tối thiểu:
-   - TikTok + `KEYWORD` -> `tiktok_tasks/search` với `keywords[] = target.values`
+- TikTok + `KEYWORD` -> `tiktok_tasks/full_flow`, mỗi keyword trong `target.values[]` sinh 1 `external_task` với `params.keyword`
    - TikTok + `POST_URL` -> `tiktok_tasks/post_detail` với `urls[] = target.values`
    - các mapping khác:
      - enable nếu canonical contract rõ
@@ -517,7 +519,7 @@ Không bắt buộc unit test ở scope hiện tại nếu direction chưa đổ
 1. Có datasource `ACTIVE` với grouped target đến hạn
 2. Scheduler tick claim đúng target
 3. Tạo `scheduled_job` thành công
-4. Tạo `external_task` và publish RabbitMQ thành công
+4. Tạo đủ `external_tasks` theo grouped target và publish RabbitMQ thành công
 5. Consumer nhận response envelope theo `task_id`
 6. Tạo `raw_batch` đúng source/target/task
 7. Duplicate response cùng `task_id` không tạo `raw_batch` thứ hai
@@ -541,7 +543,7 @@ Các phần trên là Phase 4 hoặc Phase 5.
 
 Hiện canonical RabbitMQ rõ nhất ở:
 
-- TikTok `search` với `keywords[]`
+- TikTok `full_flow` với `keyword` và grouped-keyword fan-out
 - TikTok `post_detail` với `urls[]`
 - Facebook `post_detail` với `parse_ids[]`
 
@@ -601,7 +603,7 @@ và giảm thời gian debug khi tích hợp với `scapper-srv`.
 Phase 3 được coi là xong khi:
 
 - scheduler heartbeat không còn chỉ log, mà dispatch được grouped targets đến hạn
-- mỗi dispatch tạo đủ `scheduled_job` và `external_task`
+- mỗi dispatch tạo đủ `scheduled_job` và `external_tasks` theo contract fan-out
 - task được publish RabbitMQ theo contract canonical
 - consumer nhận response theo `task_id`
 - raw response được lưu MinIO và tạo `raw_batch`

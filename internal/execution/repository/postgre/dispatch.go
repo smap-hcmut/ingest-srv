@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"strings"
+	"time"
 
 	"ingest-srv/internal/execution/repository"
 	"ingest-srv/internal/model"
@@ -48,14 +49,7 @@ func (r *implRepository) GetDispatchContext(ctx context.Context, dataSourceID, t
 	}, nil
 }
 
-func (r *implRepository) CreateDispatch(ctx context.Context, opt repository.CreateDispatchOptions) (repository.DispatchRecord, error) {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		r.l.Errorf(ctx, "execution.repository.CreateDispatch.BeginTx: %v", err)
-		return repository.DispatchRecord{}, repository.ErrCreateDispatch
-	}
-	defer rollbackTx(tx)
-
+func (r *implRepository) CreateScheduledJob(ctx context.Context, opt repository.CreateScheduledJobOptions) (model.ScheduledJob, error) {
 	triggerType := opt.TriggerType
 	if triggerType == "" {
 		triggerType = model.TriggerTypeManual
@@ -86,16 +80,19 @@ func (r *implRepository) CreateDispatch(ctx context.Context, opt repository.Crea
 		jobRow.Payload = null.JSONFrom(opt.JobPayload)
 	}
 
-	if err := jobRow.Insert(ctx, tx, boil.Infer()); err != nil {
-		r.l.Errorf(ctx, "execution.repository.CreateDispatch.InsertJob: %v", err)
-		return repository.DispatchRecord{}, repository.ErrCreateDispatch
+	if err := jobRow.Insert(ctx, r.db, boil.Infer()); err != nil {
+		r.l.Errorf(ctx, "execution.repository.CreateScheduledJob.Insert: %v", err)
+		return model.ScheduledJob{}, repository.ErrCreateDispatch
 	}
 
+	return *model.NewScheduledJobFromDB(jobRow), nil
+}
+
+func (r *implRepository) CreateExternalTask(ctx context.Context, opt repository.CreateExternalTaskOptions) (model.ExternalTask, error) {
 	taskRow := &sqlboiler.ExternalTask{
 		ID:             uuid.NewString(),
 		SourceID:       opt.Source.ID,
 		ProjectID:      opt.Source.ProjectID,
-		ScheduledJobID: null.StringFrom(jobRow.ID),
 		TaskID:         opt.TaskID,
 		Platform:       strings.ToLower(string(opt.Source.SourceType)),
 		TaskType:       opt.Action,
@@ -103,101 +100,120 @@ func (r *implRepository) CreateDispatch(ctx context.Context, opt repository.Crea
 		RequestPayload: types.JSON(opt.RequestPayload),
 		Status:         sqlboiler.JobStatus(model.JobStatusPending),
 	}
+	if strings.TrimSpace(opt.ScheduledJobID) != "" {
+		taskRow.ScheduledJobID = null.StringFrom(strings.TrimSpace(opt.ScheduledJobID))
+	}
 	if opt.Target.ID != "" {
 		taskRow.TargetID = null.StringFrom(opt.Target.ID)
 	}
 
-	if err := taskRow.Insert(ctx, tx, boil.Infer()); err != nil {
-		r.l.Errorf(ctx, "execution.repository.CreateDispatch.InsertTask: %v", err)
-		return repository.DispatchRecord{}, repository.ErrCreateDispatch
+	if err := taskRow.Insert(ctx, r.db, boil.Infer()); err != nil {
+		r.l.Errorf(ctx, "execution.repository.CreateExternalTask.Insert: %v", err)
+		return model.ExternalTask{}, repository.ErrCreateDispatch
 	}
 
-	if err := tx.Commit(); err != nil {
-		r.l.Errorf(ctx, "execution.repository.CreateDispatch.Commit: %v", err)
-		return repository.DispatchRecord{}, repository.ErrCreateDispatch
-	}
-
-	return repository.DispatchRecord{
-		ScheduledJob: *model.NewScheduledJobFromDB(jobRow),
-		ExternalTask: *model.NewExternalTaskFromDB(taskRow),
-	}, nil
+	return *model.NewExternalTaskFromDB(taskRow), nil
 }
 
-func (r *implRepository) MarkDispatchPublished(ctx context.Context, opt repository.MarkDispatchPublishedOptions) error {
-	tx, err := r.db.BeginTx(ctx, nil)
+func (r *implRepository) MarkExternalTaskPublished(ctx context.Context, opt repository.MarkExternalTaskPublishedOptions) error {
+	taskRow, err := sqlboiler.FindExternalTask(ctx, r.db, opt.ExternalTaskID)
 	if err != nil {
-		r.l.Errorf(ctx, "execution.repository.MarkDispatchPublished.BeginTx: %v", err)
+		r.l.Errorf(ctx, "execution.repository.MarkExternalTaskPublished.FindTask: %v", err)
 		return repository.ErrUpdateDispatch
 	}
-	defer rollbackTx(tx)
 
-	taskRow, err := sqlboiler.FindExternalTask(ctx, tx, opt.ExternalTaskID)
-	if err != nil {
-		r.l.Errorf(ctx, "execution.repository.MarkDispatchPublished.FindTask: %v", err)
-		return repository.ErrUpdateDispatch
-	}
 	taskRow.Status = sqlboiler.JobStatus(model.JobStatusRunning)
 	taskRow.PublishedAt = null.TimeFrom(opt.PublishedAt)
 	taskRow.ErrorMessage = null.String{}
-	if _, err := taskRow.Update(ctx, tx, boil.Whitelist(
+	if _, err := taskRow.Update(ctx, r.db, boil.Whitelist(
 		sqlboiler.ExternalTaskColumns.Status,
 		sqlboiler.ExternalTaskColumns.PublishedAt,
 		sqlboiler.ExternalTaskColumns.ErrorMessage,
 	)); err != nil {
-		r.l.Errorf(ctx, "execution.repository.MarkDispatchPublished.UpdateTask: %v", err)
+		r.l.Errorf(ctx, "execution.repository.MarkExternalTaskPublished.UpdateTask: %v", err)
 		return repository.ErrUpdateDispatch
 	}
 
-	jobRow, err := sqlboiler.FindScheduledJob(ctx, tx, opt.ScheduledJobID)
-	if err != nil {
-		r.l.Errorf(ctx, "execution.repository.MarkDispatchPublished.FindJob: %v", err)
-		return repository.ErrUpdateDispatch
-	}
-	jobRow.Status = sqlboiler.JobStatus(model.JobStatusRunning)
-	if !jobRow.StartedAt.Valid {
-		jobRow.StartedAt = null.TimeFrom(opt.PublishedAt)
-	}
-	jobRow.ErrorMessage = null.String{}
-	if _, err := jobRow.Update(ctx, tx, boil.Whitelist(
-		sqlboiler.ScheduledJobColumns.Status,
-		sqlboiler.ScheduledJobColumns.StartedAt,
-		sqlboiler.ScheduledJobColumns.ErrorMessage,
-	)); err != nil {
-		r.l.Errorf(ctx, "execution.repository.MarkDispatchPublished.UpdateJob: %v", err)
-		return repository.ErrUpdateDispatch
-	}
-
-	if err := tx.Commit(); err != nil {
-		r.l.Errorf(ctx, "execution.repository.MarkDispatchPublished.Commit: %v", err)
-		return repository.ErrUpdateDispatch
-	}
 	return nil
 }
 
-func (r *implRepository) MarkDispatchFailed(ctx context.Context, opt repository.MarkDispatchFailedOptions) error {
+func (r *implRepository) MarkExternalTaskFailed(ctx context.Context, opt repository.MarkExternalTaskFailedOptions) error {
+	taskRow, err := sqlboiler.FindExternalTask(ctx, r.db, opt.ExternalTaskID)
+	if err != nil {
+		r.l.Errorf(ctx, "execution.repository.MarkExternalTaskFailed.FindTask: %v", err)
+		return repository.ErrUpdateDispatch
+	}
+
+	taskRow.Status = sqlboiler.JobStatus(model.JobStatusFailed)
+	taskRow.CompletedAt = null.TimeFrom(opt.FailedAt)
+	taskRow.ErrorMessage = null.StringFrom(opt.ErrorMessage)
+	if _, err := taskRow.Update(ctx, r.db, boil.Whitelist(
+		sqlboiler.ExternalTaskColumns.Status,
+		sqlboiler.ExternalTaskColumns.CompletedAt,
+		sqlboiler.ExternalTaskColumns.ErrorMessage,
+	)); err != nil {
+		r.l.Errorf(ctx, "execution.repository.MarkExternalTaskFailed.UpdateTask: %v", err)
+		return repository.ErrUpdateDispatch
+	}
+
+	return nil
+}
+
+func (r *implRepository) FinalizeScheduledJob(ctx context.Context, opt repository.FinalizeScheduledJobOptions) error {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
-		r.l.Errorf(ctx, "execution.repository.MarkDispatchFailed.BeginTx: %v", err)
+		r.l.Errorf(ctx, "execution.repository.FinalizeScheduledJob.BeginTx: %v", err)
 		return repository.ErrUpdateDispatch
 	}
 	defer rollbackTx(tx)
 
-	if err := r.updateTaskFailure(ctx, tx, opt.ExternalTaskID, opt.ErrorMessage, opt.FailedAt); err != nil {
-		return err
+	jobRow, err := sqlboiler.FindScheduledJob(ctx, tx, opt.ScheduledJobID)
+	if err != nil {
+		r.l.Errorf(ctx, "execution.repository.FinalizeScheduledJob.FindJob: %v", err)
+		return repository.ErrUpdateDispatch
 	}
-	if err := r.updateJobFailure(ctx, tx, opt.ScheduledJobID, opt.ErrorMessage, opt.FailedAt); err != nil {
-		return err
+
+	jobRow.Status = sqlboiler.JobStatus(opt.Status)
+	if opt.CompletedAt != nil {
+		jobRow.CompletedAt = null.TimeFrom(*opt.CompletedAt)
+	} else {
+		jobRow.CompletedAt = null.Time{}
 	}
-	if err := r.updateTargetFailure(ctx, tx, opt.TargetID, opt.ErrorMessage, opt.FailedAt); err != nil {
-		return err
+	if strings.TrimSpace(opt.ErrorMessage) == "" {
+		jobRow.ErrorMessage = null.String{}
+	} else {
+		jobRow.ErrorMessage = null.StringFrom(opt.ErrorMessage)
 	}
-	if err := r.updateSourceFailure(ctx, tx, opt.SourceID, opt.ErrorMessage, opt.FailedAt); err != nil {
-		return err
+	if _, err := jobRow.Update(ctx, tx, boil.Whitelist(
+		sqlboiler.ScheduledJobColumns.Status,
+		sqlboiler.ScheduledJobColumns.CompletedAt,
+		sqlboiler.ScheduledJobColumns.ErrorMessage,
+	)); err != nil {
+		r.l.Errorf(ctx, "execution.repository.FinalizeScheduledJob.UpdateJob: %v", err)
+		return repository.ErrUpdateDispatch
+	}
+
+	if opt.Status == model.JobStatusFailed || opt.Status == model.JobStatusPartial {
+		eventTime := timeNowOrCompletedAt(opt.CompletedAt)
+		if err := r.updateTargetFailure(ctx, tx, opt.TargetID, strings.TrimSpace(opt.ErrorMessage), eventTime); err != nil {
+			return err
+		}
+		if err := r.updateSourceFailure(ctx, tx, opt.SourceID, strings.TrimSpace(opt.ErrorMessage), eventTime); err != nil {
+			return err
+		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		r.l.Errorf(ctx, "execution.repository.MarkDispatchFailed.Commit: %v", err)
+		r.l.Errorf(ctx, "execution.repository.FinalizeScheduledJob.Commit: %v", err)
 		return repository.ErrUpdateDispatch
 	}
+
 	return nil
+}
+
+func timeNowOrCompletedAt(value *time.Time) time.Time {
+	if value != nil {
+		return *value
+	}
+	return time.Now().UTC()
 }

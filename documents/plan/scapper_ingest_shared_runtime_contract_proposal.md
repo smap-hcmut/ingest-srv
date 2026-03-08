@@ -91,8 +91,8 @@ Completion publish uses:
   "status": "success|error",
   "completed_at": "2026-03-07T00:00:15Z",
   "storage_bucket": "ingest-raw",
-  "storage_path": "crawl-raw/tiktok/search/2026/03/07/uuid.json",
-  "batch_id": "raw-tiktok-search-uuid",
+  "storage_path": "crawl-raw/tiktok/full_flow/2026/03/07/uuid.json",
+  "batch_id": "raw-tiktok-full_flow-uuid",
   "checksum": "sha256:...",
   "item_count": 2,
   "error": null,
@@ -127,12 +127,12 @@ Rules:
 
 ### 5.2 Parsed artifact
 
-`uap-batches/{project_id}/{source_id}/{batch_id}.jsonl`
+`uap-batches/{project_id}/{source_id}/{batch_id}/part-00001.jsonl`
 
 Rules:
 
 - raw objects are immutable
-- parsed artifacts are versioned or written once
+- parsed artifacts may be chunked into multiple `.jsonl` parts
 - object metadata should carry `task_id`, `batch_id`, `platform`, `action`
 - recommended raw `batch_id` format is `raw-{platform}-{action}-{task_id}`
 
@@ -174,6 +174,8 @@ Independent execution units:
 - `external_task`
 - raw object
 - `raw_batch`
+
+TikTok grouped keyword dispatch follows the same principle: one grouped target may fan out into many independent `external_task` records, one `task_id` per keyword.
 
 This model is the production default because crawler actions are already split.
 

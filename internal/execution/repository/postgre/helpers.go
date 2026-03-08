@@ -3,6 +3,7 @@ package postgre
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"strings"
 	"time"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/aarondl/null/v8"
 	"github.com/aarondl/sqlboiler/v4/boil"
+	"github.com/aarondl/sqlboiler/v4/queries/qm"
 	"github.com/lib/pq"
 )
 
@@ -66,49 +68,88 @@ func (r *implRepository) updateTaskFailure(ctx context.Context, exec boil.Contex
 	return nil
 }
 
-func (r *implRepository) updateJobSuccess(ctx context.Context, exec boil.ContextExecutor, scheduledJobID string, completedAt time.Time) error {
+func (r *implRepository) recomputeScheduledJobStatus(ctx context.Context, exec boil.ContextExecutor, scheduledJobID string, completedAt time.Time) error {
 	if strings.TrimSpace(scheduledJobID) == "" {
 		return nil
 	}
-	row, err := sqlboiler.FindScheduledJob(ctx, exec, scheduledJobID)
-	if err != nil {
-		r.l.Errorf(ctx, "execution.repository.updateJobSuccess.FindJob: %v", err)
-		return repository.ErrCompleteTask
-	}
-	row.Status = sqlboiler.JobStatus(model.JobStatusSuccess)
-	row.CompletedAt = null.TimeFrom(completedAt)
-	row.ErrorMessage = null.String{}
-	if _, err := row.Update(ctx, exec, boil.Whitelist(
-		sqlboiler.ScheduledJobColumns.Status,
-		sqlboiler.ScheduledJobColumns.CompletedAt,
-		sqlboiler.ScheduledJobColumns.ErrorMessage,
-	)); err != nil {
-		r.l.Errorf(ctx, "execution.repository.updateJobSuccess.UpdateJob: %v", err)
-		return repository.ErrCompleteTask
-	}
-	return nil
-}
 
-func (r *implRepository) updateJobFailure(ctx context.Context, exec boil.ContextExecutor, scheduledJobID, errorMessage string, completedAt time.Time) error {
-	if strings.TrimSpace(scheduledJobID) == "" {
+	jobRow, err := sqlboiler.FindScheduledJob(ctx, exec, scheduledJobID)
+	if err != nil {
+		r.l.Errorf(ctx, "execution.repository.recomputeScheduledJobStatus.FindJob: %v", err)
+		return repository.ErrCompleteTask
+	}
+
+	taskRows, err := sqlboiler.ExternalTasks(
+		sqlboiler.ExternalTaskWhere.ScheduledJobID.EQ(null.StringFrom(scheduledJobID)),
+		qm.OrderBy(sqlboiler.ExternalTaskColumns.CreatedAt+" ASC"),
+	).All(ctx, exec)
+	if err != nil {
+		r.l.Errorf(ctx, "execution.repository.recomputeScheduledJobStatus.ListTasks: %v", err)
+		return repository.ErrCompleteTask
+	}
+	if len(taskRows) == 0 {
 		return nil
 	}
-	row, err := sqlboiler.FindScheduledJob(ctx, exec, scheduledJobID)
-	if err != nil {
-		r.l.Errorf(ctx, "execution.repository.updateJobFailure.FindJob: %v", err)
-		return repository.ErrUpdateDispatch
+
+	var successCount int
+	var failedCount int
+	var runningCount int
+	firstError := ""
+	for _, taskRow := range taskRows {
+		switch model.JobStatus(taskRow.Status) {
+		case model.JobStatusSuccess:
+			successCount++
+		case model.JobStatusFailed, model.JobStatusCancelled:
+			failedCount++
+			if firstError == "" && taskRow.ErrorMessage.Valid {
+				firstError = taskRow.ErrorMessage.String
+			}
+		default:
+			runningCount++
+		}
 	}
-	row.Status = sqlboiler.JobStatus(model.JobStatusFailed)
-	row.CompletedAt = null.TimeFrom(completedAt)
-	row.ErrorMessage = null.StringFrom(errorMessage)
-	if _, err := row.Update(ctx, exec, boil.Whitelist(
+
+	expectedTaskCount := expectedDispatchTaskCount(jobRow.Payload, len(taskRows))
+	missingCount := expectedTaskCount - len(taskRows)
+	if missingCount > 0 {
+		failedCount += missingCount
+		if firstError == "" && jobRow.ErrorMessage.Valid {
+			firstError = jobRow.ErrorMessage.String
+		}
+	}
+
+	switch {
+	case runningCount > 0 && failedCount > 0:
+		jobRow.Status = sqlboiler.JobStatus(model.JobStatusPartial)
+		jobRow.CompletedAt = null.Time{}
+		jobRow.ErrorMessage = nullableString(firstError)
+	case runningCount > 0:
+		jobRow.Status = sqlboiler.JobStatus(model.JobStatusRunning)
+		jobRow.CompletedAt = null.Time{}
+		jobRow.ErrorMessage = null.String{}
+	case successCount == expectedTaskCount:
+		jobRow.Status = sqlboiler.JobStatus(model.JobStatusSuccess)
+		jobRow.CompletedAt = null.TimeFrom(completedAt)
+		jobRow.ErrorMessage = null.String{}
+	case failedCount == expectedTaskCount:
+		jobRow.Status = sqlboiler.JobStatus(model.JobStatusFailed)
+		jobRow.CompletedAt = null.TimeFrom(completedAt)
+		jobRow.ErrorMessage = nullableString(firstError)
+	default:
+		jobRow.Status = sqlboiler.JobStatus(model.JobStatusPartial)
+		jobRow.CompletedAt = null.TimeFrom(completedAt)
+		jobRow.ErrorMessage = nullableString(firstError)
+	}
+
+	if _, err := jobRow.Update(ctx, exec, boil.Whitelist(
 		sqlboiler.ScheduledJobColumns.Status,
 		sqlboiler.ScheduledJobColumns.CompletedAt,
 		sqlboiler.ScheduledJobColumns.ErrorMessage,
 	)); err != nil {
-		r.l.Errorf(ctx, "execution.repository.updateJobFailure.UpdateJob: %v", err)
-		return repository.ErrUpdateDispatch
+		r.l.Errorf(ctx, "execution.repository.recomputeScheduledJobStatus.UpdateJob: %v", err)
+		return repository.ErrCompleteTask
 	}
+
 	return nil
 }
 
@@ -214,4 +255,29 @@ func isUniqueViolation(err error) bool {
 		return string(pqErr.Code) == "23505"
 	}
 	return false
+}
+
+func nullableString(value string) null.String {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return null.String{}
+	}
+	return null.StringFrom(trimmed)
+}
+
+func expectedDispatchTaskCount(payload null.JSON, fallback int) int {
+	if !payload.Valid || len(payload.JSON) == 0 {
+		return fallback
+	}
+
+	var decoded struct {
+		TaskCount int `json:"task_count"`
+	}
+	if err := json.Unmarshal(payload.JSON, &decoded); err != nil {
+		return fallback
+	}
+	if decoded.TaskCount <= 0 {
+		return fallback
+	}
+	return decoded.TaskCount
 }

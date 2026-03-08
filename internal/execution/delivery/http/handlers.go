@@ -7,7 +7,7 @@ import (
 )
 
 // @Summary Dispatch one crawl target manually
-// @Description Internal API to create scheduled_job/external_task and publish one RabbitMQ task
+// @Description Internal API to create one scheduled_job, fan out one-or-many external_tasks, and publish RabbitMQ task(s)
 // @Tags Execution
 // @Produce json
 // @Param id path string true "Data Source ID"

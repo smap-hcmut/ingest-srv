@@ -62,9 +62,10 @@ func main() {
 	}
 
 	consumerSrv := consumer.NewServer(logger, consumer.ServerConfig{
-		Conn:  rabbitConn,
-		DB:    postgresDB,
-		MinIO: minioClient,
+		Conn:      rabbitConn,
+		DB:        postgresDB,
+		MinIO:     minioClient,
+		UAPBucket: cfg.MinIO.Bucket,
 	})
 
 	if err := consumerSrv.Run(ctx); err != nil {

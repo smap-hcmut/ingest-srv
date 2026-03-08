@@ -10,24 +10,27 @@ import (
 
 // Server is the consumer server.
 type Server struct {
-	l     log.Logger
-	conn  rabbitmq.IRabbitMQ
-	db    *sql.DB
-	minio minio.MinIO
+	l         log.Logger
+	conn      rabbitmq.IRabbitMQ
+	db        *sql.DB
+	minio     minio.MinIO
+	uapBucket string
 }
 
 type ServerConfig struct {
-	Conn  rabbitmq.IRabbitMQ
-	DB    *sql.DB
-	MinIO minio.MinIO
+	Conn      rabbitmq.IRabbitMQ
+	DB        *sql.DB
+	MinIO     minio.MinIO
+	UAPBucket string
 }
 
 // NewServer creates a new consumer server.
 func NewServer(l log.Logger, config ServerConfig) Server {
 	return Server{
-		l:     l,
-		conn:  config.Conn,
-		db:    config.DB,
-		minio: config.MinIO,
+		l:         l,
+		conn:      config.Conn,
+		db:        config.DB,
+		minio:     config.MinIO,
+		uapBucket: config.UAPBucket,
 	}
 }

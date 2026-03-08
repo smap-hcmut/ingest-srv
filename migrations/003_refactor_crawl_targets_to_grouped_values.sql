@@ -1,3 +1,5 @@
+-- init DB thì không cần chạy cái này --
+
 BEGIN;
 
 ALTER TABLE schema_ingest.crawl_targets

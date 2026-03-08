@@ -7,6 +7,8 @@ import (
 
 	"ingest-srv/internal/execution"
 	repo "ingest-srv/internal/execution/repository"
+	"ingest-srv/internal/model"
+	"ingest-srv/internal/uap"
 )
 
 func (uc *implUseCase) HandleCompletion(ctx context.Context, input execution.HandleCompletionInput) error {
@@ -83,7 +85,7 @@ func (uc *implUseCase) HandleCompletion(ctx context.Context, input execution.Han
 			return execution.ErrInvalidCompletionInput
 		}
 
-		err = uc.repo.CompleteTaskSuccess(ctx, repo.CompleteTaskSuccessOptions{
+		rawBatch, err := uc.repo.CompleteTaskSuccess(ctx, repo.CompleteTaskSuccessOptions{
 			CompletionContext: completionCtx,
 			BatchID:           input.BatchID,
 			StorageBucket:     input.StorageBucket,
@@ -98,9 +100,42 @@ func (uc *implUseCase) HandleCompletion(ctx context.Context, input execution.Han
 			uc.l.Infof(ctx, "execution.usecase.HandleCompletion: duplicate raw batch task_id=%s batch_id=%s", input.TaskID, input.BatchID)
 			return nil
 		}
-		return err
+		if err != nil {
+			return err
+		}
+
+		if uc.shouldParseUAP(completionCtx.ExternalTask) {
+			parseErr := uc.parser.ParseAndStoreRawBatch(ctx, uap.ParseAndStoreRawBatchInput{
+				RawBatchID:     rawBatch.ID,
+				ProjectID:      rawBatch.ProjectID,
+				SourceID:       rawBatch.SourceID,
+				ExternalTaskID: completionCtx.ExternalTask.ID,
+				TaskID:         completionCtx.ExternalTask.TaskID,
+				Platform:       completionCtx.ExternalTask.Platform,
+				Action:         completionCtx.ExternalTask.TaskType,
+				StorageBucket:  rawBatch.StorageBucket,
+				StoragePath:    rawBatch.StoragePath,
+				BatchID:        rawBatch.BatchID,
+				RawMetadata:    rawBatch.RawMetadata,
+				CompletionTime: completedAt,
+			})
+			if parseErr != nil {
+				uc.l.Errorf(ctx, "execution.usecase.HandleCompletion.ParseAndStoreRawBatch: task_id=%s raw_batch_id=%s err=%v", input.TaskID, rawBatch.ID, parseErr)
+			}
+		}
+
+		return nil
 	default:
 		uc.l.Errorf(ctx, "execution.usecase.HandleCompletion: invalid status value: %s", input.Status)
 		return execution.ErrInvalidCompletionInput
 	}
+}
+
+func (uc *implUseCase) shouldParseUAP(task model.ExternalTask) bool {
+	if uc.parser == nil {
+		return false
+	}
+
+	return strings.EqualFold(strings.TrimSpace(task.Platform), "tiktok") &&
+		strings.EqualFold(strings.TrimSpace(task.TaskType), "full_flow")
 }

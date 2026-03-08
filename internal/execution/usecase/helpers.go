@@ -30,33 +30,40 @@ func (uc *implUseCase) validateDispatchContext(ctx repo.DispatchContext) error {
 	return nil
 }
 
-func (uc *implUseCase) buildDispatchSpec(source model.DataSource, target model.CrawlTarget) (execution.DispatchSpec, error) {
+func (uc *implUseCase) buildDispatchSpecs(source model.DataSource, target model.CrawlTarget) ([]execution.DispatchSpec, error) {
 	switch {
 	case source.SourceType == model.SourceTypeTikTok && target.TargetType == model.TargetTypeKeyword:
-		if len(target.Values) == 0 {
-			return execution.DispatchSpec{}, execution.ErrDispatchNotAllowed
+		keywords := extractKeywords(target.Values)
+		if len(keywords) == 0 {
+			uc.l.Warnf(context.Background(), "execution.usecase.buildDispatchSpecs.tiktokFullFlowInvalidKeywordTarget: target_id=%s keyword_count=%d", target.ID, len(target.Values))
+			return nil, execution.ErrDispatchNotAllowed
 		}
-		return execution.DispatchSpec{
-			Queue:  tikTokTasksQueue,
-			Action: actionFullFlow,
-			Params: map[string]interface{}{
-				"keywords": target.Values,
-			},
-		}, nil
+		specs := make([]execution.DispatchSpec, 0, len(keywords))
+		for _, keyword := range keywords {
+			specs = append(specs, execution.DispatchSpec{
+				Queue:   tikTokTasksQueue,
+				Action:  actionFullFlow,
+				Keyword: keyword,
+				Params: map[string]interface{}{
+					"keyword": keyword,
+				},
+			})
+		}
+		return specs, nil
 	case source.SourceType == model.SourceTypeFacebook && target.TargetType == model.TargetTypePostURL:
 		parseIDs, err := parseFacebookParseIDs(target.PlatformMeta)
 		if err != nil {
-			return execution.DispatchSpec{}, err
+			return nil, err
 		}
-		return execution.DispatchSpec{
+		return []execution.DispatchSpec{{
 			Queue:  facebookTasksQueue,
 			Action: actionPostDetail,
 			Params: map[string]interface{}{
 				"parse_ids": parseIDs,
 			},
-		}, nil
+		}}, nil
 	default:
-		return execution.DispatchSpec{}, execution.ErrUnsupportedDispatchMapping
+		return nil, execution.ErrUnsupportedDispatchMapping
 	}
 }
 
@@ -138,11 +145,34 @@ func parseFacebookParseIDs(platformMeta json.RawMessage) ([]string, error) {
 	return payload.ParseIDs, nil
 }
 
-func buildJobPayload(queue, action string, requestPayload json.RawMessage, input execution.DispatchTargetInput) json.RawMessage {
+func buildJobPayload(specs []execution.DispatchSpec, input execution.DispatchTargetInput) json.RawMessage {
+	var queue string
+	var action string
+	if len(specs) > 0 {
+		queue = specs[0].Queue
+		action = specs[0].Action
+	}
+
+	tasks := make([]map[string]interface{}, 0, len(specs))
+	for _, spec := range specs {
+		task := map[string]interface{}{
+			"queue":  spec.Queue,
+			"action": spec.Action,
+		}
+		if spec.Keyword != "" {
+			task["keyword"] = spec.Keyword
+		}
+		if len(spec.Params) > 0 {
+			task["params"] = cloneParams(spec.Params)
+		}
+		tasks = append(tasks, task)
+	}
+
 	payload := map[string]interface{}{
-		"queue":           queue,
-		"action":          action,
-		"request_payload": json.RawMessage(requestPayload),
+		"queue":      queue,
+		"action":     action,
+		"task_count": len(specs),
+		"tasks":      tasks,
 	}
 	if input.TriggerType != "" {
 		payload["trigger_type"] = input.TriggerType
@@ -247,4 +277,30 @@ func getModeMultiplier(mode model.CrawlMode) (float64, error) {
 	default:
 		return 0, fmt.Errorf("unsupported crawl mode %s", mode)
 	}
+}
+
+func derefCrawlMode(mode *model.CrawlMode) string {
+	if mode == nil {
+		return ""
+	}
+	return string(*mode)
+}
+
+func formatTimePtr(value *time.Time) string {
+	if value == nil {
+		return ""
+	}
+	return value.Format(time.RFC3339)
+}
+
+func extractKeywords(values []string) []string {
+	keywords := make([]string, 0, len(values))
+	for _, value := range values {
+		keyword := strings.TrimSpace(value)
+		if keyword == "" {
+			continue
+		}
+		keywords = append(keywords, keyword)
+	}
+	return keywords
 }

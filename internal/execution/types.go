@@ -17,13 +17,23 @@ type DispatchTargetInput struct {
 }
 
 // DispatchTargetOutput contains the created runtime lineage for a dispatch.
-type DispatchTargetOutput struct {
-	ScheduledJobID string `json:"scheduled_job_id"`
+type DispatchTaskOutput struct {
 	ExternalTaskID string `json:"external_task_id"`
 	TaskID         string `json:"task_id"`
 	Queue          string `json:"queue"`
 	Action         string `json:"action"`
 	Status         string `json:"status"`
+	Keyword        string `json:"keyword,omitempty"`
+	ErrorMessage   string `json:"error_message,omitempty"`
+}
+
+type DispatchTargetOutput struct {
+	ScheduledJobID string `json:"scheduled_job_id"`
+	Status         string `json:"status"`
+	TaskCount      int    `json:"task_count"`
+	PublishedCount int    `json:"published_count"`
+	FailedCount    int    `json:"failed_count"`
+	Tasks          []DispatchTaskOutput `json:"tasks"`
 }
 
 // DispatchTargetManuallyInput triggers one execution unit for an existing crawl target.
@@ -56,6 +66,7 @@ type DispatchSpec struct {
 	Queue  string
 	Action string
 	Params map[string]interface{}
+	Keyword string
 }
 
 // PublishDispatchInput is the usecase-facing payload passed to the RabbitMQ producer.
