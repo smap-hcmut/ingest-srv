@@ -1,337 +1,502 @@
-# SMAP Dispatcher Service
+# ingest-srv
 
-This repository houses the **Dispatcher Service** for the SMAP data collection system. It serves as the central coordinator that receives high-level crawl requests, validates them, and distributes granular tasks to platform-specific workers via RabbitMQ.
+SMAP Ingest Service.
 
-## 🏗 System Architecture
+Service này chịu trách nhiệm quản lý `data source`, điều phối vòng đời ingest, tích hợp crawler bên thứ ba, lưu vết raw data, chuẩn hóa dữ liệu sang UAP và publish sang pipeline phân tích.
 
-The service follows a **Producer-Consumer** and **Fan-out** architecture pattern. It acts as an intermediary between the request initiator (e.g., a frontend or scheduler) and the actual scraping workers.
+## Mục lục
+
+- Tổng quan
+- Service này làm gì
+- Service này không sở hữu gì
+- Liên kết với service khác
+- Kiến trúc nội bộ
+- Entity chính
+- Business rules
+- State machine
+- Các flow chính
+- API namespace và contract
+- Trạng thái hiện tại
+- Run và config
+
+## Tổng quan
+
+`ingest-srv` là service đứng giữa lớp quản lý nguồn dữ liệu và lớp xử lý dữ liệu đầu vào cho phân tích.
+
+Nó làm 4 việc lớn:
+
+1. quản lý metadata và lifecycle của source
+2. điều phối crawl / upload / webhook intake
+3. lưu trace lineage từ source -> target -> job -> task -> raw batch
+4. chuẩn hóa raw thành UAP để hệ downstream consume
+
+## Service này làm gì
+
+### 1. Quản lý nguồn dữ liệu
+
+- tạo và quản lý `data_sources`
+- quản lý `crawl_targets` cho source crawl
+- lưu `mapping_rules` cho source passive
+- quản lý `crawl_mode`
+- quản lý trạng thái `PENDING/READY/ACTIVE/PAUSED/FAILED/COMPLETED/ARCHIVED`
+
+### 2. Điều phối lifecycle ingest
+
+- dry run source trước khi chạy thật
+- chuẩn hóa state transition của source
+- phản ứng với lệnh activate/pause/resume/archive từ orchestration hoặc `project-srv`
+- ghi audit trail khi đổi crawl mode
+
+### 3. Tích hợp runtime với crawler bên ngoài
+
+- publish task sang crawler qua RabbitMQ
+- consume kết quả crawl
+- tạo `external_tasks` và `raw_batches`
+- đảm bảo idempotency theo `task_id` và lineage theo source/target
+
+### 4. Chuẩn hóa và publish dữ liệu
+
+- parse raw payload/file theo loại source
+- áp `mapping_rules`
+- chuẩn hóa record thành UAP
+- publish sang topic phân tích
+
+## Service này không sở hữu gì
+
+`ingest-srv` không sở hữu:
+
+- `projects`
+- `campaigns`
+- `project_crisis_config`
+- `crisis_alerts`
+- business decision cuối cùng về activate project hay crisis policy
+
+Các phần đó thuộc `project-srv`.
+
+## Liên kết với service khác
+
+## System Context
 
 ```mermaid
-graph LR
-    A[Project Service] -- "project.created event" --> B[RabbitMQ: smap.events]
-    A2[Legacy API] -- "CrawlRequest" --> B2[RabbitMQ: collector.inbound]
-    B --> C{SMAP Dispatcher}
-    B2 --> C
-    C -- "Validate & Map" --> C
-    C -- "CollectorTask (YouTube)" --> D[RabbitMQ: youtube_exchange]
-    C -- "CollectorTask (TikTok)" --> E[RabbitMQ: tiktok_exchange]
-    D --> F[YouTube Worker]
-    E --> G[TikTok Worker]
-    F --> H[Results: youtube_result_queue]
-    G --> I[Results: tiktok_result_queue]
-    H --> C
-    I --> C
+flowchart LR
+    UI[Frontend / Admin UI] -->|HTTP| INGEST[ingest-srv]
+    PROJECT[project-srv] <-->|HTTP + Kafka| INGEST
+    INGEST <-->|RabbitMQ| SCAPPER[scapper-srv / crawler 3rd-party]
+    INGEST -->|Kafka UAP| ANALYSIS[analysis pipeline]
+    INGEST -->|Object storage| MINIO[MinIO]
+    INGEST -->|SQL| DB[(PostgreSQL)]
+    INGEST -->|Cache/coordination| REDIS[(Redis)]
 ```
 
-### Core Component
+## Bảng tương tác liên service
 
-**Dispatcher Consumer (`cmd/consumer`)**:
+| Service / System | Quan hệ với `ingest-srv` | Giao thức | Mục đích |
+|---|---|---|---|
+| `project-srv` | orchestration + ownership business | HTTP, Kafka | đổi crawl mode, activate/pause/resume theo lifecycle project |
+| `scapper-srv` | crawler runtime | RabbitMQ | nhận crawl task, trả crawl result/raw reference |
+| Analysis pipeline | downstream consumer | Kafka | nhận UAP chuẩn hóa từ ingest |
+| MinIO | object storage | S3-compatible API | lưu raw file/payload và asset trung gian |
+| PostgreSQL | persistence chính | SQL | lưu source, target, dryrun, task, batch, audit |
+| Redis | infra phụ trợ | Redis protocol | cache/lock/coordination nếu cần |
 
-- The core worker process that consumes `CrawlRequest` messages from RabbitMQ.
-- Validates incoming requests and executes the **Dispatch UseCase** to route tasks.
-- Distributes platform-specific tasks to YouTube and TikTok workers.
-- Built with **Go** and **RabbitMQ client**.
+## `project-srv` tương tác với `ingest-srv` như thế nào
 
-## Business Logic & Rules
+### Ownership boundary
 
-The core logic resides in `internal/dispatcher`.
+| Concern | Owner |
+|---|---|
+| `project`, `campaign`, crisis config | `project-srv` |
+| `data_source`, `crawl_target`, `dryrun`, `scheduled_job`, `external_task`, `raw_batch` | `ingest-srv` |
 
-### 1. Dispatch Flow
+### Contract chính
 
-The dispatch process (`internal/dispatcher/usecase/dispatch.go`) follows these steps:
+| Direction | Contract | Ý nghĩa |
+|---|---|---|
+| `project-srv -> ingest-srv` | `PUT /ingest/datasources/{id}/crawl-mode` | đổi mode crawl |
+| `project-srv -> ingest-srv` | Kafka `project.activated` | activate source đang `READY` |
+| `project-srv -> ingest-srv` | Kafka `project.paused` | pause source đang `ACTIVE` |
+| `project-srv -> ingest-srv` | Kafka `project.resumed` | resume source đang `PAUSED` |
+| `project-srv -> ingest-srv` | Kafka `project.archived` | archive hoặc dừng flow source liên quan |
+| `ingest-srv -> project-srv` | Kafka `ingest.source.*` | phản hồi state lifecycle của source |
+| `ingest-srv -> project-srv` | Kafka `ingest.dryrun.completed` | báo dry run hoàn tất |
+| `ingest-srv -> project-srv` | Kafka `ingest.crawl.completed` | báo batch crawl hoàn tất |
 
-1. **Receive Request**: Accepts a `CrawlRequest` containing `JobID`, `TaskType`, and a generic `Payload`.
-2. **Platform Selection**: Determines which platforms to target based on configuration (default: all enabled platforms).
-3. **Task Generation**: For each target platform:
-   - Creates a `CollectorTask` with a new trace ID and metadata.
-   - **Payload Mapping**: Converts the generic input payload into a strict, platform-specific struct (e.g., `YouTubeResearchKeywordPayload`) using the `Mapper` logic.
-   - **Routing**: Determines the correct RabbitMQ routing key for the platform.
-4. **Publish**: Sends the `CollectorTask` to the platform's queue.
+## `scapper-srv` tương tác với `ingest-srv` như thế nào
 
-### 2. Supported Task Types
+```mermaid
+sequenceDiagram
+    participant SCH as ingest-srv scheduler
+    participant ING as ingest-srv runtime
+    participant MQ as RabbitMQ
+    participant SCP as scapper-srv
+    participant MIN as MinIO
 
-The system supports three primary task types (`internal/models/task.go`):
-
-- `research_keyword`: Search for content based on keywords.
-- `crawl_links`: Scrape specific video/profile URLs.
-- `research_and_crawl`: A composite task to search and then immediately scrape results.
-
-### 3. Supported Platforms
-
-- **YouTube** (`PlatformYouTube`)
-- **TikTok** (`PlatformTikTok`)
-
-## 📐 Design Patterns
-
-The project strictly follows **Clean Architecture** and **SOLID** principles:
-
-- **Clean Architecture**:
-  - `delivery/`: Transport layer (RabbitMQ consumers, HTTP handlers).
-  - `usecase/`: Pure business logic (Dispatching, Mapping).
-  - `models/`: Domain entities and DTOs.
-  - **Benefit**: The business logic is decoupled from the transport mechanism. We could easily switch from RabbitMQ to Kafka without changing the core dispatch logic.
-
-- **Dependency Injection (DI)**:
-  - All components (UseCases, Repositories, Consumers) are initialized with their dependencies passed via constructors (`New...`).
-  - **Benefit**: Makes testing easier (mocking dependencies) and dependencies explicit.
-
-- **Strategy/Factory Pattern**:
-  - The `mapPayload` function (`internal/dispatcher/usecase/util.go`) acts as a factory, selecting the correct payload structure and validation strategy based on the `Platform` and `TaskType`.
-
-## 📂 Project Structure
-
-```text
-collector-srv/
-├── cmd/
-│   └── consumer/     # RabbitMQ Consumer entry point
-├── config/           # Configuration loading (Env)
-├── internal/
-│   ├── dispatcher/   # CORE DOMAIN: Dispatch logic
-│   │   ├── delivery/ # RabbitMQ consumers/producers
-│   │   └── usecase/  # Business logic (Dispatch, Map)
-│   ├── consumer/     # Consumer server implementation
-│   ├── results/      # Result processing from workers
-│   ├── state/        # Redis state management
-│   ├── webhook/      # Progress webhook client
-│   └── models/       # Shared data structures (CrawlRequest, CollectorTask)
-├── pkg/              # Shared utilities (Logger, RabbitMQ, Redis, etc.)
-└── ...
+    SCH->>ING: tạo scheduled_job
+    ING->>ING: fan out external_tasks per keyword
+    ING->>MQ: publish crawl tasks (task_id)
+    MQ->>SCP: deliver task
+    SCP->>MIN: upload raw result
+    SCP->>MQ: publish completion to ingest_task_completions (task_id, raw_ref)
+    MQ->>ING: deliver completion envelope
+    ING->>ING: update external_task
+    ING->>ING: create raw_batch
 ```
 
-## 🚀 Getting Started
+### Contract cần giữ
 
-### Prerequisites
+- contract RabbitMQ request/completion canonical nằm ở `../scapper-srv/RABBITMQ.md`
+- runtime boundary, MinIO naming, idempotency canonical nằm ở `documents/plan/scapper_ingest_shared_runtime_contract_proposal.md`
+- `task_id` là correlation key chính
+- duplicate response theo cùng `task_id` phải xử lý idempotent
 
-- Go 1.25.4+
-- RabbitMQ
-- Redis (for state management, DB 1)
-- MongoDB (not yet implemented, reserved for future persistence)
+## Analysis pipeline tương tác với `ingest-srv` như thế nào
 
-### Configuration
+- ingest publish dữ liệu đầu vào phân tích sau khi parse + normalize
+- topic canonical là `smap.collector.output`
+- mỗi UAP message tương ứng 1 đơn vị phân tích: `post` hoặc `comment` hoặc `reply`
 
-Copy `template.env` to `.env` and configure:
+## Kiến trúc nội bộ
 
-```env
-# RabbitMQ
-AMQP_URL=amqp://guest:guest@localhost:5672/
+```mermaid
+flowchart TD
+    API[cmd/api] --> HTTPSERVER[internal/httpserver]
+    CONSUMER[cmd/consumer] --> CONSUMER_INFRA[internal/consumer]
+    SCHED[cmd/scheduler] --> SCHEDULER[internal/scheduler]
 
-# Service
-PORT=8080
-MODE=debug
+    HTTPSERVER --> DATASOURCE[internal/datasource]
+    HTTPSERVER --> DRYRUN[internal/dryrun]
+
+    CONSUMER_INFRA --> PROJECTSYNC[internal/projectsync]
+    CONSUMER_INFRA --> CRAWLER[internal/crawler]
+
+    SCHEDULER --> DATASOURCE
+    SCHEDULER --> CRAWLER
+
+    CRAWLER --> PARSER[internal/parser]
+    DRYRUN --> CRAWLER
+
+    DATASOURCE --> MODEL[internal/model]
+    DRYRUN --> MODEL
+    CRAWLER --> MODEL
+    PARSER --> MODEL
+    SCHEDULER --> MODEL
+
+    DATASOURCE --> SQLB[internal/sqlboiler]
+    DRYRUN --> SQLB
+    CRAWLER --> SQLB
+    SCHEDULER --> SQLB
 ```
 
-### Crawl Limits Configuration
+## Module nội bộ và trách nhiệm
 
-The service supports configurable crawl limits to control resource usage:
+| Module | Trách nhiệm |
+|---|---|
+| `internal/datasource` | CRUD source + target, lifecycle control plane, crawl mode |
+| `internal/dryrun` | dry run source/target, readiness transition, history |
+| `internal/crawler` | publish/consume RabbitMQ với crawler bên ngoài |
+| `internal/parser` | raw -> mapping -> UAP -> Kafka |
+| `internal/scheduler` | tick scheduler và tạo job/task runtime |
+| `internal/projectsync` | consume lifecycle events từ `project-srv` |
+| `internal/httpserver` | mount router, middleware, health endpoints |
+| `internal/consumer` | consumer infrastructure |
+| `internal/model` | domain model + enum dùng chung |
+| `internal/sqlboiler` | generated DB models/queries |
 
-| Environment Variable        | Default | Description                              |
-| --------------------------- | ------- | ---------------------------------------- |
-| `DEFAULT_LIMIT_PER_KEYWORD` | 50      | Default items per keyword for production |
-| `DEFAULT_MAX_COMMENTS`      | 100     | Default max comments per item            |
-| `DEFAULT_MAX_ATTEMPTS`      | 3       | Max retry attempts for failed tasks      |
-| `DRYRUN_LIMIT_PER_KEYWORD`  | 3       | Items per keyword for dry-run/testing    |
-| `DRYRUN_MAX_COMMENTS`       | 5       | Max comments per item for dry-run        |
-| `MAX_LIMIT_PER_KEYWORD`     | 500     | Hard limit (safety cap) for items        |
-| `MAX_MAX_COMMENTS`          | 1000    | Hard limit (safety cap) for comments     |
-| `INCLUDE_COMMENTS`          | true    | Whether to include comments in crawl     |
-| `DOWNLOAD_MEDIA`            | false   | Whether to download media files          |
+## Entity chính
 
-**Note:** Hard limits (`MAX_*`) are safety caps that cannot be exceeded even if default values are set higher.
+| Entity | Vai trò |
+|---|---|
+| `data_sources` | source of truth cho metadata và lifecycle của nguồn dữ liệu |
+| `crawl_targets` | đơn vị scheduling chính của source `CRAWL` |
+| `dryrun_results` | lưu kết quả dry run và readiness evidence |
+| `scheduled_jobs` | record điều phối lịch crawl |
+| `external_tasks` | record task đã gửi sang hệ ngoài / crawler |
+| `raw_batches` | batch raw đã nhận/lưu để parse/publish |
+| `crawl_mode_changes` | audit trail cho các lần đổi mode |
 
-### Running the Service
+## Business rules
 
-**Start the Dispatcher Consumer:**
-This process listens for incoming requests from RabbitMQ and dispatches them to platform workers.
+## 1. Ownership và boundary rules
+
+| Rule | Mô tả |
+|---|---|
+| `project_id` là logical FK | không dùng DB foreign key cross-service |
+| `ingest-srv` là source of truth của source metadata | project không ghi trực tiếp vào bảng ingest |
+| namespace chuẩn là `datasources` | không dùng `/sources` cho contract mới |
+
+## 2. Rules cho `data_source`
+
+| Rule | Mô tả |
+|---|---|
+| source mới luôn ở `PENDING` | chưa được chạy thật ngay sau create |
+| `COMPLETED` chỉ dành cho one-shot source | chủ yếu là `FILE_UPLOAD` |
+| `CRAWL` source cần `crawl_mode` và `crawl_interval_minutes > 0` | để có thể chạy runtime |
+| `source_category` có thể infer từ `source_type` | `CRAWL` cho social crawl, `PASSIVE` cho file/webhook |
+| source `ACTIVE` không được sửa `config` và `mapping_rules` | tránh phá runtime đang chạy |
+| đổi `config` crawl phải reset dry run state | clear `dryrun_last_result_id`, đưa source về trạng thái cần validate lại |
+
+## 3. Rules cho `crawl_target`
+
+| Rule | Mô tả |
+|---|---|
+| target chỉ được tạo dưới source `CRAWL` | không tạo target cho `FILE_UPLOAD/WEBHOOK` |
+| `target_type` hợp lệ là `KEYWORD`, `PROFILE`, `POST_URL` | enum canonical |
+| interval của target nếu không truyền sẽ kế thừa từ datasource | default inheritance |
+| ownership phải kiểm theo `(data_source_id, target_id)` | không được thao tác target chéo datasource |
+| `crawl_targets` là đơn vị scheduling chính | không schedule theo datasource tổng quát |
+
+## 4. Rules cho lifecycle source
+
+| Rule | Mô tả |
+|---|---|
+| `READY` là cổng vào của `ACTIVE` | không activate trực tiếp từ `PENDING` |
+| user không tự activate source qua public API trong V1 | activate chủ yếu do `project-srv` orchestration |
+| `ACTIVE -> PAUSED -> ACTIVE` là vòng đời crawl bình thường | dùng cho pause/resume |
+| `ARCHIVED` là trạng thái kết thúc | giữ lịch sử, ngừng vận hành |
+
+## 5. Rules cho dry run
+
+| Rule | Mô tả |
+|---|---|
+| dry run chỉ chạy khi source ở `PENDING` hoặc `READY` | không chạy tự do ở mọi state |
+| `SUCCESS` -> source sang `READY` | đủ điều kiện chờ activate |
+| `WARNING` -> source vẫn `READY` | có cảnh báo nhưng usable |
+| `FAILED` -> source chưa được chạy thật | thường giữ `PENDING` hoặc cần sửa config |
+| dry run của `CRAWL` là per-target | trace bằng `dryrun_results.target_id` |
+| dry run của `PASSIVE` không cần `target_id` | áp cho file upload / webhook |
+
+## 6. Rules cho crawl mode
+
+| Rule | Mô tả |
+|---|---|
+| mode hợp lệ là `SLEEP`, `NORMAL`, `CRISIS` | enum canonical |
+| mode chỉ áp dụng cho source `CRAWL` | source passive không nhận crawl mode |
+| đổi mode phải ghi `crawl_mode_changes` | audit trail bắt buộc |
+| effective interval = `target_interval x mode_multiplier` | dùng ở scheduler runtime |
+
+### Mode multiplier
+
+| Mode | Multiplier | Ý nghĩa |
+|---|---:|---|
+| `CRISIS` | `0.2` | crawl dày hơn |
+| `NORMAL` | `1.0` | mặc định |
+| `SLEEP` | `5.0` | crawl thưa hơn |
+
+## 7. Rules cho parser và publish
+
+| Rule | Mô tả |
+|---|---|
+| 1 UAP message = 1 đơn vị phân tích | post/comment/reply |
+| luôn giữ `raw.original_fields` + `trace.raw_ref` | phục vụ audit/reprocess |
+| parse lifecycle và publish lifecycle tách riêng | `batch_status` và `publish_status` không trộn |
+| V1 publish fail -> fail toàn batch | không hỗ trợ partial success |
+| không dùng `ingest.data.first_batch` làm contract mới | event canonical là `ingest.crawl.completed` |
+
+## 8. Rules về idempotency và replay
+
+| Concern | Rule |
+|---|---|
+| RabbitMQ request/response | idempotency theo `task_id` |
+| raw batch dedup | theo `(source_id, batch_id)`, fallback `checksum` |
+| replay | mặc định chỉ cho batch lỗi; batch `SUCCESS` cần `force = true` + audit |
+
+## State machine
+
+## Data Source Lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> PENDING
+    PENDING --> READY: dryrun SUCCESS/WARNING
+    READY --> ACTIVE: activate/project.activated
+    ACTIVE --> PAUSED: pause/project.paused
+    PAUSED --> ACTIVE: resume/project.resumed
+    PENDING --> FAILED: dryrun/runtime validation fail
+    READY --> FAILED: dryrun re-run fail
+    FAILED --> READY: dryrun success again
+    PENDING --> ARCHIVED: archive
+    READY --> ARCHIVED: archive
+    PAUSED --> ARCHIVED: archive
+    FAILED --> ARCHIVED: archive
+    COMPLETED --> [*]
+    ARCHIVED --> [*]
+```
+
+## Dryrun Lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> PENDING
+    PENDING --> RUNNING
+    RUNNING --> SUCCESS
+    RUNNING --> WARNING
+    RUNNING --> FAILED
+```
+
+## Crawl Runtime Lineage
+
+```mermaid
+flowchart LR
+    DS[data_source] --> CT[crawl_target]
+    CT --> SJ[scheduled_job]
+    SJ --> ET[external_tasks]
+    ET --> RB[raw_batch]
+    RB --> UAP[UAP event]
+```
+
+## Các flow chính
+
+## 1. User onboarding flow
+
+```mermaid
+flowchart TD
+    U[User/UI] -->|POST /datasources| DS[Create data source]
+    DS --> T{source_type}
+    T -->|CRAWL| C1[Create crawl targets]
+    C1 --> C2[Dry run per-target]
+    C2 --> C3[source READY]
+    C3 --> P[project.activated]
+    P --> A[source ACTIVE]
+
+    T -->|FILE_UPLOAD| F1[Upload sample/file]
+    F1 --> F2[Analyze mapping]
+    F2 --> F3[Confirm mapping]
+    F3 --> F4[source READY or COMPLETED]
+
+    T -->|WEBHOOK| W1[Bootstrap webhook id/secret]
+    W1 --> W2[Validate setup]
+    W2 --> W3[source READY]
+```
+
+## 2. Crawl runtime flow
+
+```mermaid
+sequenceDiagram
+    participant SCH as Scheduler
+    participant DS as DataSource/CrawlTarget
+    participant ING as Ingest Runtime
+    participant MQ as RabbitMQ
+    participant SCP as scapper-srv
+    participant MIN as MinIO
+    participant PAR as Parser
+    participant ANA as Analysis
+
+    SCH->>DS: query target đến hạn
+    SCH->>ING: create scheduled_job
+    ING->>ING: fan out external_tasks
+    ING->>MQ: publish tasks
+    MQ->>SCP: deliver task
+    SCP->>MIN: upload raw
+    SCP->>MQ: publish response
+    MQ->>ING: consume response
+    ING->>ING: create raw_batch
+    ING->>PAR: trigger parse pipeline
+    PAR->>ANA: publish UAP
+```
+
+## 3. Crisis feedback loop
+
+```mermaid
+flowchart LR
+    INGEST[ingest-srv] -->|ingest.crawl.completed / raw signals| ANALYSIS[analysis]
+    ANALYSIS --> PROJECT[project-srv]
+    PROJECT -->|HTTP/Kafka: change crawl mode| INGEST
+    INGEST -->|persist crawl_mode_changes| DB[(PostgreSQL)]
+    INGEST -->|effective interval changes| SCHEDULER[scheduler]
+```
+
+## 4. Project lifecycle sync
+
+```mermaid
+flowchart TD
+    P1[project.activated] --> A[Activate READY sources]
+    P2[project.paused] --> B[Pause ACTIVE sources]
+    P3[project.resumed] --> C[Resume PAUSED sources]
+    P4[project.archived] --> D[Archive or stop related sources]
+```
+
+## API namespace và contract
+
+## Canonical namespace
+
+| Deprecated | Canonical |
+|---|---|
+| `/sources/*` | `/datasources/*` |
+| `PUT /ingest/sources/{id}/crawl-mode` | `PUT /ingest/datasources/{id}/crawl-mode` |
+| `ingest.data.first_batch` | `ingest.crawl.completed` |
+
+## Nhóm endpoint chính
+
+### User-facing
+
+| Method | Path | Mục đích |
+|---|---|---|
+| `POST` | `/api/v1/datasources` | tạo source |
+| `GET` | `/api/v1/datasources` | list source |
+| `GET` | `/api/v1/datasources/:id` | detail source |
+| `PUT` | `/api/v1/datasources/:id` | update source |
+| `DELETE` | `/api/v1/datasources/:id` | archive source |
+| `POST` | `/api/v1/datasources/:id/targets` | create target |
+| `GET` | `/api/v1/datasources/:id/targets` | list targets |
+| `GET` | `/api/v1/datasources/:id/targets/:target_id` | detail target |
+| `PUT` | `/api/v1/datasources/:id/targets/:target_id` | update target |
+| `DELETE` | `/api/v1/datasources/:id/targets/:target_id` | delete target |
+
+### Internal / orchestration-facing
+
+| Method | Path | Mục đích |
+|---|---|---|
+| `GET` | `/health` | health check |
+| `GET` | `/ready` | readiness check |
+| `GET` | `/live` | liveness check |
+| `GET` | `/api/v1/ingest/ping` | ingest ping |
+| `PUT` | `/api/v1/ingest/datasources/:id/crawl-mode` | đổi crawl mode |
+| `POST` | `/api/v1/internal/datasources/:id/trigger` | manual trigger task |
+| `POST` | `/api/v1/internal/raw-batches/:id/replay` | replay parse/publish |
+
+## Trạng thái hiện tại
+
+## Snapshot implementation
+
+| Hạng mục | Trạng thái khái quát |
+|---|---|
+| datasource CRUD public | đã có nền tảng |
+| crawl_target CRUD public | đã có nền tảng |
+| delivery validation phase 1 | đã được siết thêm |
+| lifecycle API phase 2 | đang triển khai |
+| dry run module | chưa hoàn chỉnh |
+| scheduler per-target runtime | chưa hoàn chỉnh |
+| RabbitMQ end-to-end runtime | chưa hoàn chỉnh |
+| parser -> UAP -> Kafka end-to-end | chưa hoàn chỉnh |
+
+## Thứ tự đọc tài liệu khuyến nghị
+
+1. `README.md`
+2. `documents/plan/ingest_next_phase_plan.md`
+3. `documents/plan/ingest_phase2_lifecycle_plan.md`
+4. `documents/resource/ingest/ingest_plan.md`
+5. `documents/resource/ingest/ingest_project_schema_alignment_proposal.md`
+
+## Run và config
+
+## Run
 
 ```bash
-go run cmd/consumer/main.go
-```
-
-**Or use the Makefile:**
-
-```bash
+make run-api
 make run-consumer
+make run-scheduler
 ```
 
-## 🔌 Integration Guide
+## Config
 
-### Event-Driven Architecture
+- `config/ingest-config.yaml`
+- `config/ingest-config.example.yaml`
 
-The service now supports event-driven choreography with the Project Service. See `openspec/project.md` for full details.
+## Ghi chú cuối
 
-#### SMAP Events Exchange
+README này nhằm giúp người đọc:
 
-- **Exchange**: `smap.events` (Type: `topic`)
-- **Consumed Routing Key**: `project.created`
-
-> **Note:** `data.collected` event is published by Crawler (Worker) services, not Dispatcher.
-
-#### Project Created Event (Consumed)
-
-```json
-{
-  "event_id": "evt_abc123",
-  "timestamp": "2025-12-05T10:00:00Z",
-  "payload": {
-    "project_id": "proj_xyz",
-    "user_id": "user_123",
-    "brand_name": "VinFast",
-    "brand_keywords": ["VinFast", "VF3"],
-    "competitor_names": ["Toyota"],
-    "competitor_keywords_map": {
-      "Toyota": ["Toyota", "Vios"]
-    },
-    "date_range": {
-      "from": "2025-01-01",
-      "to": "2025-02-01"
-    }
-  }
-}
-```
-
-#### Data Collected Event (Published)
-
-```json
-{
-  "event_id": "evt_def456",
-  "timestamp": "2025-12-05T11:00:00Z",
-  "payload": {
-    "project_id": "proj_xyz",
-    "user_id": "user_123",
-    "minio_path": "/data/proj_xyz/output.json",
-    "item_count": 150,
-    "platform": "youtube"
-  }
-}
-```
-
-#### Redis State Management (Hybrid State)
-
-The service updates project state in Redis (DB 1) with key schema `smap:proj:{projectID}`.
-
-**Hybrid State Pipeline:**
-
-```text
-Phase 1: CRAWL                              Phase 2: ANALYZE
-┌─────────────────────────────────┐         ┌─────────────────────────┐
-│ Task-Level (completion check):  │         │ analyze_total: 450      │
-│   tasks_total: 10               │         │ analyze_done: 200       │
-│   tasks_done: 10                │  ────►  │ analyze_errors: 5       │
-│   tasks_errors: 0               │         └─────────────────────────┘
-│                                 │
-│ Item-Level (progress display):  │
-│   items_expected: 500           │
-│   items_actual: 450             │
-│   items_errors: 50              │
-└─────────────────────────────────┘
-Crawler → Dispatcher                         Analytics → Dispatcher
-```
-
-| Field            | Type   | Description                                |
-| ---------------- | ------ | ------------------------------------------ |
-| `status`         | String | INITIALIZING, PROCESSING, DONE, FAILED     |
-| `tasks_total`    | Int    | Total crawl tasks (keywords × platforms)   |
-| `tasks_done`     | Int    | Crawl tasks completed                      |
-| `tasks_errors`   | Int    | Crawl tasks failed                         |
-| `items_expected` | Int    | Expected items (tasks × limit_per_keyword) |
-| `items_actual`   | Int    | Actual items crawled successfully          |
-| `items_errors`   | Int    | Items failed to crawl                      |
-| `analyze_total`  | Int    | Total analyze tasks (auto-set on crawl)    |
-| `analyze_done`   | Int    | Analyze tasks completed                    |
-| `analyze_errors` | Int    | Analyze tasks failed                       |
-
-**Completion Logic:**
-
-- Crawl complete: `tasks_done + tasks_errors >= tasks_total` (task-level)
-- Analyze complete: `analyze_done + analyze_errors >= analyze_total`
-- Project complete: Both phases complete
-
-**Progress Display:**
-
-- Uses item-level for accurate progress: `(items_actual + items_errors) / items_expected`
-- Falls back to task-level if items not tracked
-
-#### Progress Webhook (Hybrid Format)
-
-The service calls Project Service webhook to notify progress:
-
-```http
-POST /internal/progress/callback
-Header: X-Internal-Key: {internal_key}
-```
-
-```json
-{
-  "project_id": "proj_xyz",
-  "user_id": "user_123",
-  "status": "PROCESSING",
-  "tasks": {
-    "total": 10,
-    "done": 8,
-    "errors": 0,
-    "percent": 80.0
-  },
-  "items": {
-    "expected": 500,
-    "actual": 400,
-    "errors": 20,
-    "percent": 84.0
-  },
-  "crawl": {
-    "total": 10,
-    "done": 8,
-    "errors": 0,
-    "progress_percent": 84.0
-  },
-  "analyze": {
-    "total": 400,
-    "done": 200,
-    "errors": 5,
-    "progress_percent": 51.25
-  },
-  "overall_progress_percent": 67.625
-}
-```
-
-#### Analyze Result Handler
-
-The service consumes analyze results from Analytics Service:
-
-```json
-{
-  "project_id": "proj_xyz",
-  "job_id": "proj_xyz-analyze-0",
-  "task_type": "analyze_result",
-  "batch_size": 50,
-  "success_count": 48,
-  "error_count": 2
-}
-```
-
-### RabbitMQ Connection (Legacy Inbound)
-
-External services (e.g., API Gateway, Scheduler) can still publish `CrawlRequest` messages to the **Inbound** exchange.
-
-- **Exchange**: `collector.inbound` (Type: `topic`)
-- **Routing Key**: `crawler.#` (e.g., `crawler.request`)
-- **Queue**: `collector.inbound.queue`
-
-> [!NOTE]
-> The `tiktok_exchange` and `youtube_exchange` exchanges are **internal** and managed by the dispatcher. Do not publish to them directly.
-
-#### Payload Example (`CrawlRequest`)
-
-```json
-{
-  "job_id": "job_12345",
-  "task_type": "research_keyword",
-  "payload": {
-    "keyword": "golang tutorial",
-    "limit": 10
-  },
-  "time_range": 7,
-  "attempt": 1,
-  "max_attempts": 3,
-  "emitted_at": "2023-10-27T10:00:00Z"
-}
-```
+- nắm tổng quan service trong 5-10 phút
+- hiểu boundary với `project-srv`, `scapper-srv`, analysis
+- thấy ngay các rule quan trọng và state machine
+- biết service hiện đang ở đâu trong roadmap

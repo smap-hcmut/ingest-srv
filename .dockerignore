@@ -1,0 +1,68 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+!README.md
+docs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+*.exe
+*.dll
+*.so
+*.dylib
+api
+*.test
+*.out
+
+# Vendor (sẽ được download lại trong Docker)
+vendor/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Environment files (security)
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+*.crt
+
+# Test coverage
+coverage.txt
+coverage.html
+*.cover
+
+# Logs
+*.log
+logs/
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Misc
+*.bak
+*.old
+

@@ -1,48 +1,43 @@
 package consumer
 
 import (
-	"errors"
+	"database/sql"
 
-	"smap-collector/config"
-	"smap-collector/internal/dispatcher"
-	"smap-collector/internal/state"
-	"smap-collector/pkg/discord"
-	pkgLog "smap-collector/pkg/log"
-	"smap-collector/pkg/rabbitmq"
-	pkgRedis "smap-collector/pkg/redis"
+	"ingest-srv/pkg/log"
+	"ingest-srv/pkg/kafka"
+	"ingest-srv/pkg/minio"
+	"ingest-srv/pkg/rabbitmq"
 )
 
+// Server is the consumer server.
 type Server struct {
-	l    pkgLog.Logger
-	conn *rabbitmq.Connection
-	cfg  Config
-	disc *discord.DiscordWebhook
+	l         log.Logger
+	conn      rabbitmq.IRabbitMQ
+	db        *sql.DB
+	minio     minio.MinIO
+	uapBucket string
+	kafka     kafka.IProducer
+	uapTopic  string
 }
 
-// Config contains all dependencies for the consumer server.
-type Config struct {
-	Logger            pkgLog.Logger
-	AMQPConn          *rabbitmq.Connection
-	Discord           *discord.DiscordWebhook
-	DispatcherOptions dispatcher.Options
-	ProjectConfig     config.ProjectConfig
-	RedisClient       pkgRedis.Client
-	StateOptions      state.Options
-	CrawlLimitsConfig config.CrawlLimitsConfig
+type ServerConfig struct {
+	Conn      rabbitmq.IRabbitMQ
+	DB        *sql.DB
+	MinIO     minio.MinIO
+	UAPBucket string
+	Kafka     kafka.IProducer
+	UAPTopic  string
 }
 
-func New(cfg Config) (*Server, error) {
-	if cfg.Logger == nil {
-		return nil, errors.New("logger is required")
+// NewServer creates a new consumer server.
+func NewServer(l log.Logger, config ServerConfig) Server {
+	return Server{
+		l:         l,
+		conn:      config.Conn,
+		db:        config.DB,
+		minio:     config.MinIO,
+		uapBucket: config.UAPBucket,
+		kafka:     config.Kafka,
+		uapTopic:  config.UAPTopic,
 	}
-	if cfg.AMQPConn == nil {
-		return nil, errors.New("amqp connection is required")
-	}
-
-	return &Server{
-		l:    cfg.Logger,
-		conn: cfg.AMQPConn,
-		cfg:  cfg,
-		disc: cfg.Discord,
-	}, nil
 }

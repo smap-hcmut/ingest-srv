@@ -1,68 +1,72 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: smap-collector-consumer
+  name: smap-ingest-consumer
   namespace: smap
   labels:
-    app: smap-collector-consumer
+    app: smap-ingest-consumer
+    service: ingest-srv
+    version: v1
 spec:
   replicas: 1
   revisionHistoryLimit: 10
   selector:
     matchLabels:
-      app: smap-collector-consumer
+      app: smap-ingest-consumer
   strategy:
     rollingUpdate:
-      maxSurge: 0
-      maxUnavailable: 1
+      maxSurge: 1
+      maxUnavailable: 0
     type: RollingUpdate
   template:
     metadata:
       labels:
-        app: smap-collector-consumer
+        app: smap-ingest-consumer
+        service: ingest-srv
+        version: v1
     spec:
       imagePullSecrets:
         - name: harbor-secret
       containers:
-        - name: smap-collector-consumer
-          image: registry.tantai.dev/smap/smap-collector:251209-043818
+        - name: smap-ingest-consumer
+          image: registry.tantai.dev/smap/ingest-srv-consumer:latest
           imagePullPolicy: Always
           resources:
             requests:
               memory: "128Mi"
-              cpu: "50m"
+              cpu: "100m"
             limits:
-              memory: "256Mi"
-              cpu: "500m"
+              memory: "512Mi"
+              cpu: "1000m"
           envFrom:
             - configMapRef:
-                name: smap-collector-config
+                name: smap-ingest-config
             - secretRef:
-                name: smap-collector-secrets
+                name: smap-ingest-secrets
           env:
             - name: CONTAINER_NAME
-              value: "smap-collector-consumer"
+              value: "smap-ingest-consumer"
             - name: KUBERNETES_NAMESPACE
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
           livenessProbe:
             exec:
               command:
                 - /bin/sh
                 - -c
-                - pgrep -f consumer || exit 1
+                - ps aux | grep -v grep | grep -q consumer
             initialDelaySeconds: 30
             periodSeconds: 10
             timeoutSeconds: 5
+            successThreshold: 1
             failureThreshold: 3
-          readinessProbe:
-            exec:
-              command:
-                - /bin/sh
-                - -c
-                - pgrep -f consumer || exit 1
-            initialDelaySeconds: 10
-            periodSeconds: 5
-            timeoutSeconds: 3
-            failureThreshold: 3
+      terminationGracePeriodSeconds: 30

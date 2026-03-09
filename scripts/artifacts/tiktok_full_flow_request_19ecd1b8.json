@@ -1,0 +1,11 @@
+{
+  "task_id": "19ecd1b8-f94c-4feb-81a2-ad086bb40713",
+  "action": "full_flow",
+  "params": {
+    "keyword": "vinfast vf8 review",
+    "limit": 2,
+    "comment_count": 20,
+    "threshold": 0.0
+  },
+  "created_at": "2026-03-07T21:02:38.161106+00:00"
+}
