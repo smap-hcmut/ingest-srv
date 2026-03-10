@@ -20,9 +20,9 @@ type createReq struct {
 	Description          string          `json:"description" example:"Crawl TikTok posts about VinFast"`
 	SourceType           string          `json:"source_type" binding:"required" example:"TIKTOK" enums:"TIKTOK,FACEBOOK,YOUTUBE,FILE_UPLOAD,WEBHOOK"`
 	SourceCategory       string          `json:"source_category" example:"CRAWL" enums:"CRAWL,PASSIVE"`
-	Config               json.RawMessage `json:"config,omitempty"`
-	AccountRef           json.RawMessage `json:"account_ref,omitempty"`
-	MappingRules         json.RawMessage `json:"mapping_rules,omitempty"`
+	Config               json.RawMessage `json:"config,omitempty" swaggertype:"object"`
+	AccountRef           json.RawMessage `json:"account_ref,omitempty" swaggertype:"object"`
+	MappingRules         json.RawMessage `json:"mapping_rules,omitempty" swaggertype:"object"`
 	CrawlMode            string          `json:"crawl_mode" example:"NORMAL" enums:"SLEEP,NORMAL,CRISIS"`
 	CrawlIntervalMinutes int             `json:"crawl_interval_minutes" example:"11"`
 }
@@ -137,9 +137,9 @@ type updateReq struct {
 	ID           string          `json:"-"`
 	Name         string          `json:"name" example:"TikTok VinFast Crawler v2"`
 	Description  string          `json:"description" example:"Updated description"`
-	Config       json.RawMessage `json:"config,omitempty"`
-	AccountRef   json.RawMessage `json:"account_ref,omitempty"`
-	MappingRules json.RawMessage `json:"mapping_rules,omitempty"`
+	Config       json.RawMessage `json:"config,omitempty" swaggertype:"object"`
+	AccountRef   json.RawMessage `json:"account_ref,omitempty" swaggertype:"object"`
+	MappingRules json.RawMessage `json:"mapping_rules,omitempty" swaggertype:"object"`
 }
 
 func (r updateReq) toInput() datasource.UpdateInput {
@@ -180,9 +180,9 @@ type dataSourceResp struct {
 	SourceType           string          `json:"source_type" example:"TIKTOK"`
 	SourceCategory       string          `json:"source_category" example:"CRAWL"`
 	Status               string          `json:"status" example:"PENDING"`
-	Config               json.RawMessage `json:"config,omitempty"`
-	AccountRef           json.RawMessage `json:"account_ref,omitempty"`
-	MappingRules         json.RawMessage `json:"mapping_rules,omitempty"`
+	Config               json.RawMessage `json:"config,omitempty" swaggertype:"object"`
+	AccountRef           json.RawMessage `json:"account_ref,omitempty" swaggertype:"object"`
+	MappingRules         json.RawMessage `json:"mapping_rules,omitempty" swaggertype:"object"`
 	OnboardingStatus     string          `json:"onboarding_status" example:"NOT_REQUIRED"`
 	DryrunStatus         string          `json:"dryrun_status" example:"NOT_REQUIRED"`
 	DryrunLastResultID   string          `json:"dryrun_last_result_id,omitempty"`
@@ -442,7 +442,7 @@ type createTargetGroupReq struct {
 	DataSourceID         string          `json:"-"`
 	Values               []string        `json:"values" binding:"required" example:"vinfast"`
 	Label                string          `json:"label" example:"VinFast keyword"`
-	PlatformMeta         json.RawMessage `json:"platform_meta,omitempty"`
+	PlatformMeta         json.RawMessage `json:"platform_meta,omitempty" swaggertype:"object"`
 	IsActive             bool            `json:"is_active" example:"true"`
 	Priority             int             `json:"priority" example:"0"`
 	CrawlIntervalMinutes int             `json:"crawl_interval_minutes" example:"11"`
@@ -530,7 +530,7 @@ type updateTargetReq struct {
 	ID                   string          `json:"-"`
 	Values               []string        `json:"values,omitempty"`
 	Label                string          `json:"label" example:"Updated label"`
-	PlatformMeta         json.RawMessage `json:"platform_meta,omitempty"`
+	PlatformMeta         json.RawMessage `json:"platform_meta,omitempty" swaggertype:"object"`
 	IsActive             *bool           `json:"is_active,omitempty"`
 	Priority             *int            `json:"priority,omitempty"`
 	CrawlIntervalMinutes *int            `json:"crawl_interval_minutes,omitempty"`
@@ -595,7 +595,7 @@ type crawlTargetResp struct {
 	TargetType           string          `json:"target_type" example:"KEYWORD"`
 	Values               []string        `json:"values"`
 	Label                string          `json:"label,omitempty"`
-	PlatformMeta         json.RawMessage `json:"platform_meta,omitempty"`
+	PlatformMeta         json.RawMessage `json:"platform_meta,omitempty" swaggertype:"object"`
 	IsActive             bool            `json:"is_active" example:"true"`
 	Priority             int             `json:"priority" example:"0"`
 	CrawlIntervalMinutes int             `json:"crawl_interval_minutes" example:"11"`

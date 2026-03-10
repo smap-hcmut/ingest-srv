@@ -5,8 +5,10 @@ LOCAL_CONFIG_FILE=./config/ingest-config.local.yaml
 
 ifeq ($(OS),Windows_NT)
 RUN_WITH_LOCAL_CONFIG=set "INGEST_CONFIG_FILE=$(LOCAL_CONFIG_FILE)" &&
+FIX_SWAGGER=powershell -Command "(Get-Content docs/docs.go) | Where-Object { $$_ -notmatch 'LeftDelim:|RightDelim:' } | Set-Content docs/docs.go"
 else
 RUN_WITH_LOCAL_CONFIG=INGEST_CONFIG_FILE=$(LOCAL_CONFIG_FILE)
+FIX_SWAGGER=sed -i '' '/LeftDelim:/d' docs/docs.go && sed -i '' '/RightDelim:/d' docs/docs.go
 endif
 
 models:
@@ -21,14 +23,12 @@ swagger:
 	@echo "Generating swagger"
 	@swag init -g cmd/api/main.go
 	@echo "Fixing swagger docs (removing deprecated LeftDelim/RightDelim)..."
-	@sed -i '' '/LeftDelim:/d' docs/docs.go
-	@sed -i '' '/RightDelim:/d' docs/docs.go
+	@$(FIX_SWAGGER)
 
 run-api:
 	@echo "Generating swagger"
 	@swag init -g cmd/api/main.go
-	@sed -i '' '/LeftDelim:/d' docs/docs.go
-	@sed -i '' '/RightDelim:/d' docs/docs.go
+	@$(FIX_SWAGGER)
 	@echo "Running the application"
 	@go run cmd/api/main.go
 

@@ -86,8 +86,8 @@ type dryrunResultResp struct {
 	Status       string          `json:"status"`
 	SampleCount  int             `json:"sample_count"`
 	TotalFound   *int            `json:"total_found,omitempty"`
-	SampleData   json.RawMessage `json:"sample_data,omitempty"`
-	Warnings     json.RawMessage `json:"warnings,omitempty"`
+	SampleData   json.RawMessage `json:"sample_data,omitempty" swaggertype:"array,object"`
+	Warnings     json.RawMessage `json:"warnings,omitempty" swaggertype:"array,object"`
 	ErrorMessage string          `json:"error_message,omitempty"`
 	RequestedBy  string          `json:"requested_by,omitempty"`
 	StartedAt    *string         `json:"started_at,omitempty"`
