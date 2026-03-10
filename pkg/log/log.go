@@ -70,10 +70,17 @@ func (l *zapLogger) ctx(ctx context.Context) *zap.SugaredLogger {
 	if ctx == nil {
 		panic("nil context passed to Logger")
 	}
-	if logger, _ := ctx.Value(loggerKey{}).(*zap.SugaredLogger); logger != nil {
-		return logger
+
+	logger := l.sugarLogger
+	if ctxLogger, _ := ctx.Value(loggerKey{}).(*zap.SugaredLogger); ctxLogger != nil {
+		logger = ctxLogger
 	}
-	return l.sugarLogger
+
+	if traceID, ok := ctx.Value(TraceIDKey).(string); ok && traceID != "" {
+		return logger.With("trace_id", traceID)
+	}
+
+	return logger
 }
 
 func (l *zapLogger) Debug(ctx context.Context, args ...any)   { l.ctx(ctx).Debug(args...) }

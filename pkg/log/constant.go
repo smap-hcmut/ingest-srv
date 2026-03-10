@@ -9,6 +9,9 @@ const (
 	EncodingConsole = "console"
 	// EncodingJSON is JSON encoding.
 	EncodingJSON = "json"
+
+	// TraceIDKey is the key for trace id in context
+	TraceIDKey = "trace_id"
 )
 
 // Log level names (for config mapping).

@@ -15,6 +15,8 @@ import (
 	"ingest-srv/pkg/minio"
 	"ingest-srv/pkg/rabbitmq"
 	"ingest-srv/pkg/redis"
+	"go.uber.org/zap"
+	"time"
 )
 
 // HTTPServer represents ingest HTTP API server.
@@ -65,7 +67,7 @@ func New(logger log.Logger, cfg Config) (*HTTPServer, error) {
 	gin.SetMode(cfg.Mode)
 
 	srv := &HTTPServer{
-		gin:         gin.Default(),
+		gin:         gin.New(),
 		l:           logger,
 		host:        cfg.Host,
 		port:        cfg.Port,
@@ -89,7 +91,38 @@ func New(logger log.Logger, cfg Config) (*HTTPServer, error) {
 		return nil, err
 	}
 
+	// Add middlewares
+	srv.gin.Use(srv.zapLoggerMiddleware())
+	srv.gin.Use(gin.Recovery())
+
 	return srv, nil
+}
+
+func (srv *HTTPServer) zapLoggerMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		start := time.Now()
+		path := c.Request.URL.Path
+		query := c.Request.URL.RawQuery
+
+		c.Next()
+
+		latency := time.Since(start)
+		status := c.Writer.Status()
+
+		if srv.environment == "production" {
+			srv.l.Info(c.Request.Context(), "HTTP Request",
+				zap.Int("status", status),
+				zap.String("method", c.Request.Method),
+				zap.String("path", path),
+				zap.String("query", query),
+				zap.String("ip", c.ClientIP()),
+				zap.Duration("latency", latency),
+				zap.String("user-agent", c.Request.UserAgent()),
+			)
+		} else {
+			srv.l.Infof(c.Request.Context(), "%s %s %d %s %s", c.Request.Method, path, status, latency, c.ClientIP())
+		}
+	}
 }
 
 func (srv HTTPServer) validate() error {
