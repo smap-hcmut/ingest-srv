@@ -9,11 +9,10 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-// timeEncoder dùng format dễ đọc: 2006-01-02 15:04:05.000
-const timeFormat = "2006-01-02 15:04:05.000"
+var vietnamZone = time.FixedZone("ICT", 7*3600)
 
-func timeEncoder(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
-	enc.AppendString(t.Format(timeFormat))
+func rfc2822TimeEncoder(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
+	enc.AppendString(t.In(vietnamZone).Format(time.RFC1123Z))
 }
 
 var logLevelMap = map[string]zapcore.Level{
@@ -42,12 +41,22 @@ func (l *zapLogger) init() {
 	if l.cfg.Mode == ModeProduction {
 		encoderCfg = zap.NewProductionEncoderConfig()
 	}
-	encoderCfg.LevelKey = "LEVEL"
-	encoderCfg.CallerKey = "CALLER"
-	encoderCfg.TimeKey = "TIME"
-	encoderCfg.NameKey = "NAME"
-	encoderCfg.MessageKey = "MESSAGE"
-	encoderCfg.EncodeTime = timeEncoder
+	encoderCfg.TimeKey = "timestamp"
+	encoderCfg.EncodeTime = rfc2822TimeEncoder
+
+	// In JSON mode, we leave other keys empty so orderedCore can add them in specific order
+	if l.cfg.Encoding == EncodingJSON {
+		encoderCfg.LevelKey = ""
+		encoderCfg.CallerKey = ""
+		encoderCfg.NameKey = ""
+		encoderCfg.MessageKey = ""
+	} else {
+		encoderCfg.LevelKey = "level"
+		encoderCfg.CallerKey = "caller"
+		encoderCfg.NameKey = "name"
+		encoderCfg.MessageKey = "message"
+		encoderCfg.EncodeLevel = zapcore.LowercaseLevelEncoder
+	}
 
 	if l.cfg.ColorEnabled && l.cfg.Encoding == EncodingConsole {
 		encoderCfg.EncodeLevel = zapcore.CapitalColorLevelEncoder
@@ -60,8 +69,94 @@ func (l *zapLogger) init() {
 		encoder = zapcore.NewJSONEncoder(encoderCfg)
 	}
 	core := zapcore.NewCore(encoder, logWriter, zap.NewAtomicLevelAt(logLevel))
-	logger := zap.New(core, zap.AddCaller(), zap.AddCallerSkip(1))
+
+	serviceName := os.Getenv("CONTAINER_NAME")
+	if serviceName == "" {
+		serviceName = "ingest-srv"
+	}
+
+	// Use our orderedCore to enforce field order in JSON mode
+	if l.cfg.Encoding == EncodingJSON {
+		core = &orderedCore{
+			Core:        core,
+			serviceName: serviceName,
+		}
+	}
+
+	var logger *zap.Logger
+	if l.cfg.Encoding == EncodingJSON {
+		logger = zap.New(core)
+	} else {
+		logger = zap.New(core, zap.AddCaller(), zap.AddCallerSkip(1)).With(
+			zap.String("service", serviceName),
+			zap.String("trace_id", ""),
+		)
+	}
+
 	l.sugarLogger = logger.Sugar()
+}
+
+type orderedCore struct {
+	zapcore.Core
+	serviceName string
+	fields      []zapcore.Field
+}
+
+func (c *orderedCore) With(fields []zapcore.Field) zapcore.Core {
+	// Clone and append fields
+	newFields := make([]zapcore.Field, len(c.fields)+len(fields))
+	copy(newFields, c.fields)
+	copy(newFields[len(c.fields):], fields)
+
+	return &orderedCore{
+		Core:        c.Core,
+		serviceName: c.serviceName,
+		fields:      newFields,
+	}
+}
+
+func (c *orderedCore) Check(ent zapcore.Entry, ce *zapcore.CheckedEntry) *zapcore.CheckedEntry {
+	if c.Enabled(ent.Level) {
+		return ce.AddCore(ent, c)
+	}
+	return ce
+}
+
+func (c *orderedCore) Write(ent zapcore.Entry, fields []zapcore.Field) error {
+	// Reorder fields: trace_id, level, caller, message, service
+	// timestamp is already handled by the encoder if TimeKey is set
+
+	allFields := make([]zapcore.Field, 0, len(c.fields)+len(fields))
+	allFields = append(allFields, c.fields...)
+	allFields = append(allFields, fields...)
+
+	var traceID string
+	// Find trace_id in all fields (last one wins)
+	for _, f := range allFields {
+		if f.Key == "trace_id" {
+			traceID = f.String
+		}
+	}
+
+	orderedFields := make([]zapcore.Field, 0, len(allFields)+5)
+	orderedFields = append(orderedFields, zap.String("trace_id", traceID))
+	orderedFields = append(orderedFields, zap.String("level", ent.Level.String()))
+	if ent.Caller.Defined {
+		orderedFields = append(orderedFields, zap.String("caller", ent.Caller.TrimmedPath()))
+	} else {
+		orderedFields = append(orderedFields, zap.String("caller", ""))
+	}
+	orderedFields = append(orderedFields, zap.String("message", ent.Message))
+	orderedFields = append(orderedFields, zap.String("service", c.serviceName))
+
+	// Add other fields, skipping trace_id as we already added it
+	for _, f := range allFields {
+		if f.Key != "trace_id" {
+			orderedFields = append(orderedFields, f)
+		}
+	}
+
+	return c.Core.Write(ent, orderedFields)
 }
 
 type loggerKey struct{}
