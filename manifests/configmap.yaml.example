@@ -1,0 +1,55 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ingest-config
+  namespace: smap
+  labels:
+    app: ingest-api
+data:
+  ENV: "production"
+
+  # Logger Configuration
+  LOGGER_LEVEL: "info"
+  LOGGER_MODE: "production"
+  LOGGER_ENCODING: "json"
+  LOGGER_COLOR_ENABLED: "false"
+
+  # PostgreSQL Configuration
+  POSTGRES_HOST: "CHANGE_ME"
+  POSTGRES_PORT: "5432"
+  POSTGRES_DBNAME: "smap"
+  POSTGRES_SSLMODE: "disable"
+  POSTGRES_SCHEMA: "schema_ingest"
+
+  # Redis Configuration (in-cluster service)
+  REDIS_HOST: "redis-client.infrastructure.svc.cluster.local"
+  REDIS_PORT: "6379"
+  REDIS_DB: "1"
+
+  # MinIO Configuration
+  MINIO_ENDPOINT: "CHANGE_ME:9000"
+  MINIO_USE_SSL: "false"
+  MINIO_REGION: "us-east-1"
+  MINIO_BUCKET: "ingest-data"
+
+  # RabbitMQ (in-cluster service)
+  RABBITMQ_URL: "amqp://CHANGE_ME:CHANGE_ME@rabbitmq.rabbitmq.svc.cluster.local:5672/"
+
+  # Kafka Configuration (in-cluster service)
+  KAFKA_BROKERS: "kafka-cluster-kafka-bootstrap.kafka.svc.cluster.local:9092"
+  KAFKA_TOPIC: "ingest.events"
+  KAFKA_UAP_TOPIC: "smap.collector.output"
+  KAFKA_GROUP_ID: "ingest-consumer"
+
+  # Cookie Configuration
+  COOKIE_DOMAIN: ".example.com"
+  COOKIE_SECURE: "true"
+  COOKIE_SAMESITE: "None"
+  COOKIE_MAX_AGE: "7200"
+  COOKIE_MAX_AGE_REMEMBER: "2592000"
+  COOKIE_NAME: "smap_auth_token"
+
+  # Scheduler Configuration
+  SCHEDULER_HEARTBEAT_CRON: "*/5 * * * * *"
+  SCHEDULER_TIMEZONE: "Asia/Ho_Chi_Minh"
+  SCHEDULER_HEARTBEAT_LIMIT: "20"
