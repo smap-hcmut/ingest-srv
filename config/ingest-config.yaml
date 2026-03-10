@@ -61,7 +61,7 @@ rabbitmq:
   retry_without_timeout: true
 
 jwt:
-  secret_key: "smap-secret-key-at-least-32-chars-long"
+  secret_key: "smap-jwt-secret-2026-5cbPq8ZNywUafL3mX2r7HDqE1vS9kC4b0MRgx6VtYzQJKpLn"
 
 cookie:
   domain: "localhost"
@@ -72,10 +72,10 @@ cookie:
   name: "smap_auth_token"
 
 encrypter:
-  key: "test-encryption-key-32-chars-123"
+  key: "smap-encrypt-key-32-chars-2026!!"
 
 internal:
-  internal_key: "ingest-service-key"
+  internal_key: "smap-internal-key-2026-Yz7Fp4QvBmC9R2Ld"
 
 discord:
   webhook_url: ""

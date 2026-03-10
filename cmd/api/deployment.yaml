@@ -1,18 +1,18 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: smap-ingest-api
+  name: ingest-api
   namespace: smap
   labels:
-    app: smap-ingest-api
-    service: ingest-srv
-    version: v1
+    app: ingest-api
+    app.kubernetes.io/part-of: smap
+    app.kubernetes.io/component: api
 spec:
   replicas: 1
-  revisionHistoryLimit: 10
+  revisionHistoryLimit: 5
   selector:
     matchLabels:
-      app: smap-ingest-api
+      app: ingest-api
   strategy:
     rollingUpdate:
       maxSurge: 1
@@ -21,16 +21,15 @@ spec:
   template:
     metadata:
       labels:
-        app: smap-ingest-api
-        service: ingest-srv
-        version: v1
+        app: ingest-api
+        app.kubernetes.io/part-of: smap
     spec:
       imagePullSecrets:
-        - name: harbor-secret
+        - name: harbor-registry
       containers:
-        - name: smap-ingest-api
-          image: registry.tantai.dev/smap/ingest-srv:latest
-          imagePullPolicy: Always
+        - name: ingest-api
+          image: registry.tantai.dev/smap/ingest-api:260310-115147
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
               name: http
@@ -44,12 +43,12 @@ spec:
               cpu: "1000m"
           envFrom:
             - configMapRef:
-                name: smap-ingest-config
+                name: ingest-config
             - secretRef:
-                name: smap-ingest-secrets
+                name: ingest-secrets
           env:
             - name: CONTAINER_NAME
-              value: "smap-ingest-api"
+              value: "ingest-api"
             - name: KUBERNETES_NAMESPACE
               valueFrom:
                 fieldRef:
@@ -74,7 +73,7 @@ spec:
             failureThreshold: 3
           readinessProbe:
             httpGet:
-              path: /ready
+              path: /health
               port: 8080
               scheme: HTTP
             initialDelaySeconds: 10
@@ -98,14 +97,14 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: smap-ingest-api
+  name: ingest-api
   namespace: smap
   labels:
-    app: smap-ingest-api
-    service: ingest-srv
+    app: ingest-api
+    app.kubernetes.io/part-of: smap
 spec:
   selector:
-    app: smap-ingest-api
+    app: ingest-api
   ports:
     - port: 80
       targetPort: 8080

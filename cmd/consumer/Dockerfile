@@ -10,11 +10,11 @@ WORKDIR /app
 ARG TARGETOS
 ARG TARGETARCH
 
-RUN apk add --no-cache git tzdata
+RUN apk add --no-cache ca-certificates tzdata
 
 COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod \
-    go mod download
+    go mod download && go mod verify
 
 COPY . .
 
@@ -24,6 +24,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     GOOS=${TARGETOS} \
     GOARCH=${TARGETARCH} \
     go build \
+    -trimpath \
     -ldflags="-s -w" \
     -o consumer ./cmd/consumer
 
@@ -32,9 +33,14 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 # =============================================================================
 FROM gcr.io/distroless/static-debian12:nonroot AS runtime
 
+LABEL org.opencontainers.image.source="https://github.com/smap-hcmut/dispatcher-srv" \
+      org.opencontainers.image.description="SMAP Ingest Consumer" \
+      org.opencontainers.image.licenses="MIT"
+
 WORKDIR /app
 
 COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 ENV TZ=Asia/Ho_Chi_Minh
 
 COPY --from=builder --chown=nonroot:nonroot /app/consumer .

@@ -4,7 +4,7 @@ metadata:
   name: ingest-consumer
   namespace: smap
   labels:
-    app: ingest-consumer
+    app.kubernetes.io/name: ingest-consumer
     app.kubernetes.io/part-of: smap
     app.kubernetes.io/component: consumer
 spec:
@@ -22,21 +22,22 @@ spec:
     metadata:
       labels:
         app: ingest-consumer
+        app.kubernetes.io/name: ingest-consumer
         app.kubernetes.io/part-of: smap
     spec:
       imagePullSecrets:
-        - name: harbor-registry
+        - name: zot-registry
       containers:
         - name: ingest-consumer
-          image: registry.tantai.dev/smap/ingest-consumer:260310-115209
-          imagePullPolicy: IfNotPresent
+          image: 172.16.21.10:5000/smap/ingest-consumer:latest
+          imagePullPolicy: Always
           resources:
             requests:
               memory: "128Mi"
               cpu: "100m"
             limits:
               memory: "512Mi"
-              cpu: "1000m"
+              cpu: "500m"
           envFrom:
             - configMapRef:
                 name: ingest-config
@@ -57,15 +58,5 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: status.podIP
-          livenessProbe:
-            exec:
-              command:
-                - /bin/sh
-                - -c
-                - ps aux | grep -v grep | grep -q consumer
-            initialDelaySeconds: 30
-            periodSeconds: 10
-            timeoutSeconds: 5
-            successThreshold: 1
-            failureThreshold: 3
-      terminationGracePeriodSeconds: 30
+      terminationGracePeriodSeconds: 60
+      restartPolicy: Always

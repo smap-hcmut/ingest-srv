@@ -1,18 +1,18 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: smap-ingest-scheduler
+  name: ingest-scheduler
   namespace: smap
   labels:
-    app: smap-ingest-scheduler
-    service: ingest-srv
-    version: v1
+    app: ingest-scheduler
+    app.kubernetes.io/part-of: smap
+    app.kubernetes.io/component: scheduler
 spec:
   replicas: 1
-  revisionHistoryLimit: 10
+  revisionHistoryLimit: 5
   selector:
     matchLabels:
-      app: smap-ingest-scheduler
+      app: ingest-scheduler
   strategy:
     rollingUpdate:
       maxSurge: 1
@@ -21,16 +21,15 @@ spec:
   template:
     metadata:
       labels:
-        app: smap-ingest-scheduler
-        service: ingest-srv
-        version: v1
+        app: ingest-scheduler
+        app.kubernetes.io/part-of: smap
     spec:
       imagePullSecrets:
-        - name: harbor-secret
+        - name: harbor-registry
       containers:
-        - name: smap-ingest-scheduler
-          image: registry.tantai.dev/smap/ingest-srv-scheduler:latest
-          imagePullPolicy: Always
+        - name: ingest-scheduler
+          image: registry.tantai.dev/smap/ingest-scheduler:260310-115220
+          imagePullPolicy: IfNotPresent
           resources:
             requests:
               memory: "128Mi"
@@ -40,12 +39,12 @@ spec:
               cpu: "1000m"
           envFrom:
             - configMapRef:
-                name: smap-ingest-config
+                name: ingest-config
             - secretRef:
-                name: smap-ingest-secrets
+                name: ingest-secrets
           env:
             - name: CONTAINER_NAME
-              value: "smap-ingest-scheduler"
+              value: "ingest-scheduler"
             - name: KUBERNETES_NAMESPACE
               valueFrom:
                 fieldRef:
