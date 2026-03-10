@@ -109,6 +109,10 @@ func (srv *HTTPServer) zapLoggerMiddleware() gin.HandlerFunc {
 		latency := time.Since(start)
 		status := c.Writer.Status()
 
+		if path == "/health" || path == "/ready" || path == "/live" {
+			return
+		}
+
 		if srv.environment == "production" {
 			srv.l.Info(c.Request.Context(), "HTTP Request",
 				zap.Int("status", status),

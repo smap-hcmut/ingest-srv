@@ -28,7 +28,7 @@ spec:
         - name: harbor-registry
       containers:
         - name: ingest-api
-          image: registry.tantai.dev/smap/ingest-api:260310-115147
+          image: registry.tantai.dev/smap/ingest-api:260310-210321
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
@@ -67,7 +67,7 @@ spec:
               port: 8080
               scheme: HTTP
             initialDelaySeconds: 30
-            periodSeconds: 10800
+            periodSeconds: 10
             timeoutSeconds: 10
             successThreshold: 1
             failureThreshold: 1
@@ -77,7 +77,7 @@ spec:
               port: 8080
               scheme: HTTP
             initialDelaySeconds: 10
-            periodSeconds: 10800
+            periodSeconds: 10
             timeoutSeconds: 10
             successThreshold: 1
             failureThreshold: 1
