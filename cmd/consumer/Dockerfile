@@ -1,46 +1,50 @@
 # syntax=docker/dockerfile:1
 
-##
-## STEP 1 - BUILD
-##
-FROM golang:1.25-alpine AS builder
+# =============================================================================
+# STAGE 1: BUILDER
+# =============================================================================
+FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS builder
 
 WORKDIR /app
 
-# Install build deps if needed (gcc/musl-dev) — not required now, keep base lean
+ARG TARGETOS
+ARG TARGETARCH
 
-# Pre-cache modules
+RUN apk add --no-cache ca-certificates tzdata
+
 COPY go.mod go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download && go mod verify
 
-# Copy source
 COPY . .
 
-# Build consumer binary
-RUN CGO_ENABLED=0 GOOS=linux go build -mod=mod -o consumer ./cmd/consumer
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    --mount=type=cache,target=/go/pkg/mod \
+    CGO_ENABLED=0 \
+    GOOS=${TARGETOS} \
+    GOARCH=${TARGETARCH} \
+    go build \
+    -trimpath \
+    -ldflags="-s -w" \
+    -o consumer ./cmd/consumer
 
-##
-## STEP 2 - RUNTIME
-##
-FROM alpine:latest
+# =============================================================================
+# STAGE 2: RUNTIME
+# =============================================================================
+FROM gcr.io/distroless/static-debian12:nonroot AS runtime
 
-ENV UID=2025 \
-    USER=sefthost \
-    GID=2025 \
-    GROUP=sefthost
-
-# Create non-root user
-RUN addgroup -g "$GID" -S "$GROUP" \
-    && adduser -D -S -h /app -s /bin/sh -G "$GROUP" -u "$UID" "$USER"
-
-# Install certs + timezone data
-RUN apk add --no-cache ca-certificates tzdata && update-ca-certificates
-ENV TZ=Asia/Ho_Chi_Minh
-RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+LABEL org.opencontainers.image.source="https://github.com/smap-hcmut/dispatcher-srv" \
+      org.opencontainers.image.description="SMAP Ingest Consumer" \
+      org.opencontainers.image.licenses="MIT"
 
 WORKDIR /app
-COPY --from=builder /app/consumer .
 
-USER sefthost
+COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+ENV TZ=Asia/Ho_Chi_Minh
+
+COPY --from=builder --chown=nonroot:nonroot /app/consumer .
+
+USER nonroot:nonroot
 
 ENTRYPOINT ["./consumer"]

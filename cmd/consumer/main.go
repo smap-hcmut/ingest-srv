@@ -2,80 +2,87 @@ package main
 
 import (
 	"context"
-	"log"
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
 
-	"smap-collector/config"
-	"smap-collector/internal/consumer"
-	"smap-collector/internal/state"
-	"smap-collector/pkg/discord"
-	pkgLog "smap-collector/pkg/log"
-	"smap-collector/pkg/rabbitmq"
-	pkgRedis "smap-collector/pkg/redis"
+	"ingest-srv/config"
+	configKafka "ingest-srv/config/kafka"
+	configMinio "ingest-srv/config/minio"
+	configPostgre "ingest-srv/config/postgre"
+	configRabbit "ingest-srv/config/rabbitmq"
+	"ingest-srv/internal/consumer"
+	"ingest-srv/pkg/log"
 )
 
 func main() {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("failed to load config: %v", err)
+		fmt.Printf("Failed to load config: %v\n", err)
+		os.Exit(1)
 	}
 
-	l := pkgLog.Init(pkgLog.ZapConfig{
+	logger := log.Init(log.ZapConfig{
 		Level:        cfg.Logger.Level,
 		Mode:         cfg.Logger.Mode,
 		Encoding:     cfg.Logger.Encoding,
 		ColorEnabled: cfg.Logger.ColorEnabled,
 	})
 
-	// Initialize Discord webhook for error reporting
-	discordWebhook, err := discord.NewDiscordWebhook(cfg.Discord.ReportBugID, cfg.Discord.ReportBugToken)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	postgresDB, err := configPostgre.Connect(ctx, cfg.Postgres)
 	if err != nil {
-		l.Warnf(ctx, "failed to initialize Discord webhook: %v", err)
+		logger.Errorf(ctx, "PostgreSQL connect failed: %v", err)
+		postgresDB = nil
+	} else {
+		defer configPostgre.Disconnect(ctx, postgresDB)
 	}
 
-	// Connect to RabbitMQ (fail fast)
-	conn, err := rabbitmq.Dial(cfg.RabbitMQConfig.URL, true)
+	minioClient, err := configMinio.Connect(ctx, &cfg.MinIO)
 	if err != nil {
-		l.Fatalf(ctx, "failed to connect to RabbitMQ: %v", err)
+		logger.Errorf(ctx, "MinIO connect failed: %v", err)
+		minioClient = nil
+	} else {
+		defer configMinio.Disconnect()
 	}
-	defer conn.Close()
 
-	// Initialize Redis client for state management (fail fast)
-	redisOpts := pkgRedis.NewClientOptions().SetOptions(cfg.Redis).SetDB(cfg.Redis.StateDB)
-	redisClient, err := pkgRedis.Connect(redisOpts)
+	rabbitConn, err := configRabbit.Connect(cfg.RabbitMQ)
 	if err != nil {
-		l.Fatalf(ctx, "failed to connect to Redis: %v", err)
+		logger.Errorf(ctx, "RabbitMQ connect failed: %v", err)
+		rabbitConn = nil
+	} else {
+		defer configRabbit.Disconnect()
 	}
-	defer redisClient.Disconnect()
 
-	if err := redisClient.Ping(ctx); err != nil {
-		l.Fatalf(ctx, "Redis ping failed: %v", err)
+	kafkaCfg := cfg.Kafka
+	kafkaCfg.Topic = cfg.Kafka.UAPTopic
+	kafkaProducer, err := configKafka.ConnectProducer(kafkaCfg)
+	if err != nil {
+		logger.Warnf(ctx, "Kafka producer connect failed, UAP publish will be disabled: %v", err)
+		kafkaProducer = nil
+	} else {
+		defer configKafka.DisconnectProducer()
 	}
-	l.Infof(ctx, "Redis state client connected: db=%d", cfg.Redis.StateDB)
 
-	// Create consumer server with initialized dependencies
-	srv, err := consumer.New(consumer.Config{
-		Logger:            l,
-		AMQPConn:          conn,
-		Discord:           discordWebhook,
-		ProjectConfig:     cfg.Project,
-		RedisClient:       redisClient,
-		StateOptions:      state.Options{TTL: state.DefaultTTL},
-		CrawlLimitsConfig: cfg.CrawlLimits,
+	if postgresDB == nil || minioClient == nil || rabbitConn == nil {
+		logger.Errorf(ctx, "Execution completion consumer requires postgres, minio, and rabbitmq")
+		os.Exit(1)
+	}
+
+	consumerSrv := consumer.NewServer(logger, consumer.ServerConfig{
+		Conn:      rabbitConn,
+		DB:        postgresDB,
+		MinIO:     minioClient,
+		UAPBucket: cfg.MinIO.Bucket,
+		Kafka:     kafkaProducer,
+		UAPTopic:  cfg.Kafka.UAPTopic,
 	})
-	if err != nil {
-		l.Fatalf(ctx, "failed to init consumer: %v", err)
-	}
-	defer srv.Close()
 
-	l.Info(ctx, "Starting SMAP Dispatcher Service...")
-
-	if err := srv.Run(ctx); err != nil {
-		l.Fatalf(ctx, "consumer stopped with error: %v", err)
+	if err := consumerSrv.Run(ctx); err != nil {
+		logger.Errorf(ctx, "Execution completion consumer error: %v", err)
+		os.Exit(1)
 	}
 }

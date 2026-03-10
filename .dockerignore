@@ -1,0 +1,81 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+!README.md
+docs/
+document/
+documents/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Vendor (downloaded inside Docker)
+vendor/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Environment files (security)
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+*.crt
+
+# Test coverage
+coverage.txt
+coverage.html
+*.cover
+
+# Logs
+*.log
+logs/
+
+# Docker
+docker-compose*.yml
+.dockerignore
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Scripts & tools (not needed in image)
+scripts/
+manifests/
+migrations/
+
+# Python test scripts
+*.py
+__pycache__/
+
+# Config templates (not needed in build)
+template.sqlboiler.toml
+*.toml
+
+# Misc
+*.bak
+*.old
+

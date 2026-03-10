@@ -1,0 +1,86 @@
+# SMAP Ingest Service – Example configuration
+
+environment:
+  name: development
+
+http_server:
+  host: "0.0.0.0"
+  port: 8080
+  mode: debug
+
+logger:
+  level: debug
+  mode: debug
+  encoding: console
+  color_enabled: true
+
+postgres:
+  host: 172.16.19.10
+  port: 5432
+  user: ingest_master
+  password: ingest_master_pwd
+  dbname: smap
+  sslmode: disable
+  schema: schema_ingest
+
+# PostgreSQL tmp configuration for testing
+# postgres:
+#   host: 172.16.19.10
+#   port: 5432
+#   user: project_master
+#   password: project_master_pwd
+#   dbname: smap
+#   sslmode: disable
+#   schema: schema_project
+
+redis:
+  host: redis.tantai.dev
+  port: 6379
+  password: "21042004"
+  db: 1
+
+minio:
+  endpoint: "172.16.21.10:9000"
+  access_key: "tantai"
+  secret_key: "21042004"
+  use_ssl: false
+  region: "us-east-1"
+  bucket: "ingest-data"
+  async_upload_workers: 4
+  async_upload_queue_size: 100
+
+kafka:
+  brokers:
+    - "kafka.tantai.dev:9094"
+  topic: "ingest.events"
+  uap_topic: "smap.collector.output"
+  group_id: "ingest-consumer"
+
+rabbitmq:
+  url: "amqp://admin:21042004@172.16.21.206:5672/"
+  retry_without_timeout: true
+
+jwt:
+  secret_key: "smap-jwt-secret-2026-5cbPq8ZNywUafL3mX2r7HDqE1vS9kC4b0MRgx6VtYzQJKpLn"
+
+cookie:
+  domain: "localhost"
+  secure: false
+  samesite: "Lax"
+  max_age: 28800
+  max_age_remember: 604800
+  name: "smap_auth_token"
+
+encrypter:
+  key: "smap-encrypt-key-32-chars-2026!!"
+
+internal:
+  internal_key: "smap-internal-key-2026-Yz7Fp4QvBmC9R2Ld"
+
+discord:
+  webhook_url: ""
+
+scheduler:
+  heartbeat_cron: "*/5 * * * * *"
+  timezone: "Asia/Ho_Chi_Minh"
+  heartbeat_limit: 20

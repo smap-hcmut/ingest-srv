@@ -1,98 +1,350 @@
 package config
 
 import (
-	"github.com/caarlos0/env/v9"
+	"fmt"
+	"os"
+	"strings"
+
+	"github.com/spf13/viper"
 )
 
+// Config holds all service configuration.
 type Config struct {
-	// Logger Configuration
-	Logger LoggerConfig
+	Environment EnvironmentConfig
+	HTTPServer  HTTPServerConfig
+	Logger      LoggerConfig
 
-	// Message Queue Configuration
-	RabbitMQConfig RabbitMQConfig
+	Postgres PostgresConfig
+	Redis    RedisConfig
+	MinIO    MinIOConfig
+	Kafka    KafkaConfig
+	RabbitMQ RabbitMQConfig
 
-	// Redis Configuration for State Management
-	Redis RedisConfig
-
-	// External Services
-	Project ProjectConfig
-
-	// Monitoring & Notification Configuration
-	Discord DiscordConfig
-
-	// Crawl Limits Configuration
-	CrawlLimits CrawlLimitsConfig
+	JWT            JWTConfig
+	Cookie         CookieConfig
+	Encrypter      EncrypterConfig
+	InternalConfig InternalConfig
+	Discord        DiscordConfig
+	Scheduler      SchedulerConfig
 }
 
-// CrawlLimitsConfig chứa các giới hạn cho crawling.
-// Tất cả giá trị được load từ env vars, không hardcode trong code.
-type CrawlLimitsConfig struct {
-	// Default limits (used for production crawling)
-	DefaultLimitPerKeyword int `env:"DEFAULT_LIMIT_PER_KEYWORD" envDefault:"50"`
-	DefaultMaxComments     int `env:"DEFAULT_MAX_COMMENTS" envDefault:"100"`
-	DefaultMaxAttempts     int `env:"DEFAULT_MAX_ATTEMPTS" envDefault:"3"`
-
-	// Dry-run limits (for testing/preview)
-	DryRunLimitPerKeyword int `env:"DRYRUN_LIMIT_PER_KEYWORD" envDefault:"3"`
-	DryRunMaxComments     int `env:"DRYRUN_MAX_COMMENTS" envDefault:"5"`
-
-	// Hard limits (safety caps - cannot be exceeded)
-	MaxLimitPerKeyword int `env:"MAX_LIMIT_PER_KEYWORD" envDefault:"500"`
-	MaxMaxComments     int `env:"MAX_MAX_COMMENTS" envDefault:"1000"`
-
-	// Feature flags
-	IncludeComments bool `env:"INCLUDE_COMMENTS" envDefault:"true"`
-	DownloadMedia   bool `env:"DOWNLOAD_MEDIA" envDefault:"false"`
+type EnvironmentConfig struct {
+	Name string
 }
 
-// LoggerConfig is the configuration for the logger.
+type HTTPServerConfig struct {
+	Host string
+	Port int
+	Mode string
+}
+
 type LoggerConfig struct {
-	Level        string `env:"LOGGER_LEVEL" envDefault:"debug"`
-	Mode         string `env:"LOGGER_MODE" envDefault:"debug"`
-	Encoding     string `env:"LOGGER_ENCODING" envDefault:"console"`
-	ColorEnabled bool   `env:"LOGGER_COLOR_ENABLED" envDefault:"true"`
+	Level        string
+	Mode         string
+	Encoding     string
+	ColorEnabled bool
 }
 
-// DiscordConfig is the configuration for Discord webhooks.
-type DiscordConfig struct {
-	ReportBugID    string `env:"DISCORD_REPORT_BUG_ID"`
-	ReportBugToken string `env:"DISCORD_REPORT_BUG_TOKEN"`
+type PostgresConfig struct {
+	Host     string
+	Port     int
+	User     string
+	Password string
+	DBName   string
+	SSLMode  string
+	Schema   string
 }
 
-// RabbitMQConfig is the configuration for RabbitMQ,
-// which is used to connect to RabbitMQ server.
-type RabbitMQConfig struct {
-	URL string `env:"RABBITMQ_URL"`
-}
-
-// RedisConfig is the configuration for Redis state management.
-// Used for tracking project execution state (DB 1).
-// Note: Only standalone mode is supported
 type RedisConfig struct {
-	Host         string `env:"REDIS_HOST" envDefault:"localhost:6379"`
-	Password     string `env:"REDIS_PASSWORD"`
-	DB           int    `env:"REDIS_DB" envDefault:"0"`
-	StateDB      int    `env:"REDIS_STATE_DB" envDefault:"1"`
-	MinIdleConns int    `env:"REDIS_MIN_IDLE_CONNS" envDefault:"10"`
-	PoolSize     int    `env:"REDIS_POOL_SIZE" envDefault:"100"`
-	PoolTimeout  int    `env:"REDIS_POOL_TIMEOUT" envDefault:"30"`
+	Host     string
+	Port     int
+	Password string
+	DB       int
 }
 
-// ProjectConfig is the configuration for the Project Service.
-type ProjectConfig struct {
-	BaseURL              string `env:"PROJECT_SERVICE_URL" envDefault:"http://localhost:8080"`
-	Timeout              int    `env:"PROJECT_TIMEOUT" envDefault:"10"`
-	InternalKey          string `env:"PROJECT_INTERNAL_KEY"`
-	WebhookRetryAttempts int    `env:"WEBHOOK_RETRY_ATTEMPTS" envDefault:"5"`
-	WebhookRetryDelay    int    `env:"WEBHOOK_RETRY_DELAY" envDefault:"1"`
+type MinIOConfig struct {
+	Endpoint             string
+	AccessKey            string
+	SecretKey            string
+	UseSSL               bool
+	Region               string
+	Bucket               string
+	AsyncUploadWorkers   int
+	AsyncUploadQueueSize int
 }
 
-// Load is the function to load the configuration from the environment variables.
+type KafkaConfig struct {
+	Brokers  []string
+	Topic    string
+	UAPTopic string
+	GroupID  string
+}
+
+type RabbitMQConfig struct {
+	URL                 string
+	RetryWithoutTimeout bool
+}
+
+type JWTConfig struct {
+	SecretKey string
+}
+
+type CookieConfig struct {
+	Domain         string
+	Secure         bool
+	SameSite       string
+	MaxAge         int
+	MaxAgeRemember int
+	Name           string
+}
+
+type EncrypterConfig struct {
+	Key string
+}
+
+type InternalConfig struct {
+	InternalKey string
+	ServiceKeys map[string]string
+}
+
+type DiscordConfig struct {
+	WebhookURL string
+}
+
+type SchedulerConfig struct {
+	HeartbeatCron string
+	Timezone      string
+	HeartbeatLimit int
+}
+
+// Load loads configuration using Viper.
 func Load() (*Config, error) {
+	if configFile := os.Getenv("INGEST_CONFIG_FILE"); configFile != "" {
+		viper.SetConfigFile(configFile)
+	} else {
+		viper.SetConfigName("ingest-config")
+		viper.SetConfigType("yaml")
+		viper.AddConfigPath("./config")
+		viper.AddConfigPath(".")
+		viper.AddConfigPath("/etc/smap/")
+	}
+
+	viper.AutomaticEnv()
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+
+	setDefaults()
+
+	if err := viper.ReadInConfig(); err != nil {
+		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+			return nil, fmt.Errorf("error reading config file: %w", err)
+		}
+	}
+
 	cfg := &Config{}
-	err := env.Parse(cfg)
-	if err != nil {
+
+	cfg.Environment.Name = viper.GetString("environment.name")
+	cfg.HTTPServer.Host = viper.GetString("http_server.host")
+	cfg.HTTPServer.Port = viper.GetInt("http_server.port")
+	cfg.HTTPServer.Mode = viper.GetString("http_server.mode")
+
+	cfg.Logger.Level = viper.GetString("logger.level")
+	cfg.Logger.Mode = viper.GetString("logger.mode")
+	cfg.Logger.Encoding = viper.GetString("logger.encoding")
+	cfg.Logger.ColorEnabled = viper.GetBool("logger.color_enabled")
+
+	cfg.Postgres.Host = viper.GetString("postgres.host")
+	cfg.Postgres.Port = viper.GetInt("postgres.port")
+	cfg.Postgres.User = viper.GetString("postgres.user")
+	cfg.Postgres.Password = viper.GetString("postgres.password")
+	cfg.Postgres.DBName = viper.GetString("postgres.dbname")
+	cfg.Postgres.SSLMode = viper.GetString("postgres.sslmode")
+	cfg.Postgres.Schema = viper.GetString("postgres.schema")
+
+	cfg.Redis.Host = viper.GetString("redis.host")
+	cfg.Redis.Port = viper.GetInt("redis.port")
+	cfg.Redis.Password = viper.GetString("redis.password")
+	cfg.Redis.DB = viper.GetInt("redis.db")
+
+	cfg.MinIO.Endpoint = viper.GetString("minio.endpoint")
+	cfg.MinIO.AccessKey = viper.GetString("minio.access_key")
+	cfg.MinIO.SecretKey = viper.GetString("minio.secret_key")
+	cfg.MinIO.UseSSL = viper.GetBool("minio.use_ssl")
+	cfg.MinIO.Region = viper.GetString("minio.region")
+	cfg.MinIO.Bucket = viper.GetString("minio.bucket")
+	cfg.MinIO.AsyncUploadWorkers = viper.GetInt("minio.async_upload_workers")
+	cfg.MinIO.AsyncUploadQueueSize = viper.GetInt("minio.async_upload_queue_size")
+
+	cfg.Kafka.Brokers = viper.GetStringSlice("kafka.brokers")
+	cfg.Kafka.Topic = viper.GetString("kafka.topic")
+	cfg.Kafka.UAPTopic = viper.GetString("kafka.uap_topic")
+	cfg.Kafka.GroupID = viper.GetString("kafka.group_id")
+
+	cfg.RabbitMQ.URL = viper.GetString("rabbitmq.url")
+	cfg.RabbitMQ.RetryWithoutTimeout = viper.GetBool("rabbitmq.retry_without_timeout")
+
+	cfg.JWT.SecretKey = viper.GetString("jwt.secret_key")
+
+	cfg.Cookie.Domain = viper.GetString("cookie.domain")
+	cfg.Cookie.Secure = viper.GetBool("cookie.secure")
+	cfg.Cookie.SameSite = viper.GetString("cookie.samesite")
+	cfg.Cookie.MaxAge = viper.GetInt("cookie.max_age")
+	cfg.Cookie.MaxAgeRemember = viper.GetInt("cookie.max_age_remember")
+	cfg.Cookie.Name = viper.GetString("cookie.name")
+
+	cfg.Encrypter.Key = viper.GetString("encrypter.key")
+	cfg.InternalConfig.InternalKey = viper.GetString("internal.internal_key")
+
+	// Internal Service Keys
+	serviceKeys := make(map[string]string)
+	if viper.IsSet("internal.service_keys") {
+		serviceKeysRaw := viper.GetStringMapString("internal.service_keys")
+		for service, key := range serviceKeysRaw {
+			serviceKeys[service] = key
+		}
+	}
+	cfg.InternalConfig.ServiceKeys = serviceKeys
+
+	cfg.Discord.WebhookURL = viper.GetString("discord.webhook_url")
+
+	cfg.Scheduler.HeartbeatCron = viper.GetString("scheduler.heartbeat_cron")
+	cfg.Scheduler.Timezone = viper.GetString("scheduler.timezone")
+	cfg.Scheduler.HeartbeatLimit = viper.GetInt("scheduler.heartbeat_limit")
+
+	if err := validate(cfg); err != nil {
 		return nil, err
 	}
+
 	return cfg, nil
+}
+
+func setDefaults() {
+	viper.SetDefault("environment.name", "development")
+
+	viper.SetDefault("http_server.host", "0.0.0.0")
+	viper.SetDefault("http_server.port", 8080)
+	viper.SetDefault("http_server.mode", "debug")
+
+	viper.SetDefault("logger.level", "debug")
+	viper.SetDefault("logger.mode", "debug")
+	viper.SetDefault("logger.encoding", "console")
+	viper.SetDefault("logger.color_enabled", true)
+
+	viper.SetDefault("postgres.host", "172.16.19.10")
+	viper.SetDefault("postgres.port", 5432)
+	viper.SetDefault("postgres.user", "ingest_master")
+	viper.SetDefault("postgres.password", "ingest_master_pwd")
+	viper.SetDefault("postgres.dbname", "smap")
+	viper.SetDefault("postgres.sslmode", "disable")
+	viper.SetDefault("postgres.schema", "schema_ingest")
+
+	viper.SetDefault("redis.host", "redis.tantai.dev")
+	viper.SetDefault("redis.port", 6379)
+	viper.SetDefault("redis.password", "21042004")
+	viper.SetDefault("redis.db", 1)
+
+	viper.SetDefault("minio.endpoint", "172.16.21.10:9000")
+	viper.SetDefault("minio.access_key", "tantai")
+	viper.SetDefault("minio.secret_key", "21042004")
+	viper.SetDefault("minio.use_ssl", false)
+	viper.SetDefault("minio.region", "us-east-1")
+	viper.SetDefault("minio.bucket", "ingest-data")
+	viper.SetDefault("minio.async_upload_workers", 4)
+	viper.SetDefault("minio.async_upload_queue_size", 100)
+
+	viper.SetDefault("kafka.brokers", []string{"kafka.tantai.dev:9094"})
+	viper.SetDefault("kafka.topic", "ingest.events")
+	viper.SetDefault("kafka.uap_topic", "smap.collector.output")
+	viper.SetDefault("kafka.group_id", "ingest-consumer")
+
+	viper.SetDefault("rabbitmq.url", "amqp://admin:21042004@172.16.21.206:5672/")
+	viper.SetDefault("rabbitmq.retry_without_timeout", true)
+
+	viper.SetDefault("cookie.domain", "localhost")
+	viper.SetDefault("cookie.secure", false)
+	viper.SetDefault("cookie.samesite", "Lax")
+	viper.SetDefault("cookie.max_age", 28800)
+	viper.SetDefault("cookie.max_age_remember", 604800)
+	viper.SetDefault("cookie.name", "smap_auth_token")
+
+	viper.SetDefault("scheduler.heartbeat_cron", "*/1 * * * *")
+	viper.SetDefault("scheduler.timezone", "Asia/Ho_Chi_Minh")
+	viper.SetDefault("scheduler.heartbeat_limit", 20)
+}
+
+func validate(cfg *Config) error {
+	if cfg.JWT.SecretKey == "" {
+		return fmt.Errorf("jwt.secret_key is required")
+	}
+	if len(cfg.JWT.SecretKey) < 32 {
+		return fmt.Errorf("jwt.secret_key must be at least 32 characters for security")
+	}
+
+	if cfg.Encrypter.Key == "" {
+		return fmt.Errorf("encrypter.key is required")
+	}
+	if len(cfg.Encrypter.Key) < 32 {
+		return fmt.Errorf("encrypter.key must be at least 32 characters for security")
+	}
+
+	if cfg.Postgres.Host == "" {
+		return fmt.Errorf("postgres.host is required")
+	}
+	if cfg.Postgres.Port == 0 {
+		return fmt.Errorf("postgres.port is required")
+	}
+	if cfg.Postgres.DBName == "" {
+		return fmt.Errorf("postgres.dbname is required")
+	}
+	if cfg.Postgres.User == "" {
+		return fmt.Errorf("postgres.user is required")
+	}
+
+	if cfg.Redis.Host == "" {
+		return fmt.Errorf("redis.host is required")
+	}
+	if cfg.Redis.Port == 0 {
+		return fmt.Errorf("redis.port is required")
+	}
+
+	if cfg.MinIO.Endpoint == "" {
+		return fmt.Errorf("minio.endpoint is required")
+	}
+	if cfg.MinIO.AccessKey == "" {
+		return fmt.Errorf("minio.access_key is required")
+	}
+	if cfg.MinIO.SecretKey == "" {
+		return fmt.Errorf("minio.secret_key is required")
+	}
+	if cfg.MinIO.Bucket == "" {
+		return fmt.Errorf("minio.bucket is required")
+	}
+
+	if len(cfg.Kafka.Brokers) == 0 {
+		return fmt.Errorf("kafka.brokers is required")
+	}
+	if cfg.Kafka.Topic == "" {
+		return fmt.Errorf("kafka.topic is required")
+	}
+	if cfg.Kafka.UAPTopic == "" {
+		return fmt.Errorf("kafka.uap_topic is required")
+	}
+	if cfg.Kafka.GroupID == "" {
+		return fmt.Errorf("kafka.group_id is required")
+	}
+
+	if cfg.RabbitMQ.URL == "" {
+		return fmt.Errorf("rabbitmq.url is required")
+	}
+
+	if cfg.Cookie.Name == "" {
+		return fmt.Errorf("cookie.name is required")
+	}
+	if cfg.Scheduler.HeartbeatCron == "" {
+		return fmt.Errorf("scheduler.heartbeat_cron is required")
+	}
+	if cfg.Scheduler.HeartbeatLimit <= 0 {
+		return fmt.Errorf("scheduler.heartbeat_limit must be greater than 0")
+	}
+
+	return nil
 }

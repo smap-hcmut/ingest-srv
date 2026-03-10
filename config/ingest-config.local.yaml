@@ -1,0 +1,78 @@
+# SMAP Ingest Service – Local config for docker-compose infrastructure
+# Usage:
+#   INGEST_CONFIG_FILE=./config/ingest-config.local.yaml go run cmd/api/main.go
+
+environment:
+  name: local
+
+http_server:
+  host: "0.0.0.0"
+  port: 8080
+  mode: debug
+
+logger:
+  level: debug
+  mode: debug
+  encoding: console
+  color_enabled: true
+
+postgres:
+  host: "127.0.0.1"
+  port: 5432
+  user: ingest_master
+  password: ingest_master_pwd
+  dbname: smap
+  sslmode: disable
+  schema: schema_ingest
+
+redis:
+  host: "127.0.0.1"
+  port: 6379
+  password: "21042004"
+  db: 1
+
+minio:
+  endpoint: "127.0.0.1:9000"
+  access_key: "tantai"
+  secret_key: "21042004"
+  use_ssl: false
+  region: "us-east-1"
+  bucket: "ingest-data"
+  async_upload_workers: 4
+  async_upload_queue_size: 100
+
+kafka:
+  brokers:
+    - "127.0.0.1:9092"
+  topic: "ingest.events"
+  uap_topic: "smap.collector.output"
+  group_id: "ingest-consumer-local"
+
+rabbitmq:
+  url: "amqp://admin:21042004@127.0.0.1:5672/"
+  retry_without_timeout: true
+
+jwt:
+  secret_key: "smap-secret-key-at-least-32-chars-long"
+
+cookie:
+  domain: "localhost"
+  secure: false
+  samesite: "Lax"
+  max_age: 28800
+  max_age_remember: 604800
+  name: "smap_auth_token"
+
+encrypter:
+  key: "test-encryption-key-32-chars-123"
+
+internal:
+  internal_key: "ingest-service-key"
+
+discord:
+  webhook_url: ""
+
+scheduler:
+  heartbeat_cron: "*/5 * * * * *"
+  timezone: "Asia/Ho_Chi_Minh"
+  heartbeat_limit: 20

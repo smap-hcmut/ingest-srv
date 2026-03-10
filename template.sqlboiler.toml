@@ -1,0 +1,25 @@
+wipe=true                                 # Clean regeneration
+output="internal/sqlboiler"                # Generated model location
+pkgname="sqlboiler"                        # Package name
+add-global-variant=true                   # Add global helper functions
+add-enum-types=true                       # Generate enum types
+no-hooks=false                            # Enable hooks for advanced features
+no-tests=true                             # Skip test generation (for faster builds)
+add-soft-deletes=true                     # Soft delete support
+auto-columns=["created_at", "updated_at"] # Auto timestamp columns
+
+
+[psql]
+dbname = "{{.DB_NAME}}"                   # Your app database name
+host = "{{.DB_HOST}}"                     # Database server IP/hostname
+port = {{.DB_PORT}}                       # Database port
+user = "{{.DB_USER}}"                     # Database user
+pass = "{{.DB_PASSWORD}}"                 # Database password
+sslmode = "{{.DB_SSL_MODE}}"              # SSL mode (disable, require, verify-ca, verify-full)
+schema = "{{.DB_SCHEMA}}"                 # Database schema
+blacklist = [
+    "schema_migrations",                  # Migration tables
+    "repmgr_*",                           # Repmgr tables
+    "pg_stat_*",                          # PostgreSQL system tables
+    "information_schema.*"                # System schema
+]

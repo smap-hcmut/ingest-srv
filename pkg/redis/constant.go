@@ -1,14 +1,8 @@
 package redis
 
+import "time"
+
 const (
-	ONE_MINUTE     = 60
-	FIVE_MINUTES   = ONE_MINUTE * 5
-	TEN_MINUTES    = ONE_MINUTE * 10
-	THIRTY_MINUTES = ONE_MINUTE * 30
-
-	ONE_HOUR  = 3600
-	TWO_HOURS = ONE_HOUR * 2
-	ONE_DAY   = ONE_HOUR * 24
-
-	PREFIX = "connect:"
+	// DefaultConnectTimeout is the timeout for initial connection ping.
+	DefaultConnectTimeout = 5 * time.Second
 )
