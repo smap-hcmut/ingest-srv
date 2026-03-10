@@ -12,6 +12,9 @@ const (
 	normalModeMultiplier     = 1.0
 	crisisModeMultiplier     = 0.2
 	sleepModeMultiplier      = 5.0
+	tikTokFullFlowLimit      = 50
+	tikTokFullFlowThreshold  = 0.3
+	tikTokFullFlowCommentCount = 500
 )
 
 const (

@@ -45,7 +45,10 @@ func (uc *implUseCase) buildDispatchSpecs(source model.DataSource, target model.
 				Action:  actionFullFlow,
 				Keyword: keyword,
 				Params: map[string]interface{}{
-					"keyword": keyword,
+					"keyword":       keyword,
+					"limit":         tikTokFullFlowLimit,
+					"threshold":     tikTokFullFlowThreshold,
+					"comment_count": tikTokFullFlowCommentCount,
 				},
 			})
 		}
