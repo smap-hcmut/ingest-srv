@@ -1,18 +1,18 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: ingest-scheduler
+  name: ingest-consumer
   namespace: smap
   labels:
-    app: ingest-scheduler
+    app.kubernetes.io/name: ingest-consumer
     app.kubernetes.io/part-of: smap
-    app.kubernetes.io/component: scheduler
+    app.kubernetes.io/component: consumer
 spec:
   replicas: 1
   revisionHistoryLimit: 5
   selector:
     matchLabels:
-      app: ingest-scheduler
+      app: ingest-consumer
   strategy:
     rollingUpdate:
       maxSurge: 1
@@ -21,22 +21,23 @@ spec:
   template:
     metadata:
       labels:
-        app: ingest-scheduler
+        app: ingest-consumer
+        app.kubernetes.io/name: ingest-consumer
         app.kubernetes.io/part-of: smap
     spec:
       imagePullSecrets:
-        - name: harbor-registry
+        - name: zot-registry
       containers:
-        - name: ingest-scheduler
-          image: registry.tantai.dev/smap/ingest-scheduler:260310-113521
-          imagePullPolicy: IfNotPresent
+        - name: ingest-consumer
+          image: 172.16.21.10:5000/smap/ingest-consumer:latest
+          imagePullPolicy: Always
           resources:
             requests:
               memory: "128Mi"
               cpu: "100m"
             limits:
               memory: "512Mi"
-              cpu: "1000m"
+              cpu: "500m"
           envFrom:
             - configMapRef:
                 name: ingest-config
@@ -44,7 +45,7 @@ spec:
                 name: ingest-secrets
           env:
             - name: CONTAINER_NAME
-              value: "ingest-scheduler"
+              value: "ingest-consumer"
             - name: KUBERNETES_NAMESPACE
               valueFrom:
                 fieldRef:
@@ -57,15 +58,5 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: status.podIP
-          livenessProbe:
-            exec:
-              command:
-                - /bin/sh
-                - -c
-                - ps aux | grep -v grep | grep -q scheduler
-            initialDelaySeconds: 30
-            periodSeconds: 10
-            timeoutSeconds: 5
-            successThreshold: 1
-            failureThreshold: 3
-      terminationGracePeriodSeconds: 30
+      terminationGracePeriodSeconds: 60
+      restartPolicy: Always

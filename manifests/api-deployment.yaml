@@ -1,18 +1,18 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: ingest-scheduler
+  name: ingest-api
   namespace: smap
   labels:
-    app: ingest-scheduler
+    app.kubernetes.io/name: ingest-api
     app.kubernetes.io/part-of: smap
-    app.kubernetes.io/component: scheduler
+    app.kubernetes.io/component: api
 spec:
   replicas: 1
   revisionHistoryLimit: 5
   selector:
     matchLabels:
-      app: ingest-scheduler
+      app: ingest-api
   strategy:
     rollingUpdate:
       maxSurge: 1
@@ -21,15 +21,20 @@ spec:
   template:
     metadata:
       labels:
-        app: ingest-scheduler
+        app: ingest-api
+        app.kubernetes.io/name: ingest-api
         app.kubernetes.io/part-of: smap
     spec:
       imagePullSecrets:
-        - name: harbor-registry
+        - name: zot-registry
       containers:
-        - name: ingest-scheduler
-          image: registry.tantai.dev/smap/ingest-scheduler:260310-113521
-          imagePullPolicy: IfNotPresent
+        - name: ingest-api
+          image: 172.16.21.10:5000/smap/ingest-api:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+              name: http
+              protocol: TCP
           resources:
             requests:
               memory: "128Mi"
@@ -44,7 +49,7 @@ spec:
                 name: ingest-secrets
           env:
             - name: CONTAINER_NAME
-              value: "ingest-scheduler"
+              value: "ingest-api"
             - name: KUBERNETES_NAMESPACE
               valueFrom:
                 fieldRef:
@@ -58,14 +63,45 @@ spec:
                 fieldRef:
                   fieldPath: status.podIP
           livenessProbe:
-            exec:
-              command:
-                - /bin/sh
-                - -c
-                - ps aux | grep -v grep | grep -q scheduler
+            httpGet:
+              path: /health
+              port: 8080
             initialDelaySeconds: 30
             periodSeconds: 10
             timeoutSeconds: 5
-            successThreshold: 1
             failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 12
       terminationGracePeriodSeconds: 30
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ingest-api
+  namespace: smap
+  labels:
+    app.kubernetes.io/name: ingest-api
+    app.kubernetes.io/part-of: smap
+spec:
+  selector:
+    app: ingest-api
+  ports:
+    - port: 80
+      targetPort: 8080
+      protocol: TCP
+      name: http
+  type: ClusterIP

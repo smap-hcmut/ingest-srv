@@ -7,6 +7,8 @@
 *.md
 !README.md
 docs/
+document/
+documents/
 
 # IDE
 .vscode/
@@ -24,11 +26,10 @@ Thumbs.db
 *.dll
 *.so
 *.dylib
-api
 *.test
 *.out
 
-# Vendor (sẽ được download lại trong Docker)
+# Vendor (downloaded inside Docker)
 vendor/
 
 # Temporary files
@@ -54,13 +55,25 @@ coverage.html
 logs/
 
 # Docker
-Dockerfile
 docker-compose*.yml
 .dockerignore
 
 # CI/CD
 .github/
 .gitlab-ci.yml
+
+# Scripts & tools (not needed in image)
+scripts/
+manifests/
+migrations/
+
+# Python test scripts
+*.py
+__pycache__/
+
+# Config templates (not needed in build)
+template.sqlboiler.toml
+*.toml
 
 # Misc
 *.bak
