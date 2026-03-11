@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	_ "ingest-srv/docs" // Swagger docs - blank import to trigger init()
 	"ingest-srv/config"
 	configKafka "ingest-srv/config/kafka"
 	configMinio "ingest-srv/config/minio"
@@ -20,6 +21,27 @@ import (
 	"ingest-srv/pkg/log"
 )
 
+// @title       SMAP Ingest Service API
+// @description SMAP Ingest Service API documentation.
+// @version     1
+// @host        localhost:8080
+// @schemes     http https
+// @BasePath    /api/v1
+//
+// @securityDefinitions.apikey CookieAuth
+// @in cookie
+// @name smap_auth_token
+// @description Authentication token stored in HttpOnly cookie.
+//
+// @securityDefinitions.apikey Bearer
+// @in header
+// @name Authorization
+// @description Bearer token. Format: "Bearer {token}"
+//
+// @securityDefinitions.apikey InternalKey
+// @in header
+// @name X-Internal-Key
+// @description Internal service-to-service authentication key.
 func main() {
 	cfg, err := config.Load()
 	if err != nil {

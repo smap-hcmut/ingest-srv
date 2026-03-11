@@ -3,10 +3,9 @@
 .gitignore
 .gitattributes
 
-# Documentation
+# Documentation (keep docs/ for Swagger - generated docs.go is required at build)
 *.md
 !README.md
-docs/
 document/
 documents/
 

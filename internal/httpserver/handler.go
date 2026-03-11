@@ -18,6 +18,8 @@ import (
 	"ingest-srv/pkg/response"
 
 	"github.com/gin-gonic/gin"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 func (srv HTTPServer) mapHandlers() error {
@@ -77,6 +79,13 @@ func (srv HTTPServer) registerSystemRoutes() {
 	srv.gin.GET("/health", srv.healthCheck)
 	srv.gin.GET("/ready", srv.readyCheck)
 	srv.gin.GET("/live", srv.liveCheck)
+
+	// Swagger UI and docs
+	srv.gin.GET("/swagger/*any", ginSwagger.WrapHandler(
+		swaggerFiles.Handler,
+		ginSwagger.URL("doc.json"),
+		ginSwagger.DefaultModelsExpandDepth(-1),
+	))
 }
 
 func (srv HTTPServer) registerIngestRoutes() {
