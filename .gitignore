@@ -23,6 +23,8 @@ CLAUDE.md
 
 # Auth config with secrets
 knowledge-config.yaml
+config/ingest-config.yaml
+config/ingest-config.local.yaml
 secrets/
 # Kubernetes manifests with real credentials (never commit)
 manifests/secret.yaml
