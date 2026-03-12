@@ -4,7 +4,8 @@ import (
 	"context"
 
 	"ingest-srv/internal/model"
-	"ingest-srv/pkg/paginator"
+
+	"github.com/smap-hcmut/shared-libs/go/paginator"
 )
 
 // Repository defines the data access interface for DataSource.

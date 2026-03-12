@@ -3,7 +3,7 @@ package httpserver
 import (
 	"fmt"
 
-	"ingest-srv/pkg/response"
+	"github.com/smap-hcmut/shared-libs/go/response"
 
 	"github.com/gin-gonic/gin"
 )
@@ -11,7 +11,7 @@ import (
 const (
 	healthMessage = "From Smap API V1 With Love"
 	healthVersion = "1.0.0"
-	serviceName  = "ingest-srv"
+	serviceName   = "ingest-srv"
 )
 
 func (srv HTTPServer) healthCheck(c *gin.Context) {
@@ -98,9 +98,9 @@ func (srv HTTPServer) readyCheck(c *gin.Context) {
 
 	if !postgresReady || !redisReady {
 		c.JSON(503, gin.H{
-			"status":      "not ready",
-			"message":     "Core dependencies not ready",
-			"service":     serviceName,
+			"status":       "not ready",
+			"message":      "Core dependencies not ready",
+			"service":      serviceName,
 			"dependencies": deps,
 		})
 		return

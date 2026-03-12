@@ -3,11 +3,11 @@ package usecase
 import (
 	"context"
 	"fmt"
-	"strings"
-
 	"ingest-srv/internal/uap"
 	repo "ingest-srv/internal/uap/repository"
-	minioPkg "ingest-srv/pkg/minio"
+	"strings"
+
+	"github.com/smap-hcmut/shared-libs/go/minio"
 )
 
 func (uc *implUseCase) ParseAndStoreRawBatch(ctx context.Context, input uap.ParseAndStoreRawBatchInput) error {
@@ -25,7 +25,7 @@ func (uc *implUseCase) ParseAndStoreRawBatch(ctx context.Context, input uap.Pars
 		return nil
 	}
 
-	reader, _, err := uc.minio.DownloadFile(ctx, &minioPkg.DownloadRequest{
+	reader, _, err := uc.minio.DownloadFile(ctx, &minio.DownloadRequest{
 		BucketName: input.StorageBucket,
 		ObjectName: input.StoragePath,
 	})

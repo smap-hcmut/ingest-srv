@@ -7,8 +7,9 @@ import (
 	"ingest-srv/internal/execution"
 	repo "ingest-srv/internal/execution/repository"
 	"ingest-srv/internal/uap"
-	"ingest-srv/pkg/log"
-	"ingest-srv/pkg/minio"
+
+	"github.com/smap-hcmut/shared-libs/go/log"
+	"github.com/smap-hcmut/shared-libs/go/minio"
 )
 
 type taskPublisher interface {

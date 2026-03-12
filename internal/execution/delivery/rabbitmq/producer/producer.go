@@ -6,9 +6,9 @@ import (
 
 	execution "ingest-srv/internal/execution"
 	executionRabbit "ingest-srv/internal/execution/delivery/rabbitmq"
-	"ingest-srv/pkg/rabbitmq"
 
 	amqp "github.com/rabbitmq/amqp091-go"
+	"github.com/smap-hcmut/shared-libs/go/rabbitmq"
 )
 
 func (p *implProducer) PublishDispatch(ctx context.Context, input execution.PublishDispatchInput) error {

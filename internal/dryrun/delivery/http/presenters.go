@@ -7,7 +7,8 @@ import (
 
 	"ingest-srv/internal/dryrun"
 	"ingest-srv/internal/model"
-	"ingest-srv/pkg/paginator"
+
+	"github.com/smap-hcmut/shared-libs/go/paginator"
 )
 
 const timeFormat = "2006-01-02T15:04:05Z07:00"

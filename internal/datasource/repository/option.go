@@ -3,7 +3,7 @@ package repository
 import (
 	"encoding/json"
 
-	"ingest-srv/pkg/paginator"
+	"github.com/smap-hcmut/shared-libs/go/paginator"
 )
 
 // CreateDataSourceOptions contains the data needed to insert a new data source.

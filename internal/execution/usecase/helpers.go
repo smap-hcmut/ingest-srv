@@ -11,7 +11,8 @@ import (
 	"ingest-srv/internal/execution"
 	repo "ingest-srv/internal/execution/repository"
 	"ingest-srv/internal/model"
-	"ingest-srv/pkg/minio"
+
+	"github.com/smap-hcmut/shared-libs/go/minio"
 )
 
 func (uc *implUseCase) validateDispatchContext(ctx repo.DispatchContext) error {

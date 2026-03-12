@@ -3,6 +3,7 @@
 # Dependencies
 vendor/
 .go-version
+bin/
 
 # Environment variables
 .env

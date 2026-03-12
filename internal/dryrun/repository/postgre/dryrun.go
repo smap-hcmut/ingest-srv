@@ -9,7 +9,8 @@ import (
 	dryrunRepo "ingest-srv/internal/dryrun/repository"
 	"ingest-srv/internal/model"
 	"ingest-srv/internal/sqlboiler"
-	"ingest-srv/pkg/paginator"
+
+	"github.com/smap-hcmut/shared-libs/go/paginator"
 
 	"github.com/aarondl/null/v8"
 	"github.com/aarondl/sqlboiler/v4/boil"

@@ -3,8 +3,9 @@ package job
 import (
 	"ingest-srv/config"
 	"ingest-srv/internal/execution"
-	"ingest-srv/pkg/cron"
-	"ingest-srv/pkg/log"
+
+	"github.com/smap-hcmut/shared-libs/go/cron"
+	"github.com/smap-hcmut/shared-libs/go/log"
 )
 
 type Handler interface {

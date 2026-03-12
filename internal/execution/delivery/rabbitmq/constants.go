@@ -1,6 +1,6 @@
 package rabbitmq
 
-import rmq "ingest-srv/pkg/rabbitmq"
+import rmq "github.com/smap-hcmut/shared-libs/go/rabbitmq"
 
 const (
 	TikTokTasksQueueName              = "tiktok_tasks"

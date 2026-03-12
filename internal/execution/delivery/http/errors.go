@@ -2,7 +2,8 @@ package http
 
 import (
 	"ingest-srv/internal/execution"
-	pkgErrors "ingest-srv/pkg/errors"
+
+	pkgErrors "github.com/smap-hcmut/shared-libs/go/errors"
 )
 
 var (

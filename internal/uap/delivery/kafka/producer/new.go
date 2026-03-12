@@ -2,8 +2,9 @@ package producer
 
 import (
 	"ingest-srv/internal/uap"
-	"ingest-srv/pkg/kafka"
-	"ingest-srv/pkg/log"
+
+	"github.com/smap-hcmut/shared-libs/go/kafka"
+	"github.com/smap-hcmut/shared-libs/go/log"
 )
 
 type publisher struct {

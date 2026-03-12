@@ -9,8 +9,9 @@ import (
 	configPostgre "ingest-srv/config/postgre"
 	configRabbit "ingest-srv/config/rabbitmq"
 	"ingest-srv/internal/scheduler"
-	"ingest-srv/pkg/discord"
-	"ingest-srv/pkg/log"
+
+	"github.com/smap-hcmut/shared-libs/go/discord"
+	"github.com/smap-hcmut/shared-libs/go/log"
 )
 
 func main() {
@@ -22,7 +23,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	logger := log.Init(log.ZapConfig{
+	logger := log.NewZapLogger(log.ZapConfig{
 		Level:        cfg.Logger.Level,
 		Mode:         cfg.Logger.Mode,
 		Encoding:     cfg.Logger.Encoding,

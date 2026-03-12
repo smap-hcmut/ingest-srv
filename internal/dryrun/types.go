@@ -2,7 +2,8 @@ package dryrun
 
 import (
 	"ingest-srv/internal/model"
-	"ingest-srv/pkg/paginator"
+
+	"github.com/smap-hcmut/shared-libs/go/paginator"
 )
 
 // TriggerInput triggers one validation-only dryrun. For crawl sources, TargetID refers to one grouped crawl target.
@@ -32,9 +33,9 @@ type GetLatestOutput struct {
 
 // ListHistoryInput retrieves paginated dryrun history.
 type ListHistoryInput struct {
-	SourceID   string
-	TargetID   string
-	Paginator  paginator.PaginateQuery
+	SourceID  string
+	TargetID  string
+	Paginator paginator.PaginateQuery
 }
 
 // ListHistoryOutput contains paginated dryrun history.

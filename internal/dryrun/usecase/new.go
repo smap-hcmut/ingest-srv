@@ -4,7 +4,8 @@ import (
 	dsRepo "ingest-srv/internal/datasource/repository"
 	"ingest-srv/internal/dryrun"
 	dryrunRepo "ingest-srv/internal/dryrun/repository"
-	"ingest-srv/pkg/log"
+
+	"github.com/smap-hcmut/shared-libs/go/log"
 )
 
 type executor interface {

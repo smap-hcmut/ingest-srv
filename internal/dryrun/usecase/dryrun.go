@@ -8,7 +8,8 @@ import (
 	"ingest-srv/internal/dryrun"
 	dryrunRepo "ingest-srv/internal/dryrun/repository"
 	"ingest-srv/internal/model"
-	"ingest-srv/pkg/scope"
+
+	"github.com/smap-hcmut/shared-libs/go/scope"
 )
 
 // Trigger runs one validation-only dryrun for a datasource or grouped crawl target and persists the result.

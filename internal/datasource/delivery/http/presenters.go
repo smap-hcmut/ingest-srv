@@ -8,7 +8,8 @@ import (
 
 	"ingest-srv/internal/datasource"
 	"ingest-srv/internal/model"
-	"ingest-srv/pkg/paginator"
+
+	"github.com/smap-hcmut/shared-libs/go/paginator"
 )
 
 // --- Request DTOs ---

@@ -3,20 +3,18 @@ package httpserver
 import (
 	"database/sql"
 	"errors"
+	"ingest-srv/config"
+	"time"
 
 	"github.com/gin-gonic/gin"
-
-	"ingest-srv/config"
-	"ingest-srv/pkg/discord"
-	"ingest-srv/pkg/encrypter"
-	"ingest-srv/pkg/jwt"
-	"ingest-srv/pkg/kafka"
-	"ingest-srv/pkg/log"
-	"ingest-srv/pkg/minio"
-	"ingest-srv/pkg/rabbitmq"
-	"ingest-srv/pkg/redis"
+	"github.com/smap-hcmut/shared-libs/go/discord"
+	"github.com/smap-hcmut/shared-libs/go/encrypter"
+	"github.com/smap-hcmut/shared-libs/go/kafka"
+	"github.com/smap-hcmut/shared-libs/go/log"
+	"github.com/smap-hcmut/shared-libs/go/minio"
+	"github.com/smap-hcmut/shared-libs/go/rabbitmq"
+	"github.com/smap-hcmut/shared-libs/go/redis"
 	"go.uber.org/zap"
-	"time"
 )
 
 // HTTPServer represents ingest HTTP API server.
@@ -35,7 +33,6 @@ type HTTPServer struct {
 	rabbitmq   rabbitmq.IRabbitMQ
 
 	cfg          *config.Config
-	jwtManager   jwt.IManager
 	cookieConfig config.CookieConfig
 	encrypter    encrypter.Encrypter
 	discord      discord.IDiscord
@@ -56,7 +53,6 @@ type Config struct {
 	RabbitMQ   rabbitmq.IRabbitMQ
 
 	Config       *config.Config
-	JWTManager   jwt.IManager
 	CookieConfig config.CookieConfig
 	Encrypter    encrypter.Encrypter
 	Discord      discord.IDiscord
@@ -81,7 +77,6 @@ func New(logger log.Logger, cfg Config) (*HTTPServer, error) {
 		rabbitmq:   cfg.RabbitMQ,
 
 		cfg:          cfg.Config,
-		jwtManager:   cfg.JWTManager,
 		cookieConfig: cfg.CookieConfig,
 		encrypter:    cfg.Encrypter,
 		discord:      cfg.Discord,
@@ -141,9 +136,6 @@ func (srv HTTPServer) validate() error {
 	}
 	if srv.cfg == nil {
 		return errors.New("config is required")
-	}
-	if srv.jwtManager == nil {
-		return errors.New("jwtManager is required")
 	}
 	if srv.encrypter == nil {
 		return errors.New("encrypter is required")

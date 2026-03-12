@@ -6,7 +6,8 @@ import (
 	"log"
 
 	executionRabbit "ingest-srv/internal/execution/delivery/rabbitmq"
-	"ingest-srv/pkg/rabbitmq"
+
+	"github.com/smap-hcmut/shared-libs/go/rabbitmq"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 )

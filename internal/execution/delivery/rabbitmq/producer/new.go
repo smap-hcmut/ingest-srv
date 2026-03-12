@@ -5,8 +5,9 @@ import (
 
 	execution "ingest-srv/internal/execution"
 	executionRabbit "ingest-srv/internal/execution/delivery/rabbitmq"
-	"ingest-srv/pkg/log"
-	"ingest-srv/pkg/rabbitmq"
+
+	"github.com/smap-hcmut/shared-libs/go/log"
+	"github.com/smap-hcmut/shared-libs/go/rabbitmq"
 )
 
 // Producer defines the RabbitMQ publisher for execution dispatches.

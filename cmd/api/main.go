@@ -7,18 +7,18 @@ import (
 	"os/signal"
 	"syscall"
 
-	_ "ingest-srv/docs" // Swagger docs - blank import to trigger init()
 	"ingest-srv/config"
 	configKafka "ingest-srv/config/kafka"
 	configMinio "ingest-srv/config/minio"
 	configPostgre "ingest-srv/config/postgre"
 	configRabbit "ingest-srv/config/rabbitmq"
-	configRedis "ingest-srv/config/redis"
+	_ "ingest-srv/docs" // Swagger docs - blank import to trigger init()
 	"ingest-srv/internal/httpserver"
-	"ingest-srv/pkg/discord"
-	"ingest-srv/pkg/encrypter"
-	"ingest-srv/pkg/jwt"
-	"ingest-srv/pkg/log"
+
+	"github.com/smap-hcmut/shared-libs/go/discord"
+	"github.com/smap-hcmut/shared-libs/go/encrypter"
+	"github.com/smap-hcmut/shared-libs/go/log"
+	"github.com/smap-hcmut/shared-libs/go/redis"
 )
 
 // @title       SMAP Ingest Service API
@@ -49,7 +49,7 @@ func main() {
 		return
 	}
 
-	logger := log.Init(log.ZapConfig{
+	logger := log.NewZapLogger(log.ZapConfig{
 		Level:        cfg.Logger.Level,
 		Mode:         cfg.Logger.Mode,
 		Encoding:     cfg.Logger.Encoding,
@@ -74,12 +74,6 @@ func main() {
 		}
 	}
 
-	jwtManager, err := jwt.New(jwt.Config{SecretKey: cfg.JWT.SecretKey})
-	if err != nil {
-		logger.Error(ctx, "Failed to initialize JWT manager: ", err)
-		return
-	}
-
 	postgresDB, err := configPostgre.Connect(ctx, cfg.Postgres)
 	if err != nil {
 		logger.Errorf(ctx, "PostgreSQL connect failed, service continues with degraded readiness: %v", err)
@@ -89,12 +83,17 @@ func main() {
 		logger.Info(ctx, "PostgreSQL client initialized")
 	}
 
-	redisClient, err := configRedis.Connect(ctx, cfg.Redis)
+	redisClient, err := redis.New(redis.RedisConfig{
+		Host:     cfg.Redis.Host,
+		Port:     cfg.Redis.Port,
+		Password: cfg.Redis.Password,
+		DB:       cfg.Redis.DB,
+	})
 	if err != nil {
 		logger.Errorf(ctx, "Redis connect failed, service continues with degraded readiness: %v", err)
 		redisClient = nil
 	} else {
-		defer configRedis.Disconnect()
+		defer redisClient.Close()
 		logger.Info(ctx, "Redis client initialized")
 	}
 
@@ -139,7 +138,6 @@ func main() {
 		RabbitMQ:   rabbitConn,
 
 		Config:       cfg,
-		JWTManager:   jwtManager,
 		CookieConfig: cfg.Cookie,
 		Encrypter:    enc,
 		Discord:      discordClient,

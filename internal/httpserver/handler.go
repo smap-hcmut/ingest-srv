@@ -13,19 +13,20 @@ import (
 	executionProducer "ingest-srv/internal/execution/delivery/rabbitmq/producer"
 	executionRepo "ingest-srv/internal/execution/repository/postgre"
 	executionUC "ingest-srv/internal/execution/usecase"
-
 	"ingest-srv/internal/middleware"
-	"ingest-srv/pkg/response"
 
 	"github.com/gin-gonic/gin"
+	"github.com/smap-hcmut/shared-libs/go/response"
+	"github.com/smap-hcmut/shared-libs/go/scope"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 func (srv HTTPServer) mapHandlers() error {
+	scopeManager := scope.New(srv.cfg.JWT.SecretKey)
 	mw := middleware.New(
 		srv.l,
-		srv.jwtManager,
+		scopeManager,
 		srv.cookieConfig,
 		srv.cfg.InternalConfig.InternalKey,
 	)

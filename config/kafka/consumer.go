@@ -5,7 +5,8 @@ import (
 	"sync"
 
 	"ingest-srv/config"
-	"ingest-srv/pkg/kafka"
+
+	"github.com/smap-hcmut/shared-libs/go/kafka"
 )
 
 var (

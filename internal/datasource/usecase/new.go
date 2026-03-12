@@ -3,7 +3,8 @@ package usecase
 import (
 	"ingest-srv/internal/datasource"
 	repo "ingest-srv/internal/datasource/repository"
-	"ingest-srv/pkg/log"
+
+	"github.com/smap-hcmut/shared-libs/go/log"
 )
 
 type implUseCase struct {

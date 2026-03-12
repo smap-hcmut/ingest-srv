@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"ingest-srv/internal/execution"
+
+	"github.com/smap-hcmut/shared-libs/go/cron"
 )
 
 func (h handler) DispatchDueTargets() {
@@ -38,4 +40,15 @@ func (h handler) DispatchDueTargets() {
 		output.SkippedRaceCount,
 		output.FailedCount,
 	)
+}
+
+// Register returns the job information for the cron scheduler
+func (h handler) Register() []cron.JobInfo {
+	return []cron.JobInfo{
+		{
+			Name:     "dispatch_due_targets",
+			Schedule: h.cfg.HeartbeatCron,
+			Handler:  h.DispatchDueTargets,
+		},
+	}
 }

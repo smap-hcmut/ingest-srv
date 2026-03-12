@@ -5,21 +5,21 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"ingest-srv/internal/uap"
+	repo "ingest-srv/internal/uap/repository"
 	"io"
 	"path"
 	"strconv"
 	"strings"
 
-	"ingest-srv/internal/uap"
-	repo "ingest-srv/internal/uap/repository"
-	minioPkg "ingest-srv/pkg/minio"
+	"github.com/smap-hcmut/shared-libs/go/minio"
 )
 
 type artifactPart struct {
-	PartNo      int    `json:"part_no"`
+	PartNo        int    `json:"part_no"`
 	StorageBucket string `json:"storage_bucket"`
-	StoragePath string `json:"storage_path"`
-	RecordCount int    `json:"record_count"`
+	StoragePath   string `json:"storage_path"`
+	RecordCount   int    `json:"record_count"`
 }
 
 type rawTikTokFullFlowEnvelope struct {
@@ -37,17 +37,17 @@ type rawTikTokFullFlowPostBundle struct {
 }
 
 type rawTikTokPost struct {
-	VideoID       string           `json:"video_id"`
-	URL           string           `json:"url"`
-	Description   string           `json:"description"`
-	Author        rawTikTokAuthor  `json:"author"`
-	LikesCount    int              `json:"likes_count"`
-	CommentsCount int              `json:"comments_count"`
-	SharesCount   int              `json:"shares_count"`
-	ViewsCount    int              `json:"views_count"`
-	Hashtags      []string         `json:"hashtags"`
-	PostedAt      string           `json:"posted_at"`
-	IsShopVideo   bool             `json:"is_shop_video"`
+	VideoID       string          `json:"video_id"`
+	URL           string          `json:"url"`
+	Description   string          `json:"description"`
+	Author        rawTikTokAuthor `json:"author"`
+	LikesCount    int             `json:"likes_count"`
+	CommentsCount int             `json:"comments_count"`
+	SharesCount   int             `json:"shares_count"`
+	ViewsCount    int             `json:"views_count"`
+	Hashtags      []string        `json:"hashtags"`
+	PostedAt      string          `json:"posted_at"`
+	IsShopVideo   bool            `json:"is_shop_video"`
 }
 
 type rawTikTokDetail struct {
@@ -109,11 +109,11 @@ type rawTikTokCommentScore struct {
 }
 
 type rawTikTokReplyComment struct {
-	ReplyID    string         `json:"reply_id"`
-	Content    string         `json:"content"`
+	ReplyID    string          `json:"reply_id"`
+	Content    string          `json:"content"`
 	Author     rawTikTokAuthor `json:"author"`
-	LikesCount int            `json:"likes_count"`
-	RepliedAt  string         `json:"replied_at"`
+	LikesCount int             `json:"likes_count"`
+	RepliedAt  string          `json:"replied_at"`
 }
 
 type rawTikTokAuthor struct {
@@ -377,7 +377,7 @@ func buildPartPath(projectID, sourceID, batchID string, partNo int) string {
 	)
 }
 
-func uploadChunk(ctx context.Context, client minioPkg.MinIO, bucket, projectID, sourceID, batchID string, partNo int, records []uap.UAPRecord) (artifactPart, error) {
+func uploadChunk(ctx context.Context, client minio.MinIO, bucket, projectID, sourceID, batchID string, partNo int, records []uap.UAPRecord) (artifactPart, error) {
 	payload, err := marshalChunkJSONL(records)
 	if err != nil {
 		return artifactPart{}, err
@@ -385,7 +385,7 @@ func uploadChunk(ctx context.Context, client minioPkg.MinIO, bucket, projectID, 
 
 	objectPath := buildPartPath(projectID, sourceID, batchID, partNo)
 	reader := bytes.NewReader(payload)
-	if _, err := client.UploadFile(ctx, &minioPkg.UploadRequest{
+	if _, err := client.UploadFile(ctx, &minio.UploadRequest{
 		BucketName:   bucket,
 		ObjectName:   objectPath,
 		OriginalName: path.Base(objectPath),

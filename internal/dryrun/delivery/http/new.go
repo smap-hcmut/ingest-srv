@@ -3,8 +3,9 @@ package http
 import (
 	"ingest-srv/internal/dryrun"
 	"ingest-srv/internal/middleware"
-	"ingest-srv/pkg/discord"
-	"ingest-srv/pkg/log"
+
+	"github.com/smap-hcmut/shared-libs/go/discord"
+	"github.com/smap-hcmut/shared-libs/go/log"
 
 	"github.com/gin-gonic/gin"
 )

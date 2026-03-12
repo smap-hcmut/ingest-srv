@@ -1,10 +1,9 @@
 package middleware
 
 import (
-	"ingest-srv/pkg/response"
-	"ingest-srv/pkg/scope"
-
 	"github.com/gin-gonic/gin"
+	"github.com/smap-hcmut/shared-libs/go/response"
+	"github.com/smap-hcmut/shared-libs/go/scope"
 )
 
 // AdminOnly is a middleware that checks if the user has admin role

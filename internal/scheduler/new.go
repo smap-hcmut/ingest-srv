@@ -5,10 +5,11 @@ import (
 	"errors"
 
 	"ingest-srv/config"
-	"ingest-srv/pkg/cron"
-	"ingest-srv/pkg/discord"
-	"ingest-srv/pkg/log"
-	"ingest-srv/pkg/rabbitmq"
+
+	"github.com/smap-hcmut/shared-libs/go/cron"
+	"github.com/smap-hcmut/shared-libs/go/discord"
+	"github.com/smap-hcmut/shared-libs/go/log"
+	"github.com/smap-hcmut/shared-libs/go/rabbitmq"
 )
 
 type Scheduler struct {
@@ -29,8 +30,10 @@ type Config struct {
 
 // New creates scheduler runtime.
 func New(l log.Logger, cfg Config) (Scheduler, error) {
+	cronScheduler := cron.New()
+
 	s := Scheduler{
-		cron:       cron.New(),
+		cron:       cronScheduler,
 		l:          l,
 		db:         cfg.DB,
 		conn:       cfg.AMQPConn,

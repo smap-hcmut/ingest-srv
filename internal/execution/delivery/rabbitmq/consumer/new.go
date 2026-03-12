@@ -2,8 +2,9 @@ package consumer
 
 import (
 	"ingest-srv/internal/execution"
-	"ingest-srv/pkg/log"
-	"ingest-srv/pkg/rabbitmq"
+
+	"github.com/smap-hcmut/shared-libs/go/log"
+	"github.com/smap-hcmut/shared-libs/go/rabbitmq"
 )
 
 // Consumer consumes execution completion messages from RabbitMQ.

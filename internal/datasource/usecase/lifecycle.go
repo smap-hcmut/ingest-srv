@@ -7,7 +7,8 @@ import (
 	"ingest-srv/internal/datasource"
 	repo "ingest-srv/internal/datasource/repository"
 	"ingest-srv/internal/model"
-	"ingest-srv/pkg/scope"
+
+	"github.com/smap-hcmut/shared-libs/go/scope"
 )
 
 // Activate transitions a datasource from READY to ACTIVE when runtime prerequisites are met.

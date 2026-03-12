@@ -6,7 +6,8 @@ import (
 	"sync"
 
 	"ingest-srv/config"
-	"ingest-srv/pkg/redis"
+
+	"github.com/smap-hcmut/shared-libs/go/redis"
 )
 
 var (
@@ -39,7 +40,7 @@ func Connect(ctx context.Context, cfg config.RedisConfig) (redis.IRedis, error) 
 			DB:       cfg.DB,
 		}
 
-		client, e := redis.NewRedis(clientCfg)
+		client, e := redis.New(clientCfg)
 		if e != nil {
 			err = fmt.Errorf("failed to initialize Redis client: %w", e)
 			initErr = err

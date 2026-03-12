@@ -4,7 +4,8 @@ import (
 	"encoding/json"
 
 	"ingest-srv/internal/model"
-	"ingest-srv/pkg/paginator"
+
+	"github.com/smap-hcmut/shared-libs/go/paginator"
 )
 
 // CreateInput is the input for creating a data source.

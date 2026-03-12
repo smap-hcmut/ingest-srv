@@ -5,8 +5,9 @@ import (
 
 	"ingest-srv/internal/uap"
 	repo "ingest-srv/internal/uap/repository"
-	"ingest-srv/pkg/log"
-	"ingest-srv/pkg/minio"
+
+	"github.com/smap-hcmut/shared-libs/go/log"
+	"github.com/smap-hcmut/shared-libs/go/minio"
 )
 
 type implUseCase struct {

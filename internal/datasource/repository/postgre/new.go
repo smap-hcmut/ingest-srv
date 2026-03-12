@@ -4,7 +4,8 @@ import (
 	"database/sql"
 
 	repo "ingest-srv/internal/datasource/repository"
-	"ingest-srv/pkg/log"
+
+	"github.com/smap-hcmut/shared-libs/go/log"
 )
 
 type implRepository struct {

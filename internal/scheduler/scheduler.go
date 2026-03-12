@@ -3,16 +3,16 @@ package scheduler
 import (
 	"context"
 	"fmt"
+	executionJob "ingest-srv/internal/execution/delivery/job"
+	executionProducer "ingest-srv/internal/execution/delivery/rabbitmq/producer"
+	executionRepo "ingest-srv/internal/execution/repository/postgre"
+	executionUC "ingest-srv/internal/execution/usecase"
 	"os"
 	"os/signal"
 	"runtime/debug"
 	"syscall"
 
-	executionJob "ingest-srv/internal/execution/delivery/job"
-	executionProducer "ingest-srv/internal/execution/delivery/rabbitmq/producer"
-	executionRepo "ingest-srv/internal/execution/repository/postgre"
-	executionUC "ingest-srv/internal/execution/usecase"
-	"ingest-srv/pkg/cron"
+	"github.com/smap-hcmut/shared-libs/go/cron"
 )
 
 func (s Scheduler) Start() error {
@@ -40,10 +40,6 @@ func (s Scheduler) Start() error {
 }
 
 func (s Scheduler) registerJobs() error {
-	s.cron.SetFuncWrapper(func(f cron.HandleFunc) {
-		s.jobWrapper(f)
-	})
-
 	execRepo := executionRepo.New(s.l, s.db)
 	execProducer := executionProducer.New(s.l, s.conn)
 	if err := execProducer.Run(); err != nil {
@@ -51,19 +47,13 @@ func (s Scheduler) registerJobs() error {
 	}
 
 	execUC := executionUC.New(s.l, execRepo, nil, execProducer, nil)
+	jobHandler := executionJob.New(s.l, s.cfg, s.cron, execUC)
 
-	jobHandlers := []interface {
-		Register() []cron.JobInfo
-	}{
-		executionJob.New(s.l, s.cfg, s.cron, execUC),
-	}
-
-	for _, jobHandler := range jobHandlers {
-		infos := jobHandler.Register()
-		for _, info := range infos {
-			if err := s.cron.AddJob(info); err != nil {
-				return err
-			}
+	// Register jobs using shared-libs cron
+	jobInfos := jobHandler.Register()
+	for _, jobInfo := range jobInfos {
+		if err := s.cron.AddJob(jobInfo); err != nil {
+			return fmt.Errorf("failed to add job %s: %w", jobInfo.Name, err)
 		}
 	}
 

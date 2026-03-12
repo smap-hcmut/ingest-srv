@@ -3,10 +3,10 @@ package consumer
 import (
 	"database/sql"
 
-	"ingest-srv/pkg/log"
-	"ingest-srv/pkg/kafka"
-	"ingest-srv/pkg/minio"
-	"ingest-srv/pkg/rabbitmq"
+	"github.com/smap-hcmut/shared-libs/go/kafka"
+	"github.com/smap-hcmut/shared-libs/go/log"
+	"github.com/smap-hcmut/shared-libs/go/minio"
+	"github.com/smap-hcmut/shared-libs/go/rabbitmq"
 )
 
 // Server is the consumer server.

@@ -1,9 +1,8 @@
 package middleware
 
 import (
-	"ingest-srv/pkg/locale"
-
 	"github.com/gin-gonic/gin"
+	"github.com/smap-hcmut/shared-libs/go/locale"
 )
 
 // Locale returns a middleware that extracts and sets the locale from the request header.

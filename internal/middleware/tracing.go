@@ -1,10 +1,9 @@
 package middleware
 
 import (
-	"ingest-srv/pkg/log"
-
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/smap-hcmut/shared-libs/go/log"
 )
 
 const (
@@ -20,7 +19,7 @@ func Tracing() gin.HandlerFunc {
 
 		// Set trace id in context for pkg/log to pick up
 		c.Set(log.TraceIDKey, traceID)
-		
+
 		// Also set in response header
 		c.Header(XTraceIDHeader, traceID)
 

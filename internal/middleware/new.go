@@ -2,18 +2,19 @@ package middleware
 
 import (
 	"ingest-srv/config"
-	pkgLog "ingest-srv/pkg/log"
-	pkgScope "ingest-srv/pkg/scope"
+
+	"github.com/smap-hcmut/shared-libs/go/log"
+	"github.com/smap-hcmut/shared-libs/go/scope"
 )
 
 type Middleware struct {
-	l            pkgLog.Logger
-	jwtManager   pkgScope.Manager
+	l            log.Logger
+	jwtManager   scope.Manager
 	cookieConfig config.CookieConfig
 	InternalKey  string
 }
 
-func New(l pkgLog.Logger, jwtManager pkgScope.Manager, cookieConfig config.CookieConfig, internalKey string) Middleware {
+func New(l log.Logger, jwtManager scope.Manager, cookieConfig config.CookieConfig, internalKey string) Middleware {
 	return Middleware{
 		l:            l,
 		jwtManager:   jwtManager,

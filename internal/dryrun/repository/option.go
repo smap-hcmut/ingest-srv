@@ -3,7 +3,7 @@ package repository
 import (
 	"encoding/json"
 
-	"ingest-srv/pkg/paginator"
+	"github.com/smap-hcmut/shared-libs/go/paginator"
 )
 
 // CreateResultOptions contains data needed to insert a dryrun result.
@@ -35,7 +35,7 @@ type GetLatestOptions struct {
 
 // ListHistoryOptions contains filters and pagination for history queries.
 type ListHistoryOptions struct {
-	SourceID   string
-	TargetID   string
-	Paginator  paginator.PaginateQuery
+	SourceID  string
+	TargetID  string
+	Paginator paginator.PaginateQuery
 }
