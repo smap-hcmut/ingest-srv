@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"time"
 
 	"ingest-srv/internal/model"
@@ -23,18 +24,18 @@ func (m *implManager) Verify(token string) (Payload, error) {
 		}
 		return []byte(m.secretKey), nil
 	}
-	jwtToken, err := jwt.ParseWithClaims(token, &Payload{}, keyFunc)
+	jwtToken, err := jwt.Parse(token, keyFunc)
 	if err != nil {
 		return Payload{}, fmt.Errorf("%w: %v", ErrInvalidToken, err)
 	}
 	if !jwtToken.Valid {
 		return Payload{}, fmt.Errorf("%w: token is not valid", ErrInvalidToken)
 	}
-	payload, ok := jwtToken.Claims.(*Payload)
+	mapClaims, ok := jwtToken.Claims.(jwt.MapClaims)
 	if !ok {
 		return Payload{}, fmt.Errorf("%w: failed to parse claims", ErrInvalidToken)
 	}
-	return *payload, nil
+	return payloadFromMapClaims(mapClaims), nil
 }
 
 // CreateToken creates a new JWT token with the given payload.
@@ -131,4 +132,115 @@ func GetScopeFromContext(ctx context.Context) model.Scope {
 		return model.Scope{}
 	}
 	return scope
+}
+
+func payloadFromMapClaims(claims jwt.MapClaims) Payload {
+	payload := Payload{
+		UserID:   getStringClaim(claims, "sub"),
+		Username: firstNonEmptyClaim(claims, "username", "email"),
+		Role:     getStringClaim(claims, "role"),
+		Type:     getStringClaim(claims, "type"),
+		Refresh:  getBoolClaim(claims, "refresh"),
+	}
+	payload.StandardClaims = jwt.StandardClaims{
+		Audience:  getAudienceClaim(claims),
+		ExpiresAt: getInt64Claim(claims, "exp"),
+		Id:        firstNonEmptyClaim(claims, "jti", "id"),
+		IssuedAt:  getInt64Claim(claims, "iat"),
+		Issuer:    getStringClaim(claims, "iss"),
+		NotBefore: getInt64Claim(claims, "nbf"),
+		Subject:   getStringClaim(claims, "sub"),
+	}
+	return payload
+}
+
+func getStringClaim(claims jwt.MapClaims, key string) string {
+	value, ok := claims[key]
+	if !ok || value == nil {
+		return ""
+	}
+	switch v := value.(type) {
+	case string:
+		return v
+	case fmt.Stringer:
+		return v.String()
+	default:
+		return fmt.Sprint(v)
+	}
+}
+
+func firstNonEmptyClaim(claims jwt.MapClaims, keys ...string) string {
+	for _, key := range keys {
+		value := getStringClaim(claims, key)
+		if value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func getInt64Claim(claims jwt.MapClaims, key string) int64 {
+	value, ok := claims[key]
+	if !ok || value == nil {
+		return 0
+	}
+	switch v := value.(type) {
+	case float64:
+		return int64(v)
+	case float32:
+		return int64(v)
+	case int64:
+		return v
+	case int:
+		return int64(v)
+	case json.Number:
+		n, _ := v.Int64()
+		return n
+	case string:
+		n, err := strconv.ParseInt(v, 10, 64)
+		if err == nil {
+			return n
+		}
+	}
+	return 0
+}
+
+func getBoolClaim(claims jwt.MapClaims, key string) bool {
+	value, ok := claims[key]
+	if !ok || value == nil {
+		return false
+	}
+	switch v := value.(type) {
+	case bool:
+		return v
+	case string:
+		parsed, err := strconv.ParseBool(v)
+		return err == nil && parsed
+	default:
+		return false
+	}
+}
+
+func getAudienceClaim(claims jwt.MapClaims) string {
+	value, ok := claims["aud"]
+	if !ok || value == nil {
+		return ""
+	}
+	switch v := value.(type) {
+	case string:
+		return v
+	case []interface{}:
+		for _, item := range v {
+			if s, ok := item.(string); ok && s != "" {
+				return s
+			}
+		}
+	case []string:
+		for _, item := range v {
+			if item != "" {
+				return item
+			}
+		}
+	}
+	return ""
 }
