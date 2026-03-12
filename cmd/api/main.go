@@ -19,6 +19,7 @@ import (
 	"github.com/smap-hcmut/shared-libs/go/encrypter"
 	"github.com/smap-hcmut/shared-libs/go/log"
 	"github.com/smap-hcmut/shared-libs/go/redis"
+	_ "github.com/smap-hcmut/shared-libs/go/response" // For swagger type definitions
 )
 
 // @title       SMAP Ingest Service API

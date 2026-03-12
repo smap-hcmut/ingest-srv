@@ -21,13 +21,13 @@ models-local:
 
 swagger:
 	@echo "Generating swagger"
-	@swag init -g cmd/api/main.go
+	@swag init -g cmd/api/main.go --parseVendor
 	@echo "Fixing swagger docs (removing deprecated LeftDelim/RightDelim)..."
 	@$(FIX_SWAGGER)
 
 run-api:
 	@echo "Generating swagger"
-	@swag init -g cmd/api/main.go
+	@swag init -g cmd/api/main.go --parseVendor
 	@$(FIX_SWAGGER)
 	@echo "Running the application"
 	@go run cmd/api/main.go
