@@ -24,7 +24,7 @@
     "platform": "tiktok",                 // Map: queue name (tiktok_tasks)
     "url": "https://www.tiktok.com/...",   // Map: post.url
     "task_id": "f0e87d9e...",              // Map: completion.task_id (Dùng để backtrack raw data)
-    "project_id": "f0e87d9e"                // Map: get from ingest service
+    "project_id": "11111111-1111-1111-1111-111111111111" // Map: ingest runtime project_id để phân tách tenant/project
   },
 
   "hierarchy": {
@@ -105,7 +105,9 @@
     "uap_id": "tt_c_761173...",           // Map: comments.comment_id
     "origin_id": "761173...",             // Map: comments.comment_id
     "uap_type": "COMMENT",                // Enum: COMMENT | REPLY
-    "platform": "tiktok"
+    "platform": "tiktok",
+    "task_id": "f0e87d9e...",             // Map: completion.task_id (trace ngược raw batch/task)
+    "project_id": "11111111-1111-1111-1111-111111111111" // Map: ingest runtime project_id
   },
 
   "hierarchy": {

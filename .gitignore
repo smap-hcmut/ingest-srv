@@ -29,3 +29,4 @@ secrets/
 # Kubernetes manifests with real credentials (never commit)
 manifests/secret.yaml
 manifests/configmap.yaml
+ingest-config.yaml
