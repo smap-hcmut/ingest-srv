@@ -102,12 +102,13 @@ func DefaultCORSConfig(environment string) CORSConfig {
 			"Content-Length",
 			"Accept-Encoding",
 			"X-CSRF-Token",
+			"X-Trace-Id",
 			"Authorization",
 			"Accept",
 			"X-Requested-With",
 			"lang",
 		},
-		ExposedHeaders:   []string{"Content-Length"},
+		ExposedHeaders:   []string{"Content-Length", "X-Trace-Id"},
 		AllowCredentials: true,
 		MaxAge:           86400, // 24 hours
 	}
