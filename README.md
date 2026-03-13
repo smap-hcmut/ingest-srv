@@ -1,6 +1,6 @@
-# ingest-srv
+# dispatcher-srv (ingest-srv)
 
-SMAP Ingest Service.
+SMAP Dispatcher/Ingest Service.
 
 Service này quản lý datasource/target, điều phối runtime crawl, nhận completion từ crawler, lưu raw batch, parse sang UAP và publish downstream.
 
