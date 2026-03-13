@@ -14,7 +14,6 @@ import (
 	"github.com/smap-hcmut/shared-libs/go/minio"
 	"github.com/smap-hcmut/shared-libs/go/rabbitmq"
 	"github.com/smap-hcmut/shared-libs/go/redis"
-	"go.uber.org/zap"
 )
 
 // HTTPServer represents ingest HTTP API server.
@@ -109,15 +108,9 @@ func (srv *HTTPServer) zapLoggerMiddleware() gin.HandlerFunc {
 		}
 
 		if srv.environment == "production" {
-			srv.l.Info(c.Request.Context(), "HTTP Request",
-				zap.Int("status", status),
-				zap.String("method", c.Request.Method),
-				zap.String("path", path),
-				zap.String("query", query),
-				zap.String("ip", c.ClientIP()),
-				zap.Duration("latency", latency),
-				zap.String("user-agent", c.Request.UserAgent()),
-			)
+			srv.l.Infof(c.Request.Context(),
+				"HTTP Request - Method: %s, Path: %s, Status: %d, IP: %s, Latency: %v, UserAgent: %s, Query: %s",
+				c.Request.Method, path, status, c.ClientIP(), latency, c.Request.UserAgent(), query)
 		} else {
 			srv.l.Infof(c.Request.Context(), "%s %s %d %s %s", c.Request.Method, path, status, latency, c.ClientIP())
 		}

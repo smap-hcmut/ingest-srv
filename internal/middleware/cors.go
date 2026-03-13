@@ -48,6 +48,7 @@ var productionOrigins = []string{
 	"https://smap-api.tantai.dev",
 	"http://smap.tantai.dev",     // For testing/non-HTTPS
 	"http://smap-api.tantai.dev", // For testing/non-HTTPS
+	"http://localhost:3005",      // For UI Test Console (new port)
 }
 
 // isPrivateOrigin checks if origin is from an allowed private subnet

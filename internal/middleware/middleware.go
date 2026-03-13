@@ -8,17 +8,24 @@ import (
 
 func (m Middleware) Auth() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		var tokenString string
+		var err error
 
-		// Cookie-first authentication strategy
-		// First, attempt to read token from cookie (preferred method)
-		tokenString, err := c.Cookie(m.cookieConfig.Name)
-
-		// Fallback to Authorization header for backward compatibility
-		if err != nil || tokenString == "" {
-			authHeader := c.GetHeader("Authorization")
+		// Priority 1: Try to read token from Authorization header
+		authHeader := c.GetHeader("Authorization")
+		if authHeader != "" {
+			// Support both "Bearer <token>" and plain token
 			if len(authHeader) > 7 && authHeader[:7] == "Bearer " {
 				tokenString = authHeader[7:]
 			} else {
+				tokenString = authHeader
+			}
+		}
+
+		// Priority 2: If no token in header (or it's just "Bearer "), try cookie
+		if tokenString == "" || tokenString == "Bearer " {
+			tokenString, err = c.Cookie(m.cookieConfig.Name)
+			if err != nil || tokenString == "" {
 				response.Unauthorized(c)
 				c.Abort()
 				return
