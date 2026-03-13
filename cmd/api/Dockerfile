@@ -13,17 +13,20 @@ ARG TARGETARCH
 RUN apk add --no-cache ca-certificates tzdata
 
 COPY go.mod go.sum ./
-RUN --mount=type=cache,target=/go/pkg/mod \
-    go mod download && go mod verify
+COPY vendor/ vendor/
 
 COPY . .
 
+# Install swag tool and generate Swagger docs
+RUN go install github.com/swaggo/swag/cmd/swag@v1.8.12
+RUN swag init -g cmd/api/main.go --parseVendor
+
 RUN --mount=type=cache,target=/root/.cache/go-build \
-    --mount=type=cache,target=/go/pkg/mod \
     CGO_ENABLED=0 \
     GOOS=${TARGETOS} \
     GOARCH=${TARGETARCH} \
     go build \
+    -mod=vendor \
     -trimpath \
     -ldflags="-s -w" \
     -o api ./cmd/api

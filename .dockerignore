@@ -29,7 +29,7 @@ Thumbs.db
 *.out
 
 # Vendor (downloaded inside Docker)
-vendor/
+# vendor/
 
 # Temporary files
 tmp/
