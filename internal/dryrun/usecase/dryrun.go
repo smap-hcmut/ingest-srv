@@ -9,7 +9,7 @@ import (
 	dryrunRepo "ingest-srv/internal/dryrun/repository"
 	"ingest-srv/internal/model"
 
-	"github.com/smap-hcmut/shared-libs/go/scope"
+	"github.com/smap-hcmut/shared-libs/go/auth"
 )
 
 // Trigger runs one validation-only dryrun for a datasource or grouped crawl target and persists the result.
@@ -54,7 +54,7 @@ func (uc *implUseCase) Trigger(ctx context.Context, input dryrun.TriggerInput) (
 		return dryrun.TriggerOutput{}, dryrun.ErrTargetForbidden
 	}
 
-	requestedBy, _ := scope.GetUserIDFromContext(ctx)
+	requestedBy, _ := auth.GetUserIDFromContext(ctx)
 	running, err := uc.repo.CreateResult(ctx, dryrunRepo.CreateResultOptions{
 		SourceID:    source.ID,
 		ProjectID:   source.ProjectID,

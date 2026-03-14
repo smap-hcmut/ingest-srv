@@ -8,7 +8,7 @@ import (
 	repo "ingest-srv/internal/datasource/repository"
 	"ingest-srv/internal/model"
 
-	"github.com/smap-hcmut/shared-libs/go/scope"
+	"github.com/smap-hcmut/shared-libs/go/auth"
 )
 
 // Activate transitions a datasource from READY to ACTIVE when runtime prerequisites are met.
@@ -177,7 +177,7 @@ func (uc *implUseCase) UpdateCrawlMode(ctx context.Context, input datasource.Upd
 		return datasource.UpdateCrawlModeOutput{}, datasource.ErrUpdateFailed
 	}
 
-	triggeredBy, _ := scope.GetUserIDFromContext(ctx)
+	triggeredBy, _ := auth.GetUserIDFromContext(ctx)
 	if _, err := uc.repo.CreateCrawlModeChange(ctx, repo.CreateCrawlModeChangeOptions{
 		SourceID:            current.ID,
 		ProjectID:           current.ProjectID,

@@ -54,13 +54,9 @@ jwt:
   secret_key: "smap-secret-key-at-least-32-chars-long"
 
 cookie:
-  domain: "localhost"
-  secure: false
-  samesite: "Lax"
-  max_age: 28800
-  max_age_remember: 604800
   name: "smap_auth_token"
-
+  max_age: 28800  # 8 hours
+  domain: ".tantai.dev"  # Used for production; localhost origin gets SameSite=None dynamically
 encrypter:
   key: "test-encryption-key-32-chars-123"
 

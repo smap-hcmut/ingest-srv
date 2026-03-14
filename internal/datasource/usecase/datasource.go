@@ -8,7 +8,7 @@ import (
 	repo "ingest-srv/internal/datasource/repository"
 	"ingest-srv/internal/model"
 
-	"github.com/smap-hcmut/shared-libs/go/scope"
+	"github.com/smap-hcmut/shared-libs/go/auth"
 )
 
 // Create validates input, enforces business rules, and creates a new data source.
@@ -18,7 +18,7 @@ func (uc *implUseCase) Create(ctx context.Context, input datasource.CreateInput)
 		return datasource.CreateOutput{}, err
 	}
 
-	userID, _ := scope.GetUserIDFromContext(ctx)
+	userID, _ := auth.GetUserIDFromContext(ctx)
 
 	opt := repo.CreateDataSourceOptions{
 		ProjectID:              strings.TrimSpace(input.ProjectID),

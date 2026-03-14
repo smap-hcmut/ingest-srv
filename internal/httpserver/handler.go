@@ -14,16 +14,17 @@ import (
 	executionRepo "ingest-srv/internal/execution/repository/postgre"
 	executionUC "ingest-srv/internal/execution/usecase"
 	"ingest-srv/internal/middleware"
+	sharedmw "github.com/smap-hcmut/shared-libs/go/middleware"
 
 	"github.com/gin-gonic/gin"
 	"github.com/smap-hcmut/shared-libs/go/response"
-	"github.com/smap-hcmut/shared-libs/go/scope"
+	"github.com/smap-hcmut/shared-libs/go/auth"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 func (srv HTTPServer) mapHandlers() error {
-	scopeManager := scope.New(srv.cfg.JWT.SecretKey)
+	scopeManager := auth.NewManager(srv.cfg.JWT.SecretKey)
 	mw := middleware.New(
 		srv.l,
 		scopeManager,
@@ -60,11 +61,11 @@ func (srv HTTPServer) mapHandlers() error {
 }
 
 func (srv HTTPServer) registerMiddlewares(mw middleware.Middleware) {
-	srv.gin.Use(middleware.Tracing())
-	srv.gin.Use(middleware.Recovery(srv.l, srv.discord))
+	srv.gin.Use(sharedmw.Tracing())
+	srv.gin.Use(sharedmw.Recovery(srv.l, srv.discord))
 
-	corsConfig := middleware.DefaultCORSConfig(srv.environment)
-	srv.gin.Use(middleware.CORS(corsConfig))
+	corsConfig := sharedmw.DefaultCORSConfig(srv.environment)
+	srv.gin.Use(sharedmw.CORS(corsConfig))
 
 	ctx := context.Background()
 	if srv.environment == "production" {
@@ -73,7 +74,7 @@ func (srv HTTPServer) registerMiddlewares(mw middleware.Middleware) {
 		srv.l.Infof(ctx, "CORS mode: %s", srv.environment)
 	}
 
-	srv.gin.Use(mw.Locale())
+	srv.gin.Use(sharedmw.Locale())
 }
 
 func (srv HTTPServer) registerSystemRoutes() {

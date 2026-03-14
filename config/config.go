@@ -89,13 +89,13 @@ type JWTConfig struct {
 	SecretKey string
 }
 
+// CookieConfig is the configuration for HttpOnly cookie authentication
+// Note: Secure and SameSite are now dynamically determined by auth.Middleware
+// based on the request Origin header. Bearer token acceptance is controlled by ENVIRONMENT_NAME.
 type CookieConfig struct {
-	Domain         string
-	Secure         bool
-	SameSite       string
-	MaxAge         int
-	MaxAgeRemember int
-	Name           string
+	Name   string // Cookie name (e.g., "smap_auth_token")
+	MaxAge int    // Cookie max age in seconds (e.g., 28800 for 8 hours)
+	Domain string // Production domain for cookies (e.g., ".tantai.dev")
 }
 
 type EncrypterConfig struct {
@@ -184,12 +184,9 @@ func Load() (*Config, error) {
 
 	cfg.JWT.SecretKey = viper.GetString("jwt.secret_key")
 
-	cfg.Cookie.Domain = viper.GetString("cookie.domain")
-	cfg.Cookie.Secure = viper.GetBool("cookie.secure")
-	cfg.Cookie.SameSite = viper.GetString("cookie.samesite")
-	cfg.Cookie.MaxAge = viper.GetInt("cookie.max_age")
-	cfg.Cookie.MaxAgeRemember = viper.GetInt("cookie.max_age_remember")
 	cfg.Cookie.Name = viper.GetString("cookie.name")
+	cfg.Cookie.MaxAge = viper.GetInt("cookie.max_age")
+	cfg.Cookie.Domain = viper.GetString("cookie.domain")
 
 	cfg.Encrypter.Key = viper.GetString("encrypter.key")
 	cfg.InternalConfig.InternalKey = viper.GetString("internal.internal_key")
@@ -259,12 +256,9 @@ func setDefaults() {
 	viper.SetDefault("rabbitmq.url", "amqp://admin:21042004@172.16.21.206:5672/")
 	viper.SetDefault("rabbitmq.retry_without_timeout", true)
 
-	viper.SetDefault("cookie.domain", "localhost")
-	viper.SetDefault("cookie.secure", false)
-	viper.SetDefault("cookie.samesite", "Lax")
-	viper.SetDefault("cookie.max_age", 28800)
-	viper.SetDefault("cookie.max_age_remember", 604800)
 	viper.SetDefault("cookie.name", "smap_auth_token")
+	viper.SetDefault("cookie.max_age", 28800)    // 8 hours
+	viper.SetDefault("cookie.domain", ".tantai.dev")
 
 	viper.SetDefault("scheduler.heartbeat_cron", "*/1 * * * *")
 	viper.SetDefault("scheduler.timezone", "Asia/Ho_Chi_Minh")
