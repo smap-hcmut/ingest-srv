@@ -28,7 +28,7 @@ spec:
         - name: harbor-registry
       containers:
         - name: ingest-api
-          image: registry.tantai.dev/smap/ingest-api:260316-234550
+          image: registry.tantai.dev/smap/ingest-api:260316-235044
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
