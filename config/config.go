@@ -104,7 +104,6 @@ type EncrypterConfig struct {
 
 type InternalConfig struct {
 	InternalKey string
-	ServiceKeys map[string]string
 }
 
 type DiscordConfig struct {
@@ -112,8 +111,8 @@ type DiscordConfig struct {
 }
 
 type SchedulerConfig struct {
-	HeartbeatCron string
-	Timezone      string
+	HeartbeatCron  string
+	Timezone       string
 	HeartbeatLimit int
 }
 
@@ -191,16 +190,6 @@ func Load() (*Config, error) {
 	cfg.Encrypter.Key = viper.GetString("encrypter.key")
 	cfg.InternalConfig.InternalKey = viper.GetString("internal.internal_key")
 
-	// Internal Service Keys
-	serviceKeys := make(map[string]string)
-	if viper.IsSet("internal.service_keys") {
-		serviceKeysRaw := viper.GetStringMapString("internal.service_keys")
-		for service, key := range serviceKeysRaw {
-			serviceKeys[service] = key
-		}
-	}
-	cfg.InternalConfig.ServiceKeys = serviceKeys
-
 	cfg.Discord.WebhookURL = viper.GetString("discord.webhook_url")
 
 	cfg.Scheduler.HeartbeatCron = viper.GetString("scheduler.heartbeat_cron")
@@ -257,7 +246,7 @@ func setDefaults() {
 	viper.SetDefault("rabbitmq.retry_without_timeout", true)
 
 	viper.SetDefault("cookie.name", "smap_auth_token")
-	viper.SetDefault("cookie.max_age", 28800)    // 8 hours
+	viper.SetDefault("cookie.max_age", 28800) // 8 hours
 	viper.SetDefault("cookie.domain", ".tantai.dev")
 
 	viper.SetDefault("scheduler.heartbeat_cron", "*/1 * * * *")

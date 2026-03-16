@@ -1,8 +1,8 @@
 package middleware
 
 import (
-	"os"
 	"ingest-srv/config"
+	"os"
 
 	"github.com/gin-gonic/gin"
 	"github.com/smap-hcmut/shared-libs/go/auth"

@@ -2,6 +2,8 @@ module ingest-srv
 
 go 1.25.6
 
+replace github.com/smap-hcmut/shared-libs/go => ../shared-libs/go
+
 require (
 	github.com/aarondl/null/v8 v8.1.3
 	github.com/aarondl/sqlboiler/v4 v4.19.7

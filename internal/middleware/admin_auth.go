@@ -2,8 +2,8 @@ package middleware
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/smap-hcmut/shared-libs/go/response"
 	"github.com/smap-hcmut/shared-libs/go/auth"
+	"github.com/smap-hcmut/shared-libs/go/response"
 )
 
 // AdminOnly is a middleware that checks if the user has admin role
@@ -27,25 +27,6 @@ func (m Middleware) AdminOnly() gin.HandlerFunc {
 			return
 		}
 
-		c.Next()
-	}
-}
-
-// OptionalAdmin is a middleware that sets isAdmin flag but doesn't block non-admin users
-// Useful for endpoints that have different behavior for admin vs regular users
-func (m Middleware) OptionalAdmin() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		ctx := c.Request.Context()
-		payload, ok := auth.GetPayloadFromContext(ctx)
-		if !ok {
-			response.Unauthorized(c)
-			c.Abort()
-			return
-		}
-		sc := auth.NewScope(payload)
-
-		// Set isAdmin flag in context
-		c.Set("isAdmin", sc.IsAdmin())
 		c.Next()
 	}
 }
