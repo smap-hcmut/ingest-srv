@@ -28,7 +28,7 @@ spec:
         - name: harbor-registry
       containers:
         - name: ingest-scheduler
-          image: registry.tantai.dev/smap/ingest-scheduler:260315-010744
+          image: registry.tantai.dev/smap/ingest-scheduler:260316-234614
           imagePullPolicy: IfNotPresent
           resources:
             requests:

@@ -28,7 +28,7 @@ spec:
         - name: harbor-registry
       containers:
         - name: ingest-consumer
-          image: registry.tantai.dev/smap/ingest-consumer:260315-010728
+          image: registry.tantai.dev/smap/ingest-consumer:260316-234608
           imagePullPolicy: IfNotPresent
           resources:
             requests:
