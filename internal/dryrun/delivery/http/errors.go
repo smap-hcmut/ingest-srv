@@ -1,49 +1,51 @@
 package http
 
 import (
+	"errors"
 	"ingest-srv/internal/dryrun"
+	"net/http"
 
 	pkgErrors "github.com/smap-hcmut/shared-libs/go/errors"
 )
 
 var (
-	errSourceNotFound     = pkgErrors.NewHTTPError(171001, "Datasource not found")
-	errTargetNotFound     = pkgErrors.NewHTTPError(171002, "Crawl target not found")
-	errTargetRequired     = pkgErrors.NewHTTPError(171003, "target_id is required for crawl dryrun")
-	errTargetForbidden    = pkgErrors.NewHTTPError(171004, "target_id is not allowed for passive dryrun")
-	errDryrunNotAllowed   = pkgErrors.NewHTTPError(171005, "Dryrun is not allowed in current source state")
-	errInvalidSampleLimit = pkgErrors.NewHTTPError(171006, "sample_limit must be greater than 0")
-	errResultNotFound     = pkgErrors.NewHTTPError(171007, "Dryrun result not found")
-	errCreateFailed       = pkgErrors.NewHTTPError(171008, "Failed to create dryrun result")
-	errGetFailed          = pkgErrors.NewHTTPError(171009, "Failed to get dryrun result")
-	errUpdateFailed       = pkgErrors.NewHTTPError(171010, "Failed to update dryrun result")
-	errListFailed         = pkgErrors.NewHTTPError(171011, "Failed to list dryrun history")
-	errWrongBody          = pkgErrors.NewHTTPError(171012, "Wrong request body")
+	errSourceNotFound     = &pkgErrors.HTTPError{Code: 1, Message: "Datasource not found", StatusCode: http.StatusNotFound}
+	errTargetNotFound     = &pkgErrors.HTTPError{Code: 2, Message: "Crawl target not found", StatusCode: http.StatusNotFound}
+	errTargetRequired     = &pkgErrors.HTTPError{Code: 3, Message: "target_id is required for crawl dryrun", StatusCode: http.StatusBadRequest}
+	errTargetForbidden    = &pkgErrors.HTTPError{Code: 4, Message: "target_id is not allowed for passive dryrun", StatusCode: http.StatusBadRequest}
+	errDryrunNotAllowed   = &pkgErrors.HTTPError{Code: 5, Message: "Dryrun is not allowed in current source state", StatusCode: http.StatusConflict}
+	errInvalidSampleLimit = &pkgErrors.HTTPError{Code: 6, Message: "sample_limit must be greater than 0", StatusCode: http.StatusBadRequest}
+	errResultNotFound     = &pkgErrors.HTTPError{Code: 7, Message: "Dryrun result not found", StatusCode: http.StatusNotFound}
+	errCreateFailed       = &pkgErrors.HTTPError{Code: 8, Message: "Failed to create dryrun result", StatusCode: http.StatusInternalServerError}
+	errGetFailed          = &pkgErrors.HTTPError{Code: 9, Message: "Failed to get dryrun result", StatusCode: http.StatusInternalServerError}
+	errUpdateFailed       = &pkgErrors.HTTPError{Code: 10, Message: "Failed to update dryrun result", StatusCode: http.StatusInternalServerError}
+	errListFailed         = &pkgErrors.HTTPError{Code: 11, Message: "Failed to list dryrun history", StatusCode: http.StatusInternalServerError}
+	errWrongBody          = &pkgErrors.HTTPError{Code: 12, Message: "Wrong request body", StatusCode: http.StatusBadRequest}
 )
 
 func (h *handler) mapError(err error) error {
-	switch err {
-	case dryrun.ErrSourceNotFound:
+	switch {
+	case errors.Is(err, dryrun.ErrSourceNotFound):
 		return errSourceNotFound
-	case dryrun.ErrTargetNotFound:
+	case errors.Is(err, dryrun.ErrTargetNotFound):
 		return errTargetNotFound
-	case dryrun.ErrTargetRequired:
+	case errors.Is(err, dryrun.ErrTargetRequired):
 		return errTargetRequired
-	case dryrun.ErrTargetForbidden:
+	case errors.Is(err, dryrun.ErrTargetForbidden):
 		return errTargetForbidden
-	case dryrun.ErrDryrunNotAllowed:
+	case errors.Is(err, dryrun.ErrDryrunNotAllowed):
 		return errDryrunNotAllowed
-	case dryrun.ErrInvalidSampleLimit:
+	case errors.Is(err, dryrun.ErrInvalidSampleLimit):
 		return errInvalidSampleLimit
-	case dryrun.ErrResultNotFound:
+	case errors.Is(err, dryrun.ErrResultNotFound):
 		return errResultNotFound
-	case dryrun.ErrCreateFailed:
+	case errors.Is(err, dryrun.ErrCreateFailed):
 		return errCreateFailed
-	case dryrun.ErrGetFailed:
+	case errors.Is(err, dryrun.ErrGetFailed):
 		return errGetFailed
-	case dryrun.ErrUpdateFailed:
+	case errors.Is(err, dryrun.ErrUpdateFailed):
 		return errUpdateFailed
-	case dryrun.ErrListFailed:
+	case errors.Is(err, dryrun.ErrListFailed):
 		return errListFailed
 	default:
 		return err

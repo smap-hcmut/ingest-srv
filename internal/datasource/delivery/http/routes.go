@@ -1,13 +1,12 @@
 package http
 
 import (
-	"ingest-srv/internal/middleware"
-
 	"github.com/gin-gonic/gin"
+	"github.com/smap-hcmut/shared-libs/go/middleware"
 )
 
 // RegisterRoutes maps data source routes to the given router group.
-func (h *handler) RegisterRoutes(r *gin.RouterGroup, mw middleware.Middleware) {
+func (h *handler) RegisterRoutes(r *gin.RouterGroup, mw *middleware.Middleware) {
 	sources := r.Group("/datasources")
 	sources.Use(mw.Auth())
 	{
@@ -32,7 +31,7 @@ func (h *handler) RegisterRoutes(r *gin.RouterGroup, mw middleware.Middleware) {
 }
 
 // RegisterInternalRoutes maps internal datasource routes.
-func (h *handler) RegisterInternalRoutes(r *gin.RouterGroup, mw middleware.Middleware) {
+func (h *handler) RegisterInternalRoutes(r *gin.RouterGroup, mw *middleware.Middleware) {
 	sources := r.Group("/datasources")
 	sources.Use(mw.InternalAuth())
 	{

@@ -2,7 +2,6 @@ package httpserver
 
 import (
 	"context"
-
 	datasourceHandler "ingest-srv/internal/datasource/delivery/http"
 	datasourceRepo "ingest-srv/internal/datasource/repository/postgre"
 	datasourceUC "ingest-srv/internal/datasource/usecase"
@@ -13,26 +12,25 @@ import (
 	executionProducer "ingest-srv/internal/execution/delivery/rabbitmq/producer"
 	executionRepo "ingest-srv/internal/execution/repository/postgre"
 	executionUC "ingest-srv/internal/execution/usecase"
-	"ingest-srv/internal/middleware"
-	sharedmw "github.com/smap-hcmut/shared-libs/go/middleware"
+	"ingest-srv/internal/model"
 
 	"github.com/gin-gonic/gin"
-	"github.com/smap-hcmut/shared-libs/go/response"
 	"github.com/smap-hcmut/shared-libs/go/auth"
+	"github.com/smap-hcmut/shared-libs/go/middleware"
+	"github.com/smap-hcmut/shared-libs/go/response"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 func (srv HTTPServer) mapHandlers() error {
-	scopeManager := auth.NewManager(srv.cfg.JWT.SecretKey)
-	mw := middleware.New(
-		srv.l,
-		scopeManager,
-		srv.cookieConfig,
-		srv.cfg.InternalConfig.InternalKey,
-	)
+	mw := middleware.New(middleware.Config{
+		JWTManager:       auth.NewManager(srv.cfg.JWT.SecretKey),
+		CookieName:       srv.cookieConfig.Name,
+		ProductionDomain: srv.cookieConfig.Domain,
+		InternalKey:      srv.cfg.InternalConfig.InternalKey,
+	})
 
-	srv.registerMiddlewares(mw)
+	srv.registerMiddlewares()
 	srv.registerSystemRoutes()
 	srv.registerIngestRoutes()
 
@@ -50,22 +48,22 @@ func (srv HTTPServer) mapHandlers() error {
 	execUseCase := executionUC.New(srv.l, execRepo, srv.minio, execProducer, nil)
 	execHTTP := executionHandler.New(srv.l, execUseCase, srv.discord)
 
-	api := srv.gin.Group("/api/v1")
-	datasourceHTTP.RegisterRoutes(api, mw)
-	dryrunHTTP.RegisterRoutes(api, mw)
-	ingestAPI := srv.gin.Group("/api/v1/ingest")
+	apiV1 := srv.gin.Group(model.APIV1Prefix)
+	datasourceHTTP.RegisterRoutes(apiV1, mw)
+	dryrunHTTP.RegisterRoutes(apiV1, mw)
+	ingestAPI := apiV1.Group("/ingest")
 	datasourceHTTP.RegisterInternalRoutes(ingestAPI, mw)
 	execHTTP.RegisterInternalRoutes(ingestAPI, mw)
 
 	return nil
 }
 
-func (srv HTTPServer) registerMiddlewares(mw middleware.Middleware) {
-	srv.gin.Use(sharedmw.Tracing())
-	srv.gin.Use(sharedmw.Recovery(srv.l, srv.discord))
+func (srv HTTPServer) registerMiddlewares() {
+	srv.gin.Use(middleware.Tracing())
+	srv.gin.Use(middleware.Recovery(srv.l, srv.discord))
 
-	corsConfig := sharedmw.DefaultCORSConfig(srv.environment)
-	srv.gin.Use(sharedmw.CORS(corsConfig))
+	corsConfig := middleware.DefaultCORSConfig(srv.environment)
+	srv.gin.Use(middleware.CORS(corsConfig))
 
 	ctx := context.Background()
 	if srv.environment == "production" {
@@ -74,7 +72,7 @@ func (srv HTTPServer) registerMiddlewares(mw middleware.Middleware) {
 		srv.l.Infof(ctx, "CORS mode: %s", srv.environment)
 	}
 
-	srv.gin.Use(sharedmw.Locale())
+	srv.gin.Use(middleware.Locale())
 }
 
 func (srv HTTPServer) registerSystemRoutes() {
@@ -91,7 +89,7 @@ func (srv HTTPServer) registerSystemRoutes() {
 }
 
 func (srv HTTPServer) registerIngestRoutes() {
-	api := srv.gin.Group("/api/v1/ingest")
+	api := srv.gin.Group(model.APIV1Prefix + "/ingest")
 	api.GET("/ping", func(c *gin.Context) {
 		response.OK(c, gin.H{
 			"service": "ingest-srv",
