@@ -28,6 +28,7 @@ func (srv HTTPServer) mapHandlers() error {
 		CookieName:       srv.cookieConfig.Name,
 		ProductionDomain: srv.cookieConfig.Domain,
 		InternalKey:      srv.cfg.InternalConfig.InternalKey,
+		IsProduction:     srv.environment == string(model.EnvironmentProduction),
 	})
 
 	srv.registerMiddlewares()
@@ -66,7 +67,7 @@ func (srv HTTPServer) registerMiddlewares() {
 	srv.gin.Use(middleware.CORS(corsConfig))
 
 	ctx := context.Background()
-	if srv.environment == "production" {
+	if srv.environment == string(model.EnvironmentProduction) {
 		srv.l.Infof(ctx, "CORS mode: production")
 	} else {
 		srv.l.Infof(ctx, "CORS mode: %s", srv.environment)
