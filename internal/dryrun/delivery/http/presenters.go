@@ -24,6 +24,9 @@ func (r triggerReq) validate() error {
 	if strings.TrimSpace(r.SourceID) == "" {
 		return errWrongBody
 	}
+	if strings.TrimSpace(r.TargetID) == "" {
+		return errWrongBody
+	}
 	if r.SampleLimit != nil && *r.SampleLimit <= 0 {
 		return errInvalidSampleLimit
 	}
