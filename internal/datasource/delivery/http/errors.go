@@ -11,27 +11,28 @@ import (
 
 // Delivery-layer HTTP errors — sequential codes per domain.
 var (
-	errNotFound             = &pkgErrors.HTTPError{Code: 1, Message: "Data source not found", StatusCode: http.StatusNotFound}
-	errNameRequired         = &pkgErrors.HTTPError{Code: 2, Message: "Data source name is required", StatusCode: http.StatusBadRequest}
-	errProjectIDRequired    = &pkgErrors.HTTPError{Code: 3, Message: "Project ID is required", StatusCode: http.StatusBadRequest}
-	errSourceTypeRequired   = &pkgErrors.HTTPError{Code: 4, Message: "Source type is required", StatusCode: http.StatusBadRequest}
-	errInvalidSourceType    = &pkgErrors.HTTPError{Code: 5, Message: "Invalid source type", StatusCode: http.StatusBadRequest}
-	errInvalidCategory      = &pkgErrors.HTTPError{Code: 6, Message: "Invalid source category", StatusCode: http.StatusBadRequest}
-	errInvalidCrawlMode     = &pkgErrors.HTTPError{Code: 7, Message: "Invalid crawl mode", StatusCode: http.StatusBadRequest}
-	errCrawlConfigRequired  = &pkgErrors.HTTPError{Code: 8, Message: "Crawl source requires crawl_mode and crawl_interval_minutes", StatusCode: http.StatusBadRequest}
-	errCreateFailed         = &pkgErrors.HTTPError{Code: 9, Message: "Failed to create data source", StatusCode: http.StatusInternalServerError}
-	errUpdateFailed         = &pkgErrors.HTTPError{Code: 10, Message: "Failed to update data source", StatusCode: http.StatusInternalServerError}
-	errDeleteFailed         = &pkgErrors.HTTPError{Code: 11, Message: "Failed to delete data source", StatusCode: http.StatusInternalServerError}
-	errListFailed           = &pkgErrors.HTTPError{Code: 12, Message: "Failed to list data sources", StatusCode: http.StatusInternalServerError}
-	errUpdateNotAllowed     = &pkgErrors.HTTPError{Code: 13, Message: "Cannot update config/mapping on an active source", StatusCode: http.StatusConflict}
-	errWrongBody            = &pkgErrors.HTTPError{Code: 14, Message: "Wrong request body", StatusCode: http.StatusBadRequest}
-	errInvalidCrawlInterval = &pkgErrors.HTTPError{Code: 15, Message: "Invalid crawl_interval_minutes; must be greater than 0", StatusCode: http.StatusBadRequest}
-	errInvalidTransition    = &pkgErrors.HTTPError{Code: 16, Message: "Invalid datasource lifecycle transition", StatusCode: http.StatusBadRequest}
-	errActivateNotAllowed   = &pkgErrors.HTTPError{Code: 17, Message: "Datasource cannot be activated in its current state", StatusCode: http.StatusConflict}
-	errPauseNotAllowed      = &pkgErrors.HTTPError{Code: 18, Message: "Datasource cannot be paused in its current state", StatusCode: http.StatusConflict}
-	errResumeNotAllowed     = &pkgErrors.HTTPError{Code: 19, Message: "Datasource cannot be resumed in its current state", StatusCode: http.StatusConflict}
-	errCrawlModeNotAllowed  = &pkgErrors.HTTPError{Code: 20, Message: "Crawl mode update is not allowed for this datasource", StatusCode: http.StatusConflict}
-	errInternal             = &pkgErrors.HTTPError{Code: 99, Message: "Internal server error", StatusCode: http.StatusInternalServerError}
+	errNotFound                  = &pkgErrors.HTTPError{Code: 1, Message: "Data source not found", StatusCode: http.StatusNotFound}
+	errNameRequired              = &pkgErrors.HTTPError{Code: 2, Message: "Data source name is required", StatusCode: http.StatusBadRequest}
+	errProjectIDRequired         = &pkgErrors.HTTPError{Code: 3, Message: "Project ID is required", StatusCode: http.StatusBadRequest}
+	errSourceTypeRequired        = &pkgErrors.HTTPError{Code: 4, Message: "Source type is required", StatusCode: http.StatusBadRequest}
+	errInvalidSourceType         = &pkgErrors.HTTPError{Code: 5, Message: "Invalid source type", StatusCode: http.StatusBadRequest}
+	errInvalidCategory           = &pkgErrors.HTTPError{Code: 6, Message: "Invalid source category", StatusCode: http.StatusBadRequest}
+	errInvalidCrawlMode          = &pkgErrors.HTTPError{Code: 7, Message: "Invalid crawl mode", StatusCode: http.StatusBadRequest}
+	errCrawlConfigRequired       = &pkgErrors.HTTPError{Code: 8, Message: "Crawl source requires crawl_mode and crawl_interval_minutes", StatusCode: http.StatusBadRequest}
+	errCreateFailed              = &pkgErrors.HTTPError{Code: 9, Message: "Failed to create data source", StatusCode: http.StatusInternalServerError}
+	errUpdateFailed              = &pkgErrors.HTTPError{Code: 10, Message: "Failed to update data source", StatusCode: http.StatusInternalServerError}
+	errDeleteFailed              = &pkgErrors.HTTPError{Code: 11, Message: "Failed to delete data source", StatusCode: http.StatusInternalServerError}
+	errListFailed                = &pkgErrors.HTTPError{Code: 12, Message: "Failed to list data sources", StatusCode: http.StatusInternalServerError}
+	errUpdateNotAllowed          = &pkgErrors.HTTPError{Code: 13, Message: "Cannot update config/mapping on an active source", StatusCode: http.StatusConflict}
+	errWrongBody                 = &pkgErrors.HTTPError{Code: 14, Message: "Wrong request body", StatusCode: http.StatusBadRequest}
+	errInvalidCrawlInterval      = &pkgErrors.HTTPError{Code: 15, Message: "Invalid crawl_interval_minutes; must be greater than 0", StatusCode: http.StatusBadRequest}
+	errInvalidTransition         = &pkgErrors.HTTPError{Code: 16, Message: "Invalid datasource lifecycle transition", StatusCode: http.StatusBadRequest}
+	errActivateNotAllowed        = &pkgErrors.HTTPError{Code: 17, Message: "Datasource cannot be activated in its current state", StatusCode: http.StatusBadRequest}
+	errPauseNotAllowed           = &pkgErrors.HTTPError{Code: 18, Message: "Datasource cannot be paused in its current state", StatusCode: http.StatusBadRequest}
+	errResumeNotAllowed          = &pkgErrors.HTTPError{Code: 19, Message: "Datasource cannot be resumed in its current state", StatusCode: http.StatusBadRequest}
+	errCrawlModeNotAllowed       = &pkgErrors.HTTPError{Code: 20, Message: "Crawl mode update is not allowed for this datasource", StatusCode: http.StatusBadRequest}
+	errActivationReadinessFailed = &pkgErrors.HTTPError{Code: 21, Message: "Project activation readiness failed", StatusCode: http.StatusBadRequest}
+	errInternal                  = &pkgErrors.HTTPError{Code: 99, Message: "Internal server error", StatusCode: http.StatusInternalServerError}
 
 	// CrawlTarget errors — 101+ range.
 	errTargetNotFound         = &pkgErrors.HTTPError{Code: 101, Message: "Crawl target not found", StatusCode: http.StatusNotFound}
@@ -84,6 +85,8 @@ func (h *handler) mapError(err error) error {
 		return errResumeNotAllowed
 	case errors.Is(err, datasource.ErrCrawlModeNotAllowed):
 		return errCrawlModeNotAllowed
+	case errors.Is(err, datasource.ErrActivationReadinessFailed):
+		return errActivationReadinessFailed
 	case errors.Is(err, datasource.ErrTargetNotFound):
 		return errTargetNotFound
 	case errors.Is(err, datasource.ErrTargetValuesRequired):
@@ -105,6 +108,6 @@ func (h *handler) mapError(err error) error {
 	case errors.Is(err, datasource.ErrInvalidTargetInterval):
 		return errInvalidTargetInterval
 	default:
-		return errInternal
+		panic(err) // Unexpected error — panic to trigger recovery middleware and alerting.
 	}
 }

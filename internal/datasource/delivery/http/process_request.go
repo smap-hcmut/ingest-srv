@@ -84,6 +84,16 @@ func (h *handler) processUpdateCrawlModeReq(c *gin.Context) (updateCrawlModeReq,
 	return req, nil
 }
 
+// processProjectLifecycleReq extracts project_id from internal project lifecycle routes.
+func (h *handler) processProjectLifecycleReq(c *gin.Context) (projectLifecycleReq, error) {
+	req := projectLifecycleReq{ProjectID: c.Param("project_id")}
+	if err := req.validate(); err != nil {
+		h.l.Warnf(c.Request.Context(), "datasource.delivery.processProjectLifecycleReq.validate: %v", err)
+		return req, err
+	}
+	return req, nil
+}
+
 // --- CrawlTarget Request Processors ---
 
 // processCreateTargetGroupReq binds JSON + path param for creating a grouped target.

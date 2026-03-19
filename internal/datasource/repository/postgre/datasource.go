@@ -178,6 +178,23 @@ func (r *implRepository) ListDataSources(ctx context.Context, opt repository.Lis
 	return dataSources, nil
 }
 
+// GetLatestDryrunByTarget returns the latest dryrun result for one crawl target.
+func (r *implRepository) GetLatestDryrunByTarget(ctx context.Context, targetID string) (model.DryrunResult, error) {
+	row, err := sqlboiler.DryrunResults(
+		sqlboiler.DryrunResultWhere.TargetID.EQ(null.StringFrom(targetID)),
+		qm.OrderBy(sqlboiler.DryrunResultColumns.CreatedAt+" DESC"),
+	).One(ctx, r.db)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return model.DryrunResult{}, nil
+		}
+		r.l.Errorf(ctx, "datasource.repository.GetLatestDryrunByTarget.One: target_id=%s err=%v", targetID, err)
+		return model.DryrunResult{}, repository.ErrFailedToGet
+	}
+
+	return *model.NewDryrunResultFromDB(row), nil
+}
+
 // UpdateDataSource updates a data source by ID. Only non-zero fields are applied.
 func (r *implRepository) UpdateDataSource(ctx context.Context, opt repository.UpdateDataSourceOptions) (model.DataSource, error) {
 	row, err := sqlboiler.FindDataSource(ctx, r.db, opt.ID)

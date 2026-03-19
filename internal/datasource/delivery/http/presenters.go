@@ -170,6 +170,22 @@ func (r archiveReq) toInput() string {
 	return strings.TrimSpace(r.ID)
 }
 
+// projectLifecycleReq extracts project_id from path param for internal project lifecycle APIs.
+type projectLifecycleReq struct {
+	ProjectID string
+}
+
+func (r projectLifecycleReq) validate() error {
+	if strings.TrimSpace(r.ProjectID) == "" {
+		return errProjectIDRequired
+	}
+	return nil
+}
+
+func (r projectLifecycleReq) toProjectID() string {
+	return strings.TrimSpace(r.ProjectID)
+}
+
 // --- Response DTOs ---
 
 // dataSourceResp represents data source data in API responses.
@@ -259,6 +275,29 @@ type updateCrawlModeResp struct {
 	DataSource dataSourceResp `json:"data_source"`
 }
 
+type activationReadinessErrorResp struct {
+	Code         string `json:"code" example:"TARGET_DRYRUN_MISSING"`
+	Message      string `json:"message" example:"crawl target has never been dry-run"`
+	DataSourceID string `json:"datasource_id,omitempty" example:"550e8400-e29b-41d4-a716-446655440011"`
+	TargetID     string `json:"target_id,omitempty" example:"550e8400-e29b-41d4-a716-446655440012"`
+}
+
+type activationReadinessResp struct {
+	ProjectID                string                         `json:"project_id" example:"550e8400-e29b-41d4-a716-446655440000"`
+	DataSourceCount          int                            `json:"datasource_count" example:"2"`
+	HasDatasource            bool                           `json:"has_datasource" example:"true"`
+	PassiveUnconfirmedCount  int                            `json:"passive_unconfirmed_count" example:"0"`
+	MissingTargetDryrunCount int                            `json:"missing_target_dryrun_count" example:"1"`
+	FailedTargetDryrunCount  int                            `json:"failed_target_dryrun_count" example:"0"`
+	CanActivate              bool                           `json:"can_activate" example:"false"`
+	Errors                   []activationReadinessErrorResp `json:"errors"`
+}
+
+type projectLifecycleResp struct {
+	ProjectID               string `json:"project_id" example:"550e8400-e29b-41d4-a716-446655440000"`
+	AffectedDataSourceCount int    `json:"affected_datasource_count" example:"2"`
+}
+
 // --- Response Mappers ---
 
 func (h *handler) newCreateResp(o datasource.CreateOutput) createResp {
@@ -286,6 +325,36 @@ func (h *handler) newUpdateResp(o datasource.UpdateOutput) updateResp {
 
 func (h *handler) newUpdateCrawlModeResp(o datasource.UpdateCrawlModeOutput) updateCrawlModeResp {
 	return updateCrawlModeResp{DataSource: toDataSourceResp(o.DataSource)}
+}
+
+func (h *handler) newActivationReadinessResp(o datasource.ActivationReadinessOutput) activationReadinessResp {
+	errors := make([]activationReadinessErrorResp, 0, len(o.Errors))
+	for _, e := range o.Errors {
+		errors = append(errors, activationReadinessErrorResp{
+			Code:         e.Code,
+			Message:      e.Message,
+			DataSourceID: e.DataSourceID,
+			TargetID:     e.TargetID,
+		})
+	}
+
+	return activationReadinessResp{
+		ProjectID:                o.ProjectID,
+		DataSourceCount:          o.DataSourceCount,
+		HasDatasource:            o.HasDatasource,
+		PassiveUnconfirmedCount:  o.PassiveUnconfirmedCount,
+		MissingTargetDryrunCount: o.MissingTargetDryrunCount,
+		FailedTargetDryrunCount:  o.FailedTargetDryrunCount,
+		CanActivate:              o.CanActivate,
+		Errors:                   errors,
+	}
+}
+
+func (h *handler) newProjectLifecycleResp(o datasource.ProjectLifecycleOutput) projectLifecycleResp {
+	return projectLifecycleResp{
+		ProjectID:               o.ProjectID,
+		AffectedDataSourceCount: o.AffectedDataSourceCount,
+	}
 }
 
 // --- Internal Mapper ---

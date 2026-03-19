@@ -17,6 +17,7 @@ type Repository interface {
 	GetOneDataSource(ctx context.Context, opt GetOneDataSourceOptions) (model.DataSource, error)
 	GetDataSources(ctx context.Context, opt GetDataSourcesOptions) ([]model.DataSource, paginator.Paginator, error)
 	ListDataSources(ctx context.Context, opt ListDataSourcesOptions) ([]model.DataSource, error)
+	GetLatestDryrunByTarget(ctx context.Context, targetID string) (model.DryrunResult, error)
 	UpdateDataSource(ctx context.Context, opt UpdateDataSourceOptions) (model.DataSource, error)
 	ArchiveDataSource(ctx context.Context, id string) error
 	CountActiveTargets(ctx context.Context, dataSourceID string) (int64, error)

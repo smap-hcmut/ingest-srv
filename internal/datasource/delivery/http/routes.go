@@ -37,4 +37,13 @@ func (h *handler) RegisterInternalRoutes(r *gin.RouterGroup, mw *middleware.Midd
 	{
 		sources.PUT("/:id/crawl-mode", h.UpdateCrawlMode)
 	}
+
+	projects := r.Group("/projects")
+	projects.Use(mw.InternalAuth())
+	{
+		projects.GET("/:project_id/activation-readiness", h.GetActivationReadiness)
+		projects.POST("/:project_id/activate", h.Activate)
+		projects.POST("/:project_id/pause", h.Pause)
+		projects.POST("/:project_id/resume", h.Resume)
+	}
 }

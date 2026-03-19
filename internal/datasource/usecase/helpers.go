@@ -2,9 +2,10 @@ package usecase
 
 import (
 	"net/url"
+	"strings"
+
 	"ingest-srv/internal/datasource"
 	"ingest-srv/internal/model"
-	"strings"
 )
 
 // validateSourceType checks if the given source_type is valid.
@@ -160,22 +161,8 @@ func (uc *implUseCase) validDeleteTargetInput(input datasource.DeleteTargetInput
 	return nil
 }
 
-func (uc *implUseCase) validActivateInput(input datasource.ActivateInput) error {
-	if strings.TrimSpace(input.ID) == "" {
-		return datasource.ErrNotFound
-	}
-	return nil
-}
-
-func (uc *implUseCase) validPauseInput(input datasource.PauseInput) error {
-	if strings.TrimSpace(input.ID) == "" {
-		return datasource.ErrNotFound
-	}
-	return nil
-}
-
-func (uc *implUseCase) validResumeInput(input datasource.ResumeInput) error {
-	if strings.TrimSpace(input.ID) == "" {
+func (uc *implUseCase) validDataSourceID(id string) error {
+	if strings.TrimSpace(id) == "" {
 		return datasource.ErrNotFound
 	}
 	return nil

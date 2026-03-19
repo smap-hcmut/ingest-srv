@@ -172,7 +172,7 @@ func (h *handler) Archive(c *gin.Context) {
 // @Success 200 {object} updateCrawlModeResp
 // @Failure 400 {object} response.Resp
 // @Failure 500 {object} response.Resp
-// @Router /ingest/datasources/{id}/crawl-mode [put]
+// @Router /internal/datasources/{id}/crawl-mode [put]
 func (h *handler) UpdateCrawlMode(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -191,6 +191,122 @@ func (h *handler) UpdateCrawlMode(c *gin.Context) {
 	}
 
 	response.OK(c, h.newUpdateCrawlModeResp(o))
+}
+
+// @Summary Get project activation readiness
+// @Description Internal API to evaluate project readiness from datasource/target dryrun state
+// @Tags DataSource
+// @Produce json
+// @Param project_id path string true "Project ID"
+// @Success 200 {object} activationReadinessResp
+// @Failure 400 {object} response.Resp
+// @Failure 500 {object} response.Resp
+// @Router /internal/projects/{project_id}/activation-readiness [get]
+func (h *handler) GetActivationReadiness(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	req, err := h.processProjectLifecycleReq(c)
+	if err != nil {
+		h.l.Warnf(ctx, "datasource.delivery.GetActivationReadiness.processProjectLifecycleReq: %v", err)
+		response.Error(c, err, h.discord)
+		return
+	}
+
+	o, err := h.uc.GetActivationReadiness(ctx, req.toProjectID())
+	if err != nil {
+		h.l.Errorf(ctx, "datasource.delivery.GetActivationReadiness.uc.GetActivationReadiness: project_id=%s err=%v", req.ProjectID, err)
+		response.Error(c, h.mapError(err), h.discord)
+		return
+	}
+
+	response.OK(c, h.newActivationReadinessResp(o))
+}
+
+// @Summary Activate all datasources in a project
+// @Description Internal API to activate project-level datasource runtime with fail-fast semantics
+// @Tags DataSource
+// @Produce json
+// @Param project_id path string true "Project ID"
+// @Success 200 {object} projectLifecycleResp
+// @Failure 400 {object} response.Resp
+// @Failure 500 {object} response.Resp
+// @Router /internal/projects/{project_id}/activate [post]
+func (h *handler) Activate(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	req, err := h.processProjectLifecycleReq(c)
+	if err != nil {
+		h.l.Warnf(ctx, "datasource.delivery.Activate.processProjectLifecycleReq: %v", err)
+		response.Error(c, err, h.discord)
+		return
+	}
+
+	o, err := h.uc.Activate(ctx, req.toProjectID())
+	if err != nil {
+		h.l.Errorf(ctx, "datasource.delivery.Activate.uc.Activate: project_id=%s err=%v", req.ProjectID, err)
+		response.Error(c, h.mapError(err), h.discord)
+		return
+	}
+
+	response.OK(c, h.newProjectLifecycleResp(o))
+}
+
+// @Summary Pause all active datasources in a project
+// @Description Internal API to pause project-level datasource runtime
+// @Tags DataSource
+// @Produce json
+// @Param project_id path string true "Project ID"
+// @Success 200 {object} projectLifecycleResp
+// @Failure 400 {object} response.Resp
+// @Failure 500 {object} response.Resp
+// @Router /internal/projects/{project_id}/pause [post]
+func (h *handler) Pause(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	req, err := h.processProjectLifecycleReq(c)
+	if err != nil {
+		h.l.Warnf(ctx, "datasource.delivery.Pause.processProjectLifecycleReq: %v", err)
+		response.Error(c, err, h.discord)
+		return
+	}
+
+	o, err := h.uc.Pause(ctx, req.toProjectID())
+	if err != nil {
+		h.l.Errorf(ctx, "datasource.delivery.Pause.uc.Pause: project_id=%s err=%v", req.ProjectID, err)
+		response.Error(c, h.mapError(err), h.discord)
+		return
+	}
+
+	response.OK(c, h.newProjectLifecycleResp(o))
+}
+
+// @Summary Resume all paused datasources in a project
+// @Description Internal API to resume project-level datasource runtime after readiness passes
+// @Tags DataSource
+// @Produce json
+// @Param project_id path string true "Project ID"
+// @Success 200 {object} projectLifecycleResp
+// @Failure 400 {object} response.Resp
+// @Failure 500 {object} response.Resp
+// @Router /internal/projects/{project_id}/resume [post]
+func (h *handler) Resume(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	req, err := h.processProjectLifecycleReq(c)
+	if err != nil {
+		h.l.Warnf(ctx, "datasource.delivery.Resume.processProjectLifecycleReq: %v", err)
+		response.Error(c, err, h.discord)
+		return
+	}
+
+	o, err := h.uc.Resume(ctx, req.toProjectID())
+	if err != nil {
+		h.l.Errorf(ctx, "datasource.delivery.Resume.uc.Resume: project_id=%s err=%v", req.ProjectID, err)
+		response.Error(c, h.mapError(err), h.discord)
+		return
+	}
+
+	response.OK(c, h.newProjectLifecycleResp(o))
 }
 
 // --- CrawlTarget Handlers ---

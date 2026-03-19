@@ -66,9 +66,30 @@ type UpdateOutput struct {
 	DataSource model.DataSource
 }
 
-// ActivateInput transitions a datasource into ACTIVE when preconditions are met.
-type ActivateInput struct {
-	ID string
+// ActivationReadinessError describes one readiness blocker.
+type ActivationReadinessError struct {
+	Code         string
+	Message      string
+	DataSourceID string
+	TargetID     string
+}
+
+// ActivationReadinessOutput summarizes activation readiness at project scope.
+type ActivationReadinessOutput struct {
+	ProjectID                string
+	DataSourceCount          int
+	HasDatasource            bool
+	PassiveUnconfirmedCount  int
+	MissingTargetDryrunCount int
+	FailedTargetDryrunCount  int
+	CanActivate              bool
+	Errors                   []ActivationReadinessError
+}
+
+// ProjectLifecycleOutput returns the number of affected datasources at project scope.
+type ProjectLifecycleOutput struct {
+	ProjectID               string
+	AffectedDataSourceCount int
 }
 
 // ActivateOutput is the output after activating a datasource.
@@ -76,19 +97,9 @@ type ActivateOutput struct {
 	DataSource model.DataSource
 }
 
-// PauseInput transitions a datasource into PAUSED.
-type PauseInput struct {
-	ID string
-}
-
 // PauseOutput is the output after pausing a datasource.
 type PauseOutput struct {
 	DataSource model.DataSource
-}
-
-// ResumeInput transitions a datasource from PAUSED back to ACTIVE.
-type ResumeInput struct {
-	ID string
 }
 
 // ResumeOutput is the output after resuming a datasource.

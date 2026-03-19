@@ -268,6 +268,9 @@ func validate(cfg *Config) error {
 	if len(cfg.Encrypter.Key) < 32 {
 		return fmt.Errorf("encrypter.key must be at least 32 characters for security")
 	}
+	if cfg.InternalConfig.InternalKey == "" {
+		return fmt.Errorf("internal.internal_key is required")
+	}
 
 	if cfg.Postgres.Host == "" {
 		return fmt.Errorf("postgres.host is required")

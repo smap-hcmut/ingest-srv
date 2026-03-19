@@ -52,9 +52,10 @@ func (srv HTTPServer) mapHandlers() error {
 	apiV1 := srv.gin.Group(model.APIV1Prefix)
 	datasourceHTTP.RegisterRoutes(apiV1, mw)
 	dryrunHTTP.RegisterRoutes(apiV1, mw)
-	ingestAPI := apiV1.Group("/ingest")
-	datasourceHTTP.RegisterInternalRoutes(ingestAPI, mw)
-	execHTTP.RegisterInternalRoutes(ingestAPI, mw)
+
+	internalAPI := apiV1.Group("/internal")
+	datasourceHTTP.RegisterInternalRoutes(internalAPI, mw)
+	execHTTP.RegisterInternalRoutes(internalAPI, mw)
 
 	return nil
 }

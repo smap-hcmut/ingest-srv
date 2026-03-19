@@ -17,7 +17,7 @@ import (
 // @Failure 404 {object} response.Resp
 // @Failure 400 {object} response.Resp
 // @Failure 500 {object} response.Resp
-// @Router /ingest/datasources/{id}/targets/{target_id}/dispatch [post]
+// @Router /internal/datasources/{id}/targets/{target_id}/dispatch [post]
 func (h *handler) DispatchTarget(c *gin.Context) {
 	ctx := c.Request.Context()
 
