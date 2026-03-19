@@ -72,7 +72,7 @@ func (uc *implUseCase) validateTargetType(tt string) error {
 	}
 }
 
-func normalizeTargetValues(values []string, dedupe bool) []string {
+func (uc *implUseCase) normalizeTargetValues(values []string, dedupe bool) []string {
 	out := make([]string, 0, len(values))
 	seen := make(map[string]struct{}, len(values))
 	for _, value := range values {
@@ -91,7 +91,7 @@ func normalizeTargetValues(values []string, dedupe bool) []string {
 	return out
 }
 
-func validateTargetURLValues(values []string) error {
+func (uc *implUseCase) validateTargetURLValues(values []string) error {
 	for _, value := range values {
 		parsed, err := url.ParseRequestURI(value)
 		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
@@ -102,13 +102,13 @@ func validateTargetURLValues(values []string) error {
 }
 
 func (uc *implUseCase) prepareTargetValues(targetType model.TargetType, values []string) ([]string, error) {
-	normalized := normalizeTargetValues(values, targetType == model.TargetTypeKeyword)
+	normalized := uc.normalizeTargetValues(values, targetType == model.TargetTypeKeyword)
 	if len(normalized) == 0 {
 		return nil, datasource.ErrTargetValuesRequired
 	}
 	switch targetType {
 	case model.TargetTypeProfile, model.TargetTypePostURL:
-		if err := validateTargetURLValues(normalized); err != nil {
+		if err := uc.validateTargetURLValues(normalized); err != nil {
 			return nil, err
 		}
 	}

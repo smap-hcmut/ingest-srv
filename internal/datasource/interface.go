@@ -8,6 +8,7 @@ import (
 type UseCase interface {
 	DataSourceUseCase
 	ProjectOrchestrationUseCase
+	DryrunUseCase
 
 	// CrawlTarget sub-resource operations.
 	CrawlTargetUseCase
@@ -32,6 +33,11 @@ type ProjectOrchestrationUseCase interface {
 	Activate(ctx context.Context, projectID string) (ProjectLifecycleOutput, error)
 	Pause(ctx context.Context, projectID string) (ProjectLifecycleOutput, error)
 	Resume(ctx context.Context, projectID string) (ProjectLifecycleOutput, error)
+}
+
+type DryrunUseCase interface {
+	MarkDryrunRunning(ctx context.Context, input MarkDryrunRunningInput) (MarkDryrunRunningOutput, error)
+	ApplyDryrunResult(ctx context.Context, input ApplyDryrunResultInput) (ApplyDryrunResultOutput, error)
 }
 
 type CrawlTargetUseCase interface {

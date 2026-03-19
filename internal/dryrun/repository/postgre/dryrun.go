@@ -32,6 +32,9 @@ func (r *implRepository) CreateResult(ctx context.Context, opt dryrunRepo.Create
 	if opt.TargetID != "" {
 		row.TargetID = null.StringFrom(opt.TargetID)
 	}
+	if opt.JobID != "" {
+		row.JobID = null.StringFrom(opt.JobID)
+	}
 	if opt.RequestedBy != "" {
 		row.RequestedBy = null.StringFrom(opt.RequestedBy)
 	}
@@ -39,6 +42,22 @@ func (r *implRepository) CreateResult(ctx context.Context, opt dryrunRepo.Create
 	if err := row.Insert(ctx, r.db, boil.Infer()); err != nil {
 		r.l.Errorf(ctx, "dryrun.repository.CreateResult.Insert: %v", err)
 		return model.DryrunResult{}, dryrunRepo.ErrFailedToInsert
+	}
+
+	return *model.NewDryrunResultFromDB(row), nil
+}
+
+// GetByJobID returns the dryrun result correlated to one runtime task.
+func (r *implRepository) GetByJobID(ctx context.Context, jobID string) (model.DryrunResult, error) {
+	row, err := sqlboiler.DryrunResults(
+		sqlboiler.DryrunResultWhere.JobID.EQ(null.StringFrom(jobID)),
+	).One(ctx, r.db)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return model.DryrunResult{}, dryrunRepo.ErrNotFound
+		}
+		r.l.Errorf(ctx, "dryrun.repository.GetByJobID.One: %v", err)
+		return model.DryrunResult{}, dryrunRepo.ErrFailedToGet
 	}
 
 	return *model.NewDryrunResultFromDB(row), nil
@@ -57,7 +76,13 @@ func (r *implRepository) UpdateResult(ctx context.Context, opt dryrunRepo.Update
 
 	row.Status = sqlboiler.DryrunStatus(opt.Status)
 	row.SampleCount = opt.SampleCount
-	row.CompletedAt = null.TimeFrom(time.Now())
+	if opt.CompletedAt != nil {
+		row.CompletedAt = null.TimeFrom(*opt.CompletedAt)
+	} else if opt.Status == string(model.DryrunStatusFailed) ||
+		opt.Status == string(model.DryrunStatusWarning) ||
+		opt.Status == string(model.DryrunStatusSuccess) {
+		row.CompletedAt = null.TimeFrom(time.Now())
+	}
 	if opt.TotalFound != nil {
 		row.TotalFound = null.IntFrom(*opt.TotalFound)
 	}

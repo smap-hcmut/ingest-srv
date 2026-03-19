@@ -11,7 +11,7 @@ import (
 )
 
 func (uc *implUseCase) ParseAndStoreRawBatch(ctx context.Context, input uap.ParseAndStoreRawBatchInput) error {
-	if err := validateParseAndStoreRawBatchInput(input); err != nil {
+	if err := uc.validateParseAndStoreRawBatchInput(input); err != nil {
 		return err
 	}
 
@@ -31,37 +31,37 @@ func (uc *implUseCase) ParseAndStoreRawBatch(ctx context.Context, input uap.Pars
 	})
 	if err != nil {
 		errMessage := fmt.Sprintf("download raw batch object: %v", err)
-		_ = failRawBatch(ctx, uc, input, errMessage, "", nil, 0, nil)
+		_ = uc.failRawBatch(ctx, input, errMessage, "", nil, 0, nil)
 		return err
 	}
 
-	rawBytes, err := readAllAndClose(reader)
+	rawBytes, err := uc.readAllAndClose(reader)
 	if err != nil {
 		errMessage := fmt.Sprintf("read raw batch object: %v", err)
-		_ = failRawBatch(ctx, uc, input, errMessage, "", nil, 0, nil)
+		_ = uc.failRawBatch(ctx, input, errMessage, "", nil, 0, nil)
 		return err
 	}
 
 	if err := uc.repo.MarkRawBatchDownloaded(ctx, repo.MarkRawBatchDownloadedOptions{
 		RawBatchID: input.RawBatchID,
 	}); err != nil {
-		_ = failRawBatch(ctx, uc, input, fmt.Sprintf("mark raw batch downloaded: %v", err), "", nil, 0, nil)
+		_ = uc.failRawBatch(ctx, input, fmt.Sprintf("mark raw batch downloaded: %v", err), "", nil, 0, nil)
 		return err
 	}
 
-	publishStats := &kafkaPublishStats{
+	publishStats := &uap.KafkaPublishStats{
 		Topic: strings.TrimSpace(uc.uapTopic),
 	}
 	if uc.publisher == nil {
 		uc.l.Warnf(ctx, "uap.usecase.ParseAndStoreRawBatch: kafka publisher is disabled for raw_batch_id=%s", input.RawBatchID)
 	}
 
-	records, err := flattenTikTokFullFlow(rawBytes, input, func(record uap.UAPRecord) {
-		publishRecord(ctx, uc, record, input, publishStats)
+	records, err := uc.flattenTikTokFullFlow(rawBytes, input, func(record uap.UAPRecord) {
+		uc.publishRecord(ctx, record, input, publishStats)
 	})
 	if err != nil {
 		errMessage := fmt.Sprintf("parse tiktok full_flow raw batch: %v", err)
-		_ = failRawBatch(ctx, uc, input, errMessage, "", nil, 0, publishStats)
+		_ = uc.failRawBatch(ctx, input, errMessage, "", nil, 0, publishStats)
 		return err
 	}
 
@@ -70,21 +70,21 @@ func (uc *implUseCase) ParseAndStoreRawBatch(ctx context.Context, input uap.Pars
 		outputBucket = input.StorageBucket
 	}
 
-	chunks := chunkRecords(records)
-	parts := make([]artifactPart, 0, len(chunks))
+	chunks := uc.chunkRecords(records)
+	parts := make([]uap.ArtifactPart, 0, len(chunks))
 	for index, chunk := range chunks {
-		part, uploadErr := uploadChunk(ctx, uc.minio, outputBucket, input.ProjectID, input.SourceID, input.BatchID, index+1, chunk)
+		part, uploadErr := uc.uploadChunk(ctx, uc.minio, outputBucket, input.ProjectID, input.SourceID, input.BatchID, index+1, chunk)
 		if uploadErr != nil {
 			publishErr := fmt.Sprintf("upload uap chunk: %v", uploadErr)
-			_ = failRawBatch(ctx, uc, input, "", publishErr, parts, len(records), publishStats)
+			_ = uc.failRawBatch(ctx, input, "", publishErr, parts, len(records), publishStats)
 			return uploadErr
 		}
 		parts = append(parts, part)
 	}
 
-	metadata, err := mergeRawMetadata(input.RawMetadata, parts, len(records), publishStats)
+	metadata, err := uc.mergeRawMetadata(input.RawMetadata, parts, len(records), publishStats)
 	if err != nil {
-		_ = failRawBatch(ctx, uc, input, fmt.Sprintf("merge parsed raw metadata: %v", err), "", parts, len(records), publishStats)
+		_ = uc.failRawBatch(ctx, input, fmt.Sprintf("merge parsed raw metadata: %v", err), "", parts, len(records), publishStats)
 		return err
 	}
 
@@ -94,7 +94,7 @@ func (uc *implUseCase) ParseAndStoreRawBatch(ctx context.Context, input uap.Pars
 		PublishRecordCount: len(records),
 		RawMetadata:        metadata,
 	}); err != nil {
-		_ = failRawBatch(ctx, uc, input, fmt.Sprintf("mark raw batch parsed: %v", err), "", parts, len(records), publishStats)
+		_ = uc.failRawBatch(ctx, input, fmt.Sprintf("mark raw batch parsed: %v", err), "", parts, len(records), publishStats)
 		return err
 	}
 

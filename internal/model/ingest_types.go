@@ -51,6 +51,8 @@ const (
 	DryrunStatusFailed      DryrunStatus = "FAILED"       // Dry run thất bại, source chưa đủ điều kiện chạy.
 )
 
+const DryrunSampleLimitDefault = 10
+
 type CrawlMode string
 
 const (

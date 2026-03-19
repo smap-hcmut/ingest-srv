@@ -36,18 +36,30 @@ func New(l log.Logger, rabbitConn rabbitmq.IRabbitMQ) Producer {
 func (p *implProducer) Run() error {
 	var err error
 
-	p.tikTokTasksWriter, err = p.getWriter(executionRabbit.TikTokTasksQueue)
+	p.tikTokTasksWriter, err = p.getWriterWithQueue(
+		executionRabbit.TikTokTasksExchange,
+		executionRabbit.TikTokTasksQueue,
+		executionRabbit.TikTokTasksRoutingKey,
+	)
 	if err != nil {
 		return err
 	}
 
-	p.facebookTasksWriter, err = p.getWriter(executionRabbit.FacebookTasksQueue)
+	p.facebookTasksWriter, err = p.getWriterWithQueue(
+		executionRabbit.FacebookTasksExchange,
+		executionRabbit.FacebookTasksQueue,
+		executionRabbit.FacebookTasksRoutingKey,
+	)
 	if err != nil {
 		p.Close()
 		return err
 	}
 
-	p.youtubeTasksWriter, err = p.getWriter(executionRabbit.YoutubeTasksQueue)
+	p.youtubeTasksWriter, err = p.getWriterWithQueue(
+		executionRabbit.YoutubeTasksExchange,
+		executionRabbit.YoutubeTasksQueue,
+		executionRabbit.YoutubeTasksRoutingKey,
+	)
 	if err != nil {
 		p.Close()
 		return err

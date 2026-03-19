@@ -136,7 +136,7 @@ ingest-srv/
 
 ### Module 2: Dry Run & Onboarding (`dryrun`)
 
-**Trách nhiệm:** Chạy dry run validation-only trước khi activate, hỗ trợ preview/confirm mapping cho passive source, lưu kết quả sample/control-plane.
+**Trách nhiệm:** Chạy dry run async qua RabbitMQ + `scapper-srv` trước khi activate, hỗ trợ preview/confirm mapping cho passive source, lưu kết quả sample/control-plane.
 
 **Endpoints:**
 
@@ -151,11 +151,14 @@ ingest-srv/
 **Business Rules:**
 
 - Dry run chỉ chạy khi source ở `PENDING` hoặc `READY`.
-- Phase 2 hiện là **control-plane only**: không publish RabbitMQ, không tạo `external_task`, không gọi crawler thật.
+- Dry run cho crawl source publish task qua RabbitMQ, không tạo `scheduled_job`/`external_task`; lineage chính nằm ở `dryrun_results.job_id = task_id`.
+- Completion của worker quay về queue `ingest_task_completions`; ingest consumer branch execution completion và dry-run completion trên cùng queue.
+- Nếu request không truyền `sample_limit` thì mặc định dùng `10`.
 - Kết quả pass hiện trả `WARNING` → source chuyển `READY`, cập nhật `dryrun_last_result_id`.
 - Kết quả WARNING → source vẫn `READY` nhưng hiển thị warning.
 - Kết quả FAILED → source vẫn `PENDING`, user phải sửa config.
 - Dry run cho CRAWL source: thực hiện **per-target-group**; request phải có `target_id`.
+- Activation readiness của crawl chỉ pass khi mọi grouped target đều đã có latest dry run và không có target nào `FAILED`.
 - Dry run cho FILE_UPLOAD: TODO - parse sample từ file đã upload.
 - Với `FILE_UPLOAD` và `WEBHOOK`, preview/confirm mapping cập nhật trực tiếp `data_sources.mapping_rules` trong V1. (TODO)
 - Mapping preview/confirm chỉ áp dụng cho source `PASSIVE`; source `CRAWL` không dùng flow này.

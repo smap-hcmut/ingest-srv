@@ -6,6 +6,7 @@ import (
 	datasourceRepo "ingest-srv/internal/datasource/repository/postgre"
 	datasourceUC "ingest-srv/internal/datasource/usecase"
 	dryrunHandler "ingest-srv/internal/dryrun/delivery/http"
+	dryrunProducer "ingest-srv/internal/dryrun/delivery/rabbitmq/producer"
 	dryrunRepo "ingest-srv/internal/dryrun/repository/postgre"
 	dryrunUC "ingest-srv/internal/dryrun/usecase"
 	executionHandler "ingest-srv/internal/execution/delivery/http"
@@ -39,7 +40,11 @@ func (srv HTTPServer) mapHandlers() error {
 	dataUC := datasourceUC.New(srv.l, dataSRepo)
 	datasourceHTTP := datasourceHandler.New(srv.l, dataUC, srv.discord)
 	dryrunResultRepo := dryrunRepo.New(srv.l, srv.postgresDB)
-	dryrunUseCase := dryrunUC.New(srv.l, dryrunResultRepo, dataSRepo)
+	dryrunDispatchProducer := dryrunProducer.New(srv.l, srv.rabbitmq)
+	if err := dryrunDispatchProducer.Run(); err != nil {
+		return err
+	}
+	dryrunUseCase := dryrunUC.New(srv.l, dryrunResultRepo, dataUC, srv.minio, dryrunDispatchProducer)
 	dryrunHTTP := dryrunHandler.New(srv.l, dryrunUseCase, srv.discord)
 	execRepo := executionRepo.New(srv.l, srv.postgresDB)
 	execProducer := executionProducer.New(srv.l, srv.rabbitmq)

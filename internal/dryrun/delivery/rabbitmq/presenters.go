@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"ingest-srv/internal/execution"
+	"ingest-srv/internal/dryrun"
 )
 
 type DispatchMessage struct {
@@ -30,7 +30,7 @@ type CompletionMessage struct {
 	Metadata      map[string]interface{} `json:"metadata"`
 }
 
-func NewDispatchMessage(input execution.PublishDispatchInput) DispatchMessage {
+func NewDispatchMessage(input dryrun.PublishDispatchInput) DispatchMessage {
 	return DispatchMessage{
 		TaskID:    input.TaskID,
 		Action:    string(input.Action),
@@ -39,12 +39,12 @@ func NewDispatchMessage(input execution.PublishDispatchInput) DispatchMessage {
 	}
 }
 
-func MarshalDispatchMessage(input execution.PublishDispatchInput) ([]byte, error) {
+func MarshalDispatchMessage(input dryrun.PublishDispatchInput) ([]byte, error) {
 	return json.Marshal(NewDispatchMessage(input))
 }
 
-func (m CompletionMessage) ToHandleCompletionInput() execution.HandleCompletionInput {
-	return execution.HandleCompletionInput{
+func (m CompletionMessage) ToHandleCompletionInput() dryrun.HandleCompletionInput {
+	return dryrun.HandleCompletionInput{
 		TaskID:        m.TaskID,
 		Status:        m.Status,
 		CompletedAt:   m.CompletedAt,

@@ -66,6 +66,25 @@ type UpdateOutput struct {
 	DataSource model.DataSource
 }
 
+type MarkDryrunRunningInput struct {
+	ID                 string
+	DryrunLastResultID string
+}
+
+type MarkDryrunRunningOutput struct {
+	DataSource model.DataSource
+}
+
+type ApplyDryrunResultInput struct {
+	ID                 string
+	DryrunLastResultID string
+	DryrunStatus       string
+}
+
+type ApplyDryrunResultOutput struct {
+	DataSource model.DataSource
+}
+
 // ActivationReadinessError describes one readiness blocker.
 type ActivationReadinessError struct {
 	Code         string
@@ -73,6 +92,13 @@ type ActivationReadinessError struct {
 	DataSourceID string
 	TargetID     string
 }
+
+const (
+	ActivationReadinessCodeDatasourceRequired = "DATASOURCE_REQUIRED"
+	ActivationReadinessCodePassiveUnconfirmed = "PASSIVE_UNCONFIRMED"
+	ActivationReadinessCodeTargetDryrunMiss   = "TARGET_DRYRUN_MISSING"
+	ActivationReadinessCodeTargetDryrunFailed = "TARGET_DRYRUN_FAILED"
+)
 
 // ActivationReadinessOutput summarizes activation readiness at project scope.
 type ActivationReadinessOutput struct {

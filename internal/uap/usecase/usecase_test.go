@@ -117,7 +117,8 @@ func TestFlattenTikTokFullFlow(t *testing.T) {
 		CompletionTime: time.Date(2026, time.March, 8, 4, 0, 0, 0, time.UTC),
 	}
 
-	records, err := flattenTikTokFullFlow(raw, input, nil)
+	uc := &implUseCase{}
+	records, err := uc.flattenTikTokFullFlow(raw, input, nil)
 	if err != nil {
 		t.Fatalf("flattenTikTokFullFlow() error = %v", err)
 	}
@@ -170,7 +171,8 @@ func TestChunkRecords(t *testing.T) {
 		}
 	}
 
-	chunks := chunkRecords(records)
+	uc := &implUseCase{}
+	chunks := uc.chunkRecords(records)
 	if len(chunks) != 2 {
 		t.Fatalf("expected 2 chunks, got %d", len(chunks))
 	}
@@ -184,14 +186,15 @@ func TestChunkRecords(t *testing.T) {
 
 func TestMergeRawMetadata(t *testing.T) {
 	existing := json.RawMessage(`{"crawler_version":"1.0.0"}`)
-	metadata, err := mergeRawMetadata(existing, []artifactPart{
+	uc := &implUseCase{}
+	metadata, err := uc.mergeRawMetadata(existing, []uap.ArtifactPart{
 		{
 			PartNo:        1,
 			StorageBucket: "ingest-data",
 			StoragePath:   "uap-batches/project-1/source-1/batch-1/part-00001.jsonl",
 			RecordCount:   20,
 		},
-	}, 20, &kafkaPublishStats{
+	}, 20, &uap.KafkaPublishStats{
 		Topic:          "smap.collector.output",
 		AttemptedCount: 20,
 		SuccessCount:   19,
@@ -210,18 +213,18 @@ func TestMergeRawMetadata(t *testing.T) {
 	if root["crawler_version"] != "1.0.0" {
 		t.Fatalf("expected crawler_version to be preserved")
 	}
-	artifacts, ok := root[uapArtifactsKey].(map[string]interface{})
+	artifacts, ok := root[uap.ArtifactsMetadataKey].(map[string]interface{})
 	if !ok {
 		t.Fatalf("expected uap_artifacts map")
 	}
-	if int(artifacts["chunk_size"].(float64)) != uapChunkSize {
+	if int(artifacts["chunk_size"].(float64)) != uap.ChunkSize {
 		t.Fatalf("unexpected chunk size: %#v", artifacts["chunk_size"])
 	}
 	if int(artifacts["total_parts"].(float64)) != 1 {
 		t.Fatalf("unexpected total_parts: %#v", artifacts["total_parts"])
 	}
 
-	publish, ok := root[uapKafkaPublishKey].(map[string]interface{})
+	publish, ok := root[uap.KafkaPublishKey].(map[string]interface{})
 	if !ok {
 		t.Fatalf("expected kafka_publish map")
 	}
@@ -238,8 +241,8 @@ func TestPublishPayloadUsesCurrentUAPRecord(t *testing.T) {
 		Identity: uap.UAPIdentity{
 			UAPID:    "tt_p_7601",
 			OriginID: "7601",
-			UAPType:  uapTypePost,
-			Platform: tikTokPlatform,
+			UAPType:  uap.UAPTypePost,
+			Platform: uap.PlatformTikTok,
 			URL:      "https://www.tiktok.com/@demo/video/7601",
 			TaskID:   "task-1",
 		},
@@ -254,11 +257,11 @@ func TestPublishPayloadUsesCurrentUAPRecord(t *testing.T) {
 			Nickname: "Demo Author",
 		},
 		Engagement: uap.UAPEngagement{
-			Likes:         intPtr(10),
-			CommentsCount: intPtr(5),
-			Shares:        intPtr(2),
-			Views:         intPtr(100),
-			Bookmarks:     intPtr(3),
+			Likes:         ptrInt(10),
+			CommentsCount: ptrInt(5),
+			Shares:        ptrInt(2),
+			Views:         ptrInt(100),
+			Bookmarks:     ptrInt(3),
 		},
 		Media: []uap.UAPMedia{
 			{
@@ -276,41 +279,35 @@ func TestPublishPayloadUsesCurrentUAPRecord(t *testing.T) {
 	}
 
 	spy := &spyPublisher{}
-	stats := &kafkaPublishStats{Topic: "smap.collector.output"}
+	stats := &uap.KafkaPublishStats{Topic: "smap.collector.output"}
 	uc := &implUseCase{publisher: spy, uapTopic: "smap.collector.output"}
 
-	publishRecord(context.Background(), uc, record, input, stats)
+	uc.publishRecord(context.Background(), record, input, stats)
 
 	if stats.AttemptedCount != 1 || stats.SuccessCount != 1 || stats.FailedCount != 0 {
 		t.Fatalf("unexpected publish stats: %#v", stats)
 	}
-	if string(spy.lastKey) != "tt_p_7601" {
-		t.Fatalf("unexpected kafka key: %s", string(spy.lastKey))
+	if spy.lastInput.Record.Identity.UAPID != record.Identity.UAPID {
+		t.Fatalf("unexpected published uap_id: %s", spy.lastInput.Record.Identity.UAPID)
 	}
-
-	var payload uap.UAPRecord
-	if err := json.Unmarshal(spy.lastValue, &payload); err != nil {
-		t.Fatalf("unmarshal payload error = %v", err)
-	}
-	if payload.Identity.UAPID != record.Identity.UAPID {
-		t.Fatalf("unexpected payload uap_id: %s", payload.Identity.UAPID)
-	}
-	if payload.Content.Text != record.Content.Text {
-		t.Fatalf("unexpected payload text: %s", payload.Content.Text)
+	if spy.lastInput.Record.Content.Text != record.Content.Text {
+		t.Fatalf("unexpected published payload text: %s", spy.lastInput.Record.Content.Text)
 	}
 }
 
 type spyPublisher struct {
-	lastKey   []byte
-	lastValue []byte
+	lastInput uap.PublishUAPInput
 }
 
 func (s *spyPublisher) Publish(_ context.Context, input uap.PublishUAPInput) error {
-	s.lastKey = input.Key
-	s.lastValue = input.Value
+	s.lastInput = input
 	return nil
 }
 
 func (s *spyPublisher) Close() error {
 	return nil
+}
+
+func ptrInt(v int) *int {
+	return &v
 }

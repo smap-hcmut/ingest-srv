@@ -53,7 +53,6 @@ internal/<module_name>/
 │   ├── producer.go     # Logic for publishing events
 │   ├── consumer.go     # Logic for handling consumed events
 │   ├── helpers.go      # Private helper methods
-│   └── types.go        # Private struct definitions (internal to usecase package)
 ├── interface.go        # UseCase interface definition
 ├── types.go            # ALL Input/Output structs for UseCase
 └── errors.go           # Module-specific errors
@@ -66,7 +65,7 @@ internal/<module_name>/
 >
 > - **Repository**: You should have separate implementations (e.g., `repository/mongo/event.go`, `repository/mongo/recurring_tracking.go`).
 > - **UseCase**: You should have separate logic files (e.g., `usecase/event.go`, `usecase/recurring_tracking.go`).
-> - **Types**: Keep related types together or separate if too large, but ALWAYS in `types.go` (module-level) or `usecase/types.go` (if private to usecase package).
+> - **Types**: Keep related types in module root `types.go`. Do not define extra helper/data structs inside `usecase/*.go`.
 
 ### Interface Conventions
 
@@ -95,6 +94,29 @@ type UseCase interface {
     CheckNotifyEvent()
 }
 ```
+
+**UseCase + Sub-interface rule**:
+- Sub-interfaces (embedded in `UseCase`) must represent a distinct concern only (e.g., readiness query, event publishing).
+- Do **NOT** duplicate the same business action in both `UseCase` and an embedded sub-interface (example anti-pattern: `UseCase.Activate` and `LifecycleManager.Activate` together).
+
+### Microservice Integration Convention (`pkg/microservice`)
+
+When a module calls another service (internal HTTP), follow this exact pattern:
+
+1. **Root contract package**: define shared interfaces/types/errors in `pkg/microservice`.
+   - `uc_interface.go`: interface contracts (e.g., `IngestUseCase`)
+   - `*_types.go`: DTO/config shared with consumers
+   - `errors.go`: sentinel errors for downstream status mapping
+2. **Service implementation package**: each downstream service lives in `pkg/microservice/<service>`.
+   - Keep implementation files in pattern: `new.go`, `endpoint.go`, `usecase.go`, `constants.go`
+   - `New(...)` must return interface from root package (`pkg/microservice`), not local interface
+3. **No duplicated contract in implementation package**:
+   - Do not redeclare exported interface/types/errors in `pkg/microservice/<service>`
+   - Implementation package only maps transport details to root contract types/errors
+4. **HTTP server wiring style (same as tanca-connect)**:
+   - Instantiate microservice clients at top of `mapHandlers()`
+   - Inject created clients into usecases through constructor parameters
+   - Avoid long inline struct literals in `handler.go`; keep constructor call concise
 
 ### 1. Delivery Layer
 
@@ -137,7 +159,7 @@ This layer handles all transport concerns (HTTP, Job, RabbitMQ). It **MUST NOT**
 - **`errors.go`**: Error Mapping (Crucial).
   - **Responsibility**: Maps UseCase errors to HTTP errors (using `pkg/errors`).
   - **Pattern**: `func (h handler) mapError(err error) error`.
-  - **Rule**: **MUST** panic on unknown errors (`default: panic(err)`). This guarantees all domain errors are explicitly handled during development.
+  - **Rule**: **MUST** panic on unknown errors (`default: panic(err)`) and **MUST NOT** return fallback error in default branch. This guarantees all domain errors are explicitly handled during development.
   - **Constants**: Define local `var` constants like `errEventNotFound = pkgErrors.NewHTTPError(141004, "Event not found")`.
 
 #### 1.2 Job (`delivery/job`)
@@ -223,7 +245,7 @@ This layer contains the core business logic.
 
 - **`types.go`** (module root):
   - **Responsibility**: Defines Input/Output structs for UseCase methods.
-  - **Rule**: **DECOUPLE** from Delivery Layer. Do not use HTTP-specific tags (`form`, `json` is okay for general serialization but avoid binding tags if possible).
+  - **Rule**: **DECOUPLE** from Delivery Layer. Do not use HTTP/MQ wire tags (`json`, `form`, `binding`, etc.) in usecase/domain types.
   - **Naming**: `<Action>Input` and `<Action>Output` (e.g., `CreateEventInput`, `DetailOutput`).
   - **Converters**: Helper functions to convert Domain Models to UseCase DTOs (e.g., `EventToEventInstance`) should live here or in strict utility files.
 
@@ -231,6 +253,7 @@ This layer contains the core business logic.
   - **`new.go`**:
     - Defines `implUseCase` struct (private) and `New` factory.
     - Injects dependencies: `Repository`, `Logger`, and other `UseCases`.
+    - `implUseCase` is the only allowed `type` declaration inside `usecase/` production files.
   - **`<entity>.go`** (e.g., `event.go`):
     - Implements business logic.
     - **Concurrency**: Use `golang.org/x/sync/errgroup` for parallel operations (e.g., fetching multiple related entities, sending notifications).
@@ -320,7 +343,7 @@ Both MongoDB and PostgreSQL implementations **MUST** follow this file structure 
    | Layer                        | Type file                                       | Logic files                                   |
    | ---------------------------- | ----------------------------------------------- | --------------------------------------------- |
    | **UseCase** (module root)    | `types.go` — Input/Output structs               | —                                             |
-   | **UseCase** (implementation) | `usecase/types.go` — private structs            | `usecase/<entity>.go`, `usecase/<concern>.go` |
+   | **UseCase** (implementation) | `new.go` — `implUseCase` only                   | `usecase/<entity>.go`, `usecase/<concern>.go` |
    | **Delivery HTTP**            | `presenters.go` — all DTOs                      | `handlers.go`, `<resource>.go`                |
    | **Repository**               | `repository/options.go` — filter/option structs | `repository/<driver>/<entity>.go`             |
 
@@ -333,6 +356,8 @@ Both MongoDB and PostgreSQL implementations **MUST** follow this file structure 
    - **Nothing else.** No interfaces, no helper types, no constants.
 
 4. **Split by concern, not by size.** When a module is complex, split logic files by business concern rather than arbitrarily. Each file name should clearly communicate its responsibility.
+   - If `UseCase` is composed from sub-interfaces (e.g., `QueryUseCase`, `ConsumerUseCase`, `DryrunUseCase`), create one implementation file per sub-interface concern in `usecase/`.
+   - Avoid one-file-per-method fragmentation unless there is a strong reason.
 
    ```text
    # ✅ Good: split by concern
@@ -372,7 +397,7 @@ Both MongoDB and PostgreSQL implementations **MUST** follow this file structure 
 2.  **Type Centralization**:
     - ALL UseCase Input/Output types must be in `types.go` at the module root.
     - Logic files (e.g., `event.go`) must contain **logic only**, no struct definitions.
-    - Private helper structs go in `usecase/types.go`.
+    - Do not add helper/data struct types inside `usecase/*.go` production files.
 
 ### Module Interaction Rules
 
@@ -536,3 +561,8 @@ func (h handler) Create(c *gin.Context) { ... }
 - **Don't** return GORM/Mongo models directly in API responses. Use Presenter DTOs.
 - **Don't** put business logic in Handlers.
 - **Don't** import `repository` package in `delivery` layer.
+### Constant Placement Rule
+
+- Put constants in `internal/model` when they represent intrinsic entity attributes/states shared across the system.
+- Put module/process constants in module root `types.go`.
+- Do not define constants in `usecase` implementation files.

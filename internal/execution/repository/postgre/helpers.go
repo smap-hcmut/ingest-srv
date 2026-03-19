@@ -270,14 +270,25 @@ func expectedDispatchTaskCount(payload null.JSON, fallback int) int {
 		return fallback
 	}
 
-	var decoded struct {
-		TaskCount int `json:"task_count"`
-	}
+	var decoded map[string]interface{}
 	if err := json.Unmarshal(payload.JSON, &decoded); err != nil {
 		return fallback
 	}
-	if decoded.TaskCount <= 0 {
+	taskCount, ok := decoded["task_count"]
+	if !ok {
 		return fallback
 	}
-	return decoded.TaskCount
+
+	switch v := taskCount.(type) {
+	case float64:
+		if int(v) > 0 {
+			return int(v)
+		}
+	case int:
+		if v > 0 {
+			return v
+		}
+	}
+
+	return fallback
 }

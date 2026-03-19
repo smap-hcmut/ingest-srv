@@ -7,7 +7,7 @@ import (
 )
 
 // @Summary Trigger dryrun
-// @Description Run validation-only dryrun for one datasource
+// @Description Trigger one async dryrun for one datasource; response returns a RUNNING result accepted by ingest-srv
 // @Tags Dryrun
 // @Accept json
 // @Produce json

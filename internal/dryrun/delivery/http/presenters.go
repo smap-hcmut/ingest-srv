@@ -24,9 +24,6 @@ func (r triggerReq) validate() error {
 	if strings.TrimSpace(r.SourceID) == "" {
 		return errWrongBody
 	}
-	if strings.TrimSpace(r.TargetID) == "" {
-		return errWrongBody
-	}
 	if r.SampleLimit != nil && *r.SampleLimit <= 0 {
 		return errInvalidSampleLimit
 	}
@@ -87,6 +84,7 @@ type dryrunResultResp struct {
 	SourceID     string          `json:"source_id"`
 	ProjectID    string          `json:"project_id"`
 	TargetID     string          `json:"target_id,omitempty"`
+	JobID        string          `json:"job_id,omitempty"`
 	Status       string          `json:"status"`
 	SampleCount  int             `json:"sample_count"`
 	TotalFound   *int            `json:"total_found,omitempty"`
@@ -149,6 +147,7 @@ func toDryrunResultResp(result model.DryrunResult) dryrunResultResp {
 		SourceID:     result.SourceID,
 		ProjectID:    result.ProjectID,
 		TargetID:     result.TargetID,
+		JobID:        result.JobID,
 		Status:       string(result.Status),
 		SampleCount:  result.SampleCount,
 		TotalFound:   result.TotalFound,

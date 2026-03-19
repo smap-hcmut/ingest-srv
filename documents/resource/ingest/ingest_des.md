@@ -40,7 +40,7 @@ graph TD
     F -->|accept| G["mapping_rules saved<br/>source → READY"]
     F -->|reject/edit| E
 
-    H --> I["Dry run validation-only<br/>→ preview readiness"]
+    H --> I["Dry run async via worker<br/>→ preview readiness"]
     I --> J["User accept"]
     J --> K["source → READY"]
     K --> L["project.activated<br/>→ source ACTIVE"]
@@ -113,7 +113,11 @@ Ghi chú contract:
   - pub task qua RabbitMQ
   - cập nhật `crawl_targets.next_crawl_at`, `last_crawl_at`
 - `data_sources.crawl_interval_minutes` hiện không còn là implicit fallback ở public grouped-target create API; client phải gửi interval rõ cho target group.
-- Dry run cho crawl hiện chạy theo **per-target-group** và là validation-only; pass sẽ trả `WARNING` rồi đưa source vào `READY`.
+- Dry run cho crawl hiện chạy theo **per-target-group** và là async remote runtime:
+  - `POST /dryrun` tạo `dryrun_result` ở `RUNNING`, publish task qua RabbitMQ cho `scapper-srv`
+  - completion quay về queue `ingest_task_completions`
+  - pass hiện finalize về `WARNING` rồi đưa source vào `READY`
+  - mặc định lấy `10` mẫu mỗi target nếu request không truyền `sample_limit`
 
 ### Crisis feedback loop
 - Flow: Ingest -> Analysis -> Project (detect crisis) -> Ingest (crawl nhanh hơn).

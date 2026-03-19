@@ -9,16 +9,16 @@ import (
 
 // Consumer consumes execution completion messages from RabbitMQ.
 type Consumer struct {
-	l    log.Logger
-	conn rabbitmq.IRabbitMQ
-	uc   execution.UseCase
+	l      log.Logger
+	conn   rabbitmq.IRabbitMQ
+	execUC execution.ConsumerUseCase
 }
 
 // NewConsumer creates a new execution completion consumer.
-func NewConsumer(l log.Logger, rabbitConn rabbitmq.IRabbitMQ, uc execution.UseCase) Consumer {
+func NewConsumer(l log.Logger, rabbitConn rabbitmq.IRabbitMQ, execUC execution.ConsumerUseCase) Consumer {
 	return Consumer{
-		l:    l,
-		conn: rabbitConn,
-		uc:   uc,
+		l:      l,
+		conn:   rabbitConn,
+		execUC: execUC,
 	}
 }

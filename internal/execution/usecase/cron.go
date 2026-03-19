@@ -70,7 +70,7 @@ func (uc *implUseCase) DispatchDueTargets(ctx context.Context, input execution.D
 			continue
 		}
 
-		effectiveInterval, intervalErr := computeEffectiveInterval(dueTarget.Source, dueTarget.Target)
+		effectiveInterval, intervalErr := uc.computeEffectiveInterval(dueTarget.Source, dueTarget.Target)
 		if intervalErr != nil {
 			output.FailedCount++
 			uc.l.Errorf(

@@ -1,15 +1,13 @@
 package rabbitmq
 
-import (
-	rmq "github.com/smap-hcmut/shared-libs/go/rabbitmq"
-)
+import rmq "github.com/smap-hcmut/shared-libs/go/rabbitmq"
 
 const (
-	TikTokTasksQueueName              = "tiktok_tasks"
-	FacebookTasksQueueName            = "facebook_tasks"
-	YoutubeTasksQueueName             = "youtube_tasks"
-	IngestTaskCompletionsQueueName    = "ingest_task_completions"
-	IngestTaskCompletionsConsumerName = "ingest-execution-completion-consumer"
+	TikTokTasksQueueName                = "tiktok_tasks"
+	FacebookTasksQueueName              = "facebook_tasks"
+	YoutubeTasksQueueName               = "youtube_tasks"
+	IngestDryrunCompletionsQueueName    = "ingest_dryrun_completions"
+	IngestDryrunCompletionsConsumerName = "ingest-dryrun-completion-consumer"
 
 	TikTokTasksExchangeName   = "ingest_tiktok_tasks_exc"
 	FacebookTasksExchangeName = "ingest_facebook_tasks_exc"
@@ -57,8 +55,8 @@ var (
 		Name:    YoutubeTasksQueueName,
 		Durable: true,
 	}
-	IngestTaskCompletionsQueue = rmq.QueueArgs{
-		Name:    IngestTaskCompletionsQueueName,
+	IngestDryrunCompletionsQueue = rmq.QueueArgs{
+		Name:    IngestDryrunCompletionsQueueName,
 		Durable: true,
 	}
 )

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 
-	executionRabbit "ingest-srv/internal/execution/delivery/rabbitmq"
+	dryrunRabbit "ingest-srv/internal/dryrun/delivery/rabbitmq"
 
 	"github.com/smap-hcmut/shared-libs/go/rabbitmq"
 
@@ -13,7 +13,7 @@ import (
 )
 
 func (c Consumer) Consume(ctx context.Context) error {
-	return c.consume(ctx, executionRabbit.IngestTaskCompletionsQueue, executionRabbit.IngestTaskCompletionsConsumerName, c.handleCompletionWorker)
+	return c.consume(ctx, dryrunRabbit.IngestDryrunCompletionsQueue, dryrunRabbit.IngestDryrunCompletionsConsumerName, c.handleCompletionWorker)
 }
 
 func catchPanic() {
@@ -30,8 +30,8 @@ func (c Consumer) consume(ctx context.Context, queue rabbitmq.QueueArgs, consume
 	if c.conn == nil {
 		return fmt.Errorf("rabbitmq client is required")
 	}
-	if c.execUC == nil {
-		return fmt.Errorf("execution consumer usecase is required")
+	if c.dryrunUC == nil {
+		return fmt.Errorf("dryrun consumer usecase is required")
 	}
 
 	ch, err := c.conn.Channel()
