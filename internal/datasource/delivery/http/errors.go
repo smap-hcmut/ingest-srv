@@ -11,7 +11,7 @@ import (
 
 // Delivery-layer HTTP errors — sequential codes per domain.
 var (
-	errNotFound                  = &pkgErrors.HTTPError{Code: 1, Message: "Data source not found", StatusCode: http.StatusNotFound}
+	errNotFound                  = &pkgErrors.HTTPError{Code: 1, Message: "Data source not found", StatusCode: http.StatusBadRequest}
 	errNameRequired              = &pkgErrors.HTTPError{Code: 2, Message: "Data source name is required", StatusCode: http.StatusBadRequest}
 	errProjectIDRequired         = &pkgErrors.HTTPError{Code: 3, Message: "Project ID is required", StatusCode: http.StatusBadRequest}
 	errSourceTypeRequired        = &pkgErrors.HTTPError{Code: 4, Message: "Source type is required", StatusCode: http.StatusBadRequest}
@@ -23,7 +23,7 @@ var (
 	errUpdateFailed              = &pkgErrors.HTTPError{Code: 10, Message: "Failed to update data source", StatusCode: http.StatusInternalServerError}
 	errDeleteFailed              = &pkgErrors.HTTPError{Code: 11, Message: "Failed to delete data source", StatusCode: http.StatusInternalServerError}
 	errListFailed                = &pkgErrors.HTTPError{Code: 12, Message: "Failed to list data sources", StatusCode: http.StatusInternalServerError}
-	errUpdateNotAllowed          = &pkgErrors.HTTPError{Code: 13, Message: "Cannot update config/mapping on an active source", StatusCode: http.StatusConflict}
+	errUpdateNotAllowed          = &pkgErrors.HTTPError{Code: 13, Message: "Cannot update config/mapping on an active source", StatusCode: http.StatusBadRequest}
 	errWrongBody                 = &pkgErrors.HTTPError{Code: 14, Message: "Wrong request body", StatusCode: http.StatusBadRequest}
 	errInvalidCrawlInterval      = &pkgErrors.HTTPError{Code: 15, Message: "Invalid crawl_interval_minutes; must be greater than 0", StatusCode: http.StatusBadRequest}
 	errInvalidTransition         = &pkgErrors.HTTPError{Code: 16, Message: "Invalid datasource lifecycle transition", StatusCode: http.StatusBadRequest}
@@ -35,7 +35,7 @@ var (
 	errInternal                  = &pkgErrors.HTTPError{Code: 99, Message: "Internal server error", StatusCode: http.StatusInternalServerError}
 
 	// CrawlTarget errors — 101+ range.
-	errTargetNotFound         = &pkgErrors.HTTPError{Code: 101, Message: "Crawl target not found", StatusCode: http.StatusNotFound}
+	errTargetNotFound         = &pkgErrors.HTTPError{Code: 101, Message: "Crawl target not found", StatusCode: http.StatusBadRequest}
 	errTargetValuesRequired   = &pkgErrors.HTTPError{Code: 102, Message: "Crawl target values are required", StatusCode: http.StatusBadRequest}
 	errInvalidTargetType      = &pkgErrors.HTTPError{Code: 103, Message: "Invalid target_type; must be KEYWORD, PROFILE, or POST_URL", StatusCode: http.StatusBadRequest}
 	errSourceNotCrawl         = &pkgErrors.HTTPError{Code: 104, Message: "Crawl targets can only be added to CRAWL sources", StatusCode: http.StatusBadRequest}
