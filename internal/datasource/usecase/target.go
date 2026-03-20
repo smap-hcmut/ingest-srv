@@ -185,7 +185,7 @@ func (uc *implUseCase) ActivateTarget(ctx context.Context, input datasource.Acti
 		uc.l.Errorf(ctx, "datasource.usecase.ActivateTarget.repo.GetLatestDryrunByTarget: target_id=%s err=%v", current.ID, err)
 		return datasource.ActivateTargetOutput{}, datasource.ErrTargetUpdateFailed
 	}
-	if latest.ID == "" || latest.Status == model.DryrunStatusFailed {
+	if latest.ID == "" || latest.Status != model.DryrunStatusSuccess {
 		return datasource.ActivateTargetOutput{}, datasource.ErrTargetActivateNotAllowed
 	}
 

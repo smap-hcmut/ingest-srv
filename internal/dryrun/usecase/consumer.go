@@ -27,6 +27,10 @@ func (uc *implUseCase) HandleCompletion(ctx context.Context, input dryrun.Handle
 	}
 
 	if uc.isTerminalDryrunStatus(result.Status) || result.CompletedAt != nil {
+		if activateErr := uc.ensureActivatedTargetAfterSuccess(ctx, result); activateErr != nil {
+			uc.l.Errorf(ctx, "dryrun.usecase.HandleCompletion.ensureActivatedTargetAfterSuccess.duplicate: result_id=%s err=%v", result.ID, activateErr)
+			return activateErr
+		}
 		uc.l.Infof(ctx, "dryrun.usecase.HandleCompletion: duplicate terminal completion task_id=%s result_id=%s", input.TaskID, result.ID)
 		return nil
 	}
