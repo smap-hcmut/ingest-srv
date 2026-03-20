@@ -21,36 +21,39 @@ func (uc *implUseCase) Trigger(ctx context.Context, input dryrun.TriggerInput) (
 
 	source, err := uc.getSource(ctx, input.SourceID)
 	if err != nil {
+		uc.l.Errorf(ctx, "dryrun.usecase.Trigger.getSource: source_id=%s err=%v", input.SourceID, err)
 		return dryrun.TriggerOutput{}, err
 	}
 
 	switch source.Status {
 	case model.SourceStatusPending, model.SourceStatusReady:
 	default:
+		uc.l.Warnf(ctx, "dryrun.usecase.Trigger.invalidSourceStatus: source_id=%s status=%s", source.ID, source.Status)
 		return dryrun.TriggerOutput{}, dryrun.ErrDryrunNotAllowed
 	}
 
 	var target *model.CrawlTarget
 	if source.SourceCategory == model.SourceCategoryCrawl {
 		if strings.TrimSpace(input.TargetID) == "" {
+			uc.l.Warnf(ctx, "dryrun.usecase.Trigger.missingTargetID: source_id=%s", source.ID)
 			return dryrun.TriggerOutput{}, dryrun.ErrTargetRequired
 		}
 
 		resolvedTarget, err := uc.getTarget(ctx, source.ID, input.TargetID)
 		if err != nil {
+			uc.l.Errorf(ctx, "dryrun.usecase.Trigger.getTarget: source_id=%s target_id=%s err=%v", source.ID, input.TargetID, err)
 			return dryrun.TriggerOutput{}, err
-		}
-		if !resolvedTarget.IsActive {
-			return dryrun.TriggerOutput{}, dryrun.ErrDryrunNotAllowed
 		}
 		target = &resolvedTarget
 	} else if strings.TrimSpace(input.TargetID) != "" {
+		uc.l.Warnf(ctx, "dryrun.usecase.Trigger.targetIDNotAllowed: source_id=%s target_id=%s", source.ID, input.TargetID)
 		return dryrun.TriggerOutput{}, dryrun.ErrTargetForbidden
 	}
 
 	sampleLimit := uc.normalizeSampleLimit(input.SampleLimit)
 	spec, _, err := uc.buildDispatchSpec(source, target, sampleLimit)
 	if err != nil {
+		uc.l.Errorf(ctx, "dryrun.usecase.Trigger.buildDispatchSpec: source_id=%s target_id=%s err=%v", source.ID, input.TargetID, err)
 		return dryrun.TriggerOutput{}, err
 	}
 

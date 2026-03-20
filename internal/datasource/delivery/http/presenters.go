@@ -513,7 +513,6 @@ type createTargetGroupReq struct {
 	Values               []string        `json:"values" binding:"required" example:"vinfast"`
 	Label                string          `json:"label" example:"VinFast keyword"`
 	PlatformMeta         json.RawMessage `json:"platform_meta,omitempty" swaggertype:"object"`
-	IsActive             bool            `json:"is_active" example:"true"`
 	Priority             int             `json:"priority" example:"0"`
 	CrawlIntervalMinutes int             `json:"crawl_interval_minutes" example:"11"`
 }
@@ -543,7 +542,6 @@ func (r createTargetGroupReq) toInput(targetType model.TargetType) datasource.Cr
 		Values:               normalizeRequestValues(r.Values, targetType == model.TargetTypeKeyword),
 		Label:                r.Label,
 		PlatformMeta:         r.PlatformMeta,
-		IsActive:             r.IsActive,
 		Priority:             r.Priority,
 		CrawlIntervalMinutes: r.CrawlIntervalMinutes,
 	}
@@ -601,7 +599,6 @@ type updateTargetReq struct {
 	Values               []string        `json:"values,omitempty"`
 	Label                string          `json:"label" example:"Updated label"`
 	PlatformMeta         json.RawMessage `json:"platform_meta,omitempty" swaggertype:"object"`
-	IsActive             *bool           `json:"is_active,omitempty"`
 	Priority             *int            `json:"priority,omitempty"`
 	CrawlIntervalMinutes *int            `json:"crawl_interval_minutes,omitempty"`
 }
@@ -626,9 +623,22 @@ func (r updateTargetReq) toInput() datasource.UpdateTargetInput {
 		Values:               normalizeRequestValues(r.Values, false),
 		Label:                r.Label,
 		PlatformMeta:         r.PlatformMeta,
-		IsActive:             r.IsActive,
 		Priority:             r.Priority,
 		CrawlIntervalMinutes: r.CrawlIntervalMinutes,
+	}
+}
+
+func (r detailTargetReq) toActivateInput() datasource.ActivateTargetInput {
+	return datasource.ActivateTargetInput{
+		DataSourceID: strings.TrimSpace(r.DataSourceID),
+		ID:           strings.TrimSpace(r.ID),
+	}
+}
+
+func (r detailTargetReq) toDeactivateInput() datasource.DeactivateTargetInput {
+	return datasource.DeactivateTargetInput{
+		DataSourceID: strings.TrimSpace(r.DataSourceID),
+		ID:           strings.TrimSpace(r.ID),
 	}
 }
 

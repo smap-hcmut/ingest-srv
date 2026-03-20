@@ -53,7 +53,7 @@ func (uc *implUseCase) createTarget(ctx context.Context, input datasource.Create
 		Values:               values,
 		Label:                input.Label,
 		PlatformMeta:         input.PlatformMeta,
-		IsActive:             input.IsActive,
+		IsActive:             false,
 		Priority:             input.Priority,
 		CrawlIntervalMinutes: input.CrawlIntervalMinutes,
 	}
@@ -141,7 +141,6 @@ func (uc *implUseCase) UpdateTarget(ctx context.Context, input datasource.Update
 		Values:               values,
 		Label:                input.Label,
 		PlatformMeta:         input.PlatformMeta,
-		IsActive:             input.IsActive,
 		Priority:             input.Priority,
 		CrawlIntervalMinutes: input.CrawlIntervalMinutes,
 	}
@@ -156,6 +155,95 @@ func (uc *implUseCase) UpdateTarget(ctx context.Context, input datasource.Update
 	}
 
 	return datasource.UpdateTargetOutput{Target: result}, nil
+}
+
+// ActivateTarget enables one crawl target after dryrun evidence is available.
+func (uc *implUseCase) ActivateTarget(ctx context.Context, input datasource.ActivateTargetInput) (datasource.ActivateTargetOutput, error) {
+	if err := uc.validActivateTargetInput(input); err != nil {
+		uc.l.Warnf(ctx, "datasource.usecase.ActivateTarget.validActivateTargetInput: %v", err)
+		return datasource.ActivateTargetOutput{}, err
+	}
+
+	current, err := uc.repo.GetTarget(ctx, repo.GetTargetOptions{
+		DataSourceID: strings.TrimSpace(input.DataSourceID),
+		ID:           strings.TrimSpace(input.ID),
+	})
+	if err != nil {
+		uc.l.Errorf(ctx, "datasource.usecase.ActivateTarget.repo.GetTarget: id=%s err=%v", input.ID, err)
+		if err == repo.ErrTargetNotFound {
+			return datasource.ActivateTargetOutput{}, datasource.ErrTargetNotFound
+		}
+		return datasource.ActivateTargetOutput{}, datasource.ErrTargetUpdateFailed
+	}
+
+	if current.IsActive {
+		return datasource.ActivateTargetOutput{Target: current}, nil
+	}
+
+	latest, err := uc.repo.GetLatestDryrunByTarget(ctx, current.ID)
+	if err != nil {
+		uc.l.Errorf(ctx, "datasource.usecase.ActivateTarget.repo.GetLatestDryrunByTarget: target_id=%s err=%v", current.ID, err)
+		return datasource.ActivateTargetOutput{}, datasource.ErrTargetUpdateFailed
+	}
+	if latest.ID == "" || latest.Status == model.DryrunStatusFailed {
+		return datasource.ActivateTargetOutput{}, datasource.ErrTargetActivateNotAllowed
+	}
+
+	enabled := true
+	updated, err := uc.repo.UpdateTarget(ctx, repo.UpdateTargetOptions{
+		DataSourceID: strings.TrimSpace(input.DataSourceID),
+		ID:           strings.TrimSpace(input.ID),
+		IsActive:     &enabled,
+	})
+	if err != nil {
+		uc.l.Errorf(ctx, "datasource.usecase.ActivateTarget.repo.UpdateTarget: id=%s err=%v", input.ID, err)
+		if err == repo.ErrTargetNotFound {
+			return datasource.ActivateTargetOutput{}, datasource.ErrTargetNotFound
+		}
+		return datasource.ActivateTargetOutput{}, datasource.ErrTargetUpdateFailed
+	}
+
+	return datasource.ActivateTargetOutput{Target: updated}, nil
+}
+
+// DeactivateTarget disables one crawl target.
+func (uc *implUseCase) DeactivateTarget(ctx context.Context, input datasource.DeactivateTargetInput) (datasource.DeactivateTargetOutput, error) {
+	if err := uc.validDeactivateTargetInput(input); err != nil {
+		uc.l.Warnf(ctx, "datasource.usecase.DeactivateTarget.validDeactivateTargetInput: %v", err)
+		return datasource.DeactivateTargetOutput{}, err
+	}
+
+	current, err := uc.repo.GetTarget(ctx, repo.GetTargetOptions{
+		DataSourceID: strings.TrimSpace(input.DataSourceID),
+		ID:           strings.TrimSpace(input.ID),
+	})
+	if err != nil {
+		uc.l.Errorf(ctx, "datasource.usecase.DeactivateTarget.repo.GetTarget: id=%s err=%v", input.ID, err)
+		if err == repo.ErrTargetNotFound {
+			return datasource.DeactivateTargetOutput{}, datasource.ErrTargetNotFound
+		}
+		return datasource.DeactivateTargetOutput{}, datasource.ErrTargetUpdateFailed
+	}
+
+	if !current.IsActive {
+		return datasource.DeactivateTargetOutput{Target: current}, nil
+	}
+
+	disabled := false
+	updated, err := uc.repo.UpdateTarget(ctx, repo.UpdateTargetOptions{
+		DataSourceID: strings.TrimSpace(input.DataSourceID),
+		ID:           strings.TrimSpace(input.ID),
+		IsActive:     &disabled,
+	})
+	if err != nil {
+		uc.l.Errorf(ctx, "datasource.usecase.DeactivateTarget.repo.UpdateTarget: id=%s err=%v", input.ID, err)
+		if err == repo.ErrTargetNotFound {
+			return datasource.DeactivateTargetOutput{}, datasource.ErrTargetNotFound
+		}
+		return datasource.DeactivateTargetOutput{}, datasource.ErrTargetUpdateFailed
+	}
+
+	return datasource.DeactivateTargetOutput{Target: updated}, nil
 }
 
 // DeleteTarget hard-deletes a crawl target by ID with datasource ownership check.

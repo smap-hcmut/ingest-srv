@@ -93,7 +93,13 @@ func (uc *implUseCase) HandleCompletion(ctx context.Context, input dryrun.Handle
 	}
 
 	if _, applyErr := uc.applyDatasourceResult(ctx, finalResult.SourceID, finalResult.ID, finalStatus); applyErr != nil {
+		uc.l.Errorf(ctx, "dryrun.usecase.HandleCompletion.applyDatasourceResult: result_id=%s err=%v", result.ID, applyErr)
 		return applyErr
+	}
+
+	if activateErr := uc.ensureActivatedTargetAfterSuccess(ctx, finalResult); activateErr != nil {
+		uc.l.Errorf(ctx, "dryrun.usecase.HandleCompletion.ensureActivatedTargetAfterSuccess: result_id=%s err=%v", result.ID, activateErr)
+		return activateErr
 	}
 
 	return nil

@@ -497,6 +497,66 @@ func (h *handler) UpdateTarget(c *gin.Context) {
 	response.OK(c, h.newUpdateTargetResp(o))
 }
 
+// @Summary Activate a crawl target
+// @Description Activate one crawl target after dry-run evidence is available
+// @Tags CrawlTarget
+// @Produce json
+// @Param id path string true "Data Source ID"
+// @Param target_id path string true "Target ID"
+// @Success 200 {object} updateTargetResp
+// @Failure 400 {object} response.Resp
+// @Failure 500 {object} response.Resp
+// @Router /datasources/{id}/targets/{target_id}/activate [post]
+func (h *handler) ActivateTarget(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	req, err := h.processDetailTargetReq(c)
+	if err != nil {
+		h.l.Warnf(ctx, "datasource.delivery.ActivateTarget.processDetailTargetReq: %v", err)
+		response.Error(c, err, h.discord)
+		return
+	}
+
+	o, err := h.uc.ActivateTarget(ctx, req.toActivateInput())
+	if err != nil {
+		h.l.Errorf(ctx, "datasource.delivery.ActivateTarget.uc.ActivateTarget: id=%s err=%v", req.ID, err)
+		response.Error(c, h.mapError(err), h.discord)
+		return
+	}
+
+	response.OK(c, updateTargetResp{Target: toCrawlTargetResp(o.Target)})
+}
+
+// @Summary Deactivate a crawl target
+// @Description Deactivate one crawl target manually
+// @Tags CrawlTarget
+// @Produce json
+// @Param id path string true "Data Source ID"
+// @Param target_id path string true "Target ID"
+// @Success 200 {object} updateTargetResp
+// @Failure 400 {object} response.Resp
+// @Failure 500 {object} response.Resp
+// @Router /datasources/{id}/targets/{target_id}/deactivate [post]
+func (h *handler) DeactivateTarget(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	req, err := h.processDetailTargetReq(c)
+	if err != nil {
+		h.l.Warnf(ctx, "datasource.delivery.DeactivateTarget.processDetailTargetReq: %v", err)
+		response.Error(c, err, h.discord)
+		return
+	}
+
+	o, err := h.uc.DeactivateTarget(ctx, req.toDeactivateInput())
+	if err != nil {
+		h.l.Errorf(ctx, "datasource.delivery.DeactivateTarget.uc.DeactivateTarget: id=%s err=%v", req.ID, err)
+		response.Error(c, h.mapError(err), h.discord)
+		return
+	}
+
+	response.OK(c, updateTargetResp{Target: toCrawlTargetResp(o.Target)})
+}
+
 // @Summary Delete a crawl target
 // @Description Hard-delete a crawl target by ID
 // @Tags CrawlTarget

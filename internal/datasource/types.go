@@ -94,10 +94,11 @@ type ActivationReadinessError struct {
 }
 
 const (
-	ActivationReadinessCodeDatasourceRequired = "DATASOURCE_REQUIRED"
-	ActivationReadinessCodePassiveUnconfirmed = "PASSIVE_UNCONFIRMED"
-	ActivationReadinessCodeTargetDryrunMiss   = "TARGET_DRYRUN_MISSING"
-	ActivationReadinessCodeTargetDryrunFailed = "TARGET_DRYRUN_FAILED"
+	ActivationReadinessCodeDatasourceRequired   = "DATASOURCE_REQUIRED"
+	ActivationReadinessCodePassiveUnconfirmed   = "PASSIVE_UNCONFIRMED"
+	ActivationReadinessCodeTargetDryrunMiss     = "TARGET_DRYRUN_MISSING"
+	ActivationReadinessCodeTargetDryrunFailed   = "TARGET_DRYRUN_FAILED"
+	ActivationReadinessCodeActiveTargetRequired = "ACTIVE_TARGET_REQUIRED"
 )
 
 // ActivationReadinessOutput summarizes activation readiness at project scope.
@@ -155,7 +156,6 @@ type CreateTargetGroupInput struct {
 	Values               []string
 	Label                string
 	PlatformMeta         json.RawMessage
-	IsActive             bool
 	Priority             int
 	CrawlIntervalMinutes int
 }
@@ -195,13 +195,34 @@ type UpdateTargetInput struct {
 	Values               []string
 	Label                string
 	PlatformMeta         json.RawMessage
-	IsActive             *bool
 	Priority             *int
 	CrawlIntervalMinutes *int
 }
 
 // UpdateTargetOutput is the output after updating a crawl target.
 type UpdateTargetOutput struct {
+	Target model.CrawlTarget
+}
+
+// ActivateTargetInput is the input for activating a crawl target.
+type ActivateTargetInput struct {
+	DataSourceID string
+	ID           string
+}
+
+// ActivateTargetOutput is the output after activating a crawl target.
+type ActivateTargetOutput struct {
+	Target model.CrawlTarget
+}
+
+// DeactivateTargetInput is the input for deactivating a crawl target.
+type DeactivateTargetInput struct {
+	DataSourceID string
+	ID           string
+}
+
+// DeactivateTargetOutput is the output after deactivating a crawl target.
+type DeactivateTargetOutput struct {
 	Target model.CrawlTarget
 }
 

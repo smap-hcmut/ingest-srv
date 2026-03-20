@@ -97,6 +97,7 @@ func (uc *implUseCase) getSource(ctx context.Context, id string) (model.DataSour
 		return model.DataSource{}, dryrun.ErrSourceNotFound
 	}
 	if output.DataSource.ID == "" {
+		uc.l.Errorf(ctx, "dryrun.usecase.getSource.dsUC.Detail: id=%s err=%v", id, err)
 		return model.DataSource{}, dryrun.ErrSourceNotFound
 	}
 	return output.DataSource, nil
@@ -300,13 +301,17 @@ func (uc *implUseCase) buildSuccessUpdate(rawBytes []byte, fallbackItemCount *in
 
 	sampleData, sampleCount, totalFound, warnings := uc.buildSamplePayload(resultRaw, sampleLimit, artifactItemCount, fallbackItemCount)
 	warnings = uc.appendWarningFromParams(params, warnings)
+	finalStatus := model.DryrunStatusSuccess
+	if len(warnings) > 0 {
+		finalStatus = model.DryrunStatusWarning
+	}
 	return dryrunRepo.UpdateResultOptions{
-		Status:      string(model.DryrunStatusWarning),
+		Status:      string(finalStatus),
 		SampleCount: sampleCount,
 		TotalFound:  totalFound,
 		SampleData:  sampleData,
 		Warnings:    warnings,
-	}, model.DryrunStatusWarning, nil
+	}, finalStatus, nil
 }
 
 func (uc *implUseCase) buildSamplePayload(resultRaw json.RawMessage, sampleLimit int, artifactItemCount int, fallbackItemCount *int) (json.RawMessage, int, *int, json.RawMessage) {
@@ -409,6 +414,26 @@ func (uc *implUseCase) appendWarningFromParams(params map[string]interface{}, wa
 		"message": strings.TrimSpace(message),
 	})
 	return uc.marshalWarnings(items)
+}
+
+func (uc *implUseCase) ensureActivatedTargetAfterSuccess(ctx context.Context, result model.DryrunResult) error {
+	if result.Status != model.DryrunStatusSuccess {
+		return nil
+	}
+	if strings.TrimSpace(result.TargetID) == "" {
+		return nil
+	}
+
+	_, err := uc.dsUC.ActivateTarget(ctx, datasource.ActivateTargetInput{
+		DataSourceID: strings.TrimSpace(result.SourceID),
+		ID:           strings.TrimSpace(result.TargetID),
+	})
+	if err != nil {
+		uc.l.Errorf(ctx, "dryrun.usecase.ensureActivatedTargetAfterSuccess.dsUC.ActivateTarget: source_id=%s target_id=%s err=%v", result.SourceID, result.TargetID, err)
+		return dryrun.ErrUpdateFailed
+	}
+
+	return nil
 }
 
 func (uc *implUseCase) normalizeTotalFound(artifactItemCount int, fallbackItemCount *int) *int {

@@ -154,6 +154,20 @@ func (uc *implUseCase) validUpdateTargetInput(input datasource.UpdateTargetInput
 	return nil
 }
 
+func (uc *implUseCase) validActivateTargetInput(input datasource.ActivateTargetInput) error {
+	if strings.TrimSpace(input.DataSourceID) == "" || strings.TrimSpace(input.ID) == "" {
+		return datasource.ErrTargetNotFound
+	}
+	return nil
+}
+
+func (uc *implUseCase) validDeactivateTargetInput(input datasource.DeactivateTargetInput) error {
+	if strings.TrimSpace(input.DataSourceID) == "" || strings.TrimSpace(input.ID) == "" {
+		return datasource.ErrTargetNotFound
+	}
+	return nil
+}
+
 func (uc *implUseCase) validDeleteTargetInput(input datasource.DeleteTargetInput) error {
 	if strings.TrimSpace(input.DataSourceID) == "" || strings.TrimSpace(input.ID) == "" {
 		return datasource.ErrTargetNotFound

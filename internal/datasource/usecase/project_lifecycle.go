@@ -28,6 +28,7 @@ func (uc *implUseCase) GetActivationReadiness(ctx context.Context, projectID str
 		HasDatasource:   len(sources) > 0,
 		Errors:          make([]datasource.ActivationReadinessError, 0),
 	}
+	hasDatasourceWithoutActiveTarget := false
 
 	if !out.HasDatasource {
 		out.Errors = append(out.Errors, datasource.ActivationReadinessError{
@@ -63,7 +64,12 @@ func (uc *implUseCase) GetActivationReadiness(ctx context.Context, projectID str
 			return datasource.ActivationReadinessOutput{}, datasource.ErrListFailed
 		}
 
+		activeTargetCount := 0
 		for _, target := range targets {
+			if target.IsActive {
+				activeTargetCount++
+			}
+
 			latest, latestErr := uc.repo.GetLatestDryrunByTarget(ctx, target.ID)
 			if latestErr != nil {
 				uc.l.Errorf(ctx, "datasource.usecase.GetActivationReadiness.repo.GetLatestDryrunByTarget: target_id=%s err=%v", target.ID, latestErr)
@@ -91,12 +97,22 @@ func (uc *implUseCase) GetActivationReadiness(ctx context.Context, projectID str
 				})
 			}
 		}
+
+		if activeTargetCount == 0 {
+			hasDatasourceWithoutActiveTarget = true
+			out.Errors = append(out.Errors, datasource.ActivationReadinessError{
+				Code:         datasource.ActivationReadinessCodeActiveTargetRequired,
+				Message:      "crawl datasource must have at least one active target",
+				DataSourceID: source.ID,
+			})
+		}
 	}
 
 	out.CanActivate = out.HasDatasource &&
 		out.PassiveUnconfirmedCount == 0 &&
 		out.MissingTargetDryrunCount == 0 &&
-		out.FailedTargetDryrunCount == 0
+		out.FailedTargetDryrunCount == 0 &&
+		!hasDatasourceWithoutActiveTarget
 
 	return out, nil
 }

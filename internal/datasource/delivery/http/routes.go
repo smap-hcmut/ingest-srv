@@ -25,6 +25,8 @@ func (h *handler) RegisterRoutes(r *gin.RouterGroup, mw *middleware.Middleware) 
 			targets.GET("", h.ListTargets)
 			targets.GET("/:target_id", h.DetailTarget)
 			targets.PUT("/:target_id", h.UpdateTarget)
+			targets.POST("/:target_id/activate", h.ActivateTarget)
+			targets.POST("/:target_id/deactivate", h.DeactivateTarget)
 			targets.DELETE("/:target_id", h.DeleteTarget)
 		}
 	}

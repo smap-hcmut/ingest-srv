@@ -47,5 +47,7 @@ type CrawlTargetUseCase interface {
 	DetailTarget(ctx context.Context, input DetailTargetInput) (DetailTargetOutput, error)
 	ListTargets(ctx context.Context, input ListTargetsInput) (ListTargetsOutput, error)
 	UpdateTarget(ctx context.Context, input UpdateTargetInput) (UpdateTargetOutput, error)
+	ActivateTarget(ctx context.Context, input ActivateTargetInput) (ActivateTargetOutput, error)
+	DeactivateTarget(ctx context.Context, input DeactivateTargetInput) (DeactivateTargetOutput, error)
 	DeleteTarget(ctx context.Context, input DeleteTargetInput) error
 }

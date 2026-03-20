@@ -35,16 +35,18 @@ var (
 	errInternal                  = &pkgErrors.HTTPError{Code: 99, Message: "Internal server error", StatusCode: http.StatusInternalServerError}
 
 	// CrawlTarget errors — 101+ range.
-	errTargetNotFound         = &pkgErrors.HTTPError{Code: 101, Message: "Crawl target not found", StatusCode: http.StatusBadRequest}
-	errTargetValuesRequired   = &pkgErrors.HTTPError{Code: 102, Message: "Crawl target values are required", StatusCode: http.StatusBadRequest}
-	errInvalidTargetType      = &pkgErrors.HTTPError{Code: 103, Message: "Invalid target_type; must be KEYWORD, PROFILE, or POST_URL", StatusCode: http.StatusBadRequest}
-	errSourceNotCrawl         = &pkgErrors.HTTPError{Code: 104, Message: "Crawl targets can only be added to CRAWL sources", StatusCode: http.StatusBadRequest}
-	errTargetCreateFailed     = &pkgErrors.HTTPError{Code: 105, Message: "Failed to create crawl target", StatusCode: http.StatusInternalServerError}
-	errTargetUpdateFailed     = &pkgErrors.HTTPError{Code: 106, Message: "Failed to update crawl target", StatusCode: http.StatusInternalServerError}
-	errTargetDeleteFailed     = &pkgErrors.HTTPError{Code: 107, Message: "Failed to delete crawl target", StatusCode: http.StatusInternalServerError}
-	errTargetListFailed       = &pkgErrors.HTTPError{Code: 108, Message: "Failed to list crawl targets", StatusCode: http.StatusInternalServerError}
-	errInvalidTargetInterval  = &pkgErrors.HTTPError{Code: 109, Message: "Invalid crawl_interval_minutes; must be greater than 0", StatusCode: http.StatusBadRequest}
-	errTargetValuesMustBeURLs = &pkgErrors.HTTPError{Code: 110, Message: "Crawl target values must be valid URLs", StatusCode: http.StatusBadRequest}
+	errTargetNotFound             = &pkgErrors.HTTPError{Code: 101, Message: "Crawl target not found", StatusCode: http.StatusBadRequest}
+	errTargetValuesRequired       = &pkgErrors.HTTPError{Code: 102, Message: "Crawl target values are required", StatusCode: http.StatusBadRequest}
+	errInvalidTargetType          = &pkgErrors.HTTPError{Code: 103, Message: "Invalid target_type; must be KEYWORD, PROFILE, or POST_URL", StatusCode: http.StatusBadRequest}
+	errSourceNotCrawl             = &pkgErrors.HTTPError{Code: 104, Message: "Crawl targets can only be added to CRAWL sources", StatusCode: http.StatusBadRequest}
+	errTargetCreateFailed         = &pkgErrors.HTTPError{Code: 105, Message: "Failed to create crawl target", StatusCode: http.StatusInternalServerError}
+	errTargetUpdateFailed         = &pkgErrors.HTTPError{Code: 106, Message: "Failed to update crawl target", StatusCode: http.StatusInternalServerError}
+	errTargetDeleteFailed         = &pkgErrors.HTTPError{Code: 107, Message: "Failed to delete crawl target", StatusCode: http.StatusInternalServerError}
+	errTargetListFailed           = &pkgErrors.HTTPError{Code: 108, Message: "Failed to list crawl targets", StatusCode: http.StatusInternalServerError}
+	errInvalidTargetInterval      = &pkgErrors.HTTPError{Code: 109, Message: "Invalid crawl_interval_minutes; must be greater than 0", StatusCode: http.StatusBadRequest}
+	errTargetValuesMustBeURLs     = &pkgErrors.HTTPError{Code: 110, Message: "Crawl target values must be valid URLs", StatusCode: http.StatusBadRequest}
+	errTargetActivateNotAllowed   = &pkgErrors.HTTPError{Code: 111, Message: "Crawl target cannot be activated in its current state", StatusCode: http.StatusBadRequest}
+	errTargetDeactivateNotAllowed = &pkgErrors.HTTPError{Code: 112, Message: "Crawl target cannot be deactivated in its current state", StatusCode: http.StatusBadRequest}
 )
 
 func (h *handler) mapError(err error) error {
@@ -107,6 +109,10 @@ func (h *handler) mapError(err error) error {
 		return errTargetListFailed
 	case errors.Is(err, datasource.ErrInvalidTargetInterval):
 		return errInvalidTargetInterval
+	case errors.Is(err, datasource.ErrTargetActivateNotAllowed):
+		return errTargetActivateNotAllowed
+	case errors.Is(err, datasource.ErrTargetDeactivateNotAllowed):
+		return errTargetDeactivateNotAllowed
 	default:
 		panic(err) // Unexpected error — panic to trigger recovery middleware and alerting.
 	}
