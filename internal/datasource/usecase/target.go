@@ -129,6 +129,15 @@ func (uc *implUseCase) UpdateTarget(ctx context.Context, input datasource.Update
 		}
 		return datasource.UpdateTargetOutput{}, datasource.ErrTargetUpdateFailed
 	}
+	source, err := uc.repo.DetailDataSource(ctx, strings.TrimSpace(input.DataSourceID))
+	if err != nil {
+		uc.l.Errorf(ctx, "datasource.usecase.UpdateTarget.repo.DetailDataSource: source_id=%s err=%v", input.DataSourceID, err)
+		return datasource.UpdateTargetOutput{}, datasource.ErrTargetUpdateFailed
+	}
+	if err := uc.ensureDatasourceTargetMutationNotRunning(source); err != nil {
+		uc.l.Warnf(ctx, "datasource.usecase.UpdateTarget.ensureDatasourceTargetMutationNotRunning: source_id=%s err=%v", source.ID, err)
+		return datasource.UpdateTargetOutput{}, err
+	}
 	if err := uc.ensureTargetDryrunNotRunning(ctx, current.ID); err != nil {
 		uc.l.Warnf(ctx, "datasource.usecase.UpdateTarget.ensureTargetDryrunNotRunning: target_id=%s err=%v", current.ID, err)
 		return datasource.UpdateTargetOutput{}, err
@@ -197,6 +206,15 @@ func (uc *implUseCase) ActivateTarget(ctx context.Context, input datasource.Acti
 		}
 		return datasource.ActivateTargetOutput{}, datasource.ErrTargetUpdateFailed
 	}
+	source, err := uc.repo.DetailDataSource(ctx, strings.TrimSpace(input.DataSourceID))
+	if err != nil {
+		uc.l.Errorf(ctx, "datasource.usecase.ActivateTarget.repo.DetailDataSource: source_id=%s err=%v", input.DataSourceID, err)
+		return datasource.ActivateTargetOutput{}, datasource.ErrTargetUpdateFailed
+	}
+	if err := uc.ensureDatasourceTargetMutationNotRunning(source); err != nil {
+		uc.l.Warnf(ctx, "datasource.usecase.ActivateTarget.ensureDatasourceTargetMutationNotRunning: source_id=%s err=%v", source.ID, err)
+		return datasource.ActivateTargetOutput{}, err
+	}
 	if err := uc.ensureTargetDryrunNotRunning(ctx, current.ID); err != nil {
 		uc.l.Warnf(ctx, "datasource.usecase.ActivateTarget.ensureTargetDryrunNotRunning: target_id=%s err=%v", current.ID, err)
 		return datasource.ActivateTargetOutput{}, err
@@ -250,6 +268,15 @@ func (uc *implUseCase) DeactivateTarget(ctx context.Context, input datasource.De
 		}
 		return datasource.DeactivateTargetOutput{}, datasource.ErrTargetUpdateFailed
 	}
+	source, err := uc.repo.DetailDataSource(ctx, strings.TrimSpace(input.DataSourceID))
+	if err != nil {
+		uc.l.Errorf(ctx, "datasource.usecase.DeactivateTarget.repo.DetailDataSource: source_id=%s err=%v", input.DataSourceID, err)
+		return datasource.DeactivateTargetOutput{}, datasource.ErrTargetUpdateFailed
+	}
+	if err := uc.ensureDatasourceTargetMutationNotRunning(source); err != nil {
+		uc.l.Warnf(ctx, "datasource.usecase.DeactivateTarget.ensureDatasourceTargetMutationNotRunning: source_id=%s err=%v", source.ID, err)
+		return datasource.DeactivateTargetOutput{}, err
+	}
 	if err := uc.ensureTargetDryrunNotRunning(ctx, current.ID); err != nil {
 		uc.l.Warnf(ctx, "datasource.usecase.DeactivateTarget.ensureTargetDryrunNotRunning: target_id=%s err=%v", current.ID, err)
 		return datasource.DeactivateTargetOutput{}, err
@@ -300,6 +327,15 @@ func (uc *implUseCase) DeleteTarget(ctx context.Context, input datasource.Delete
 			return datasource.ErrTargetNotFound
 		}
 		return datasource.ErrTargetDeleteFailed
+	}
+	source, err := uc.repo.DetailDataSource(ctx, strings.TrimSpace(input.DataSourceID))
+	if err != nil {
+		uc.l.Errorf(ctx, "datasource.usecase.DeleteTarget.repo.DetailDataSource: source_id=%s err=%v", input.DataSourceID, err)
+		return datasource.ErrTargetDeleteFailed
+	}
+	if err := uc.ensureDatasourceTargetMutationNotRunning(source); err != nil {
+		uc.l.Warnf(ctx, "datasource.usecase.DeleteTarget.ensureDatasourceTargetMutationNotRunning: source_id=%s err=%v", source.ID, err)
+		return err
 	}
 	if err := uc.ensureTargetDryrunNotRunning(ctx, current.ID); err != nil {
 		uc.l.Warnf(ctx, "datasource.usecase.DeleteTarget.ensureTargetDryrunNotRunning: target_id=%s err=%v", current.ID, err)

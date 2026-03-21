@@ -9,10 +9,16 @@ import (
 	dryrunRabbit "ingest-srv/internal/dryrun/delivery/rabbitmq"
 
 	amqp "github.com/rabbitmq/amqp091-go"
+	"github.com/smap-hcmut/shared-libs/go/tracing"
 )
 
 func (c Consumer) handleCompletionWorker(delivery amqp.Delivery) {
 	ctx := context.Background()
+	if delivery.Headers != nil {
+		if traceID, ok := delivery.Headers[tracing.TraceIDHeader].(string); ok && traceID != "" {
+			ctx = tracing.NewTraceContext().WithTraceID(ctx, traceID)
+		}
+	}
 
 	var message dryrunRabbit.CompletionMessage
 	if err := json.Unmarshal(delivery.Body, &message); err != nil {

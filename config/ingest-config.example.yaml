@@ -47,7 +47,10 @@ kafka:
   group_id: "ingest-consumer"
 
 rabbitmq:
-  url: "amqp://admin:21042004@172.16.21.206:5672/"
+  # shared/prod-like broker:
+  # url: "amqp://admin:21042004@172.16.21.206:5672/"
+  # local isolated broker for E2E/runtime debugging:
+  url: "amqp://admin:21042004@localhost:5673/"
   retry_without_timeout: true
 
 microservice:

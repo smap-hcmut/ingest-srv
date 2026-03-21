@@ -252,6 +252,24 @@ func (uc *implUseCase) ensureDataSourceNotArchived(source model.DataSource) erro
 	return nil
 }
 
+func (uc *implUseCase) isDatasourceDryrunRunning(source model.DataSource) bool {
+	return source.DryrunStatus == model.DryrunStatusRunning
+}
+
+func (uc *implUseCase) ensureDatasourceDryrunNotRunning(source model.DataSource) error {
+	if uc.isDatasourceDryrunRunning(source) {
+		return datasource.ErrSourceDryrunRunning
+	}
+	return nil
+}
+
+func (uc *implUseCase) ensureDatasourceTargetMutationNotRunning(source model.DataSource) error {
+	if uc.isDatasourceDryrunRunning(source) {
+		return datasource.ErrTargetDryrunRunning
+	}
+	return nil
+}
+
 func (uc *implUseCase) getLatestDryrunStatusByTarget(ctx context.Context, targetID string) (model.DryrunStatus, error) {
 	latest, err := uc.repo.GetLatestDryrunByTarget(ctx, strings.TrimSpace(targetID))
 	if err != nil {
