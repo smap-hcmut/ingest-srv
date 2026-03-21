@@ -19,6 +19,7 @@ var (
 	ErrDeleteFailed              = errors.New("failed to delete data source")
 	ErrDeleteRequiresArchived    = errors.New("data source must be archived before delete")
 	ErrSourceArchived            = errors.New("data source is archived")
+	ErrSourceDryrunRunning       = errors.New("cannot mutate data source while a target dryrun is running")
 	ErrListFailed                = errors.New("failed to list data sources")
 	ErrUpdateNotAllowed          = errors.New("cannot update config/mapping on an active source")
 	ErrActivationReadinessFailed = errors.New("project activation readiness failed")
@@ -43,4 +44,5 @@ var (
 	ErrTargetActivateNotAllowed   = errors.New("activate not allowed for crawl target")
 	ErrTargetDeactivateNotAllowed = errors.New("deactivate not allowed for crawl target")
 	ErrTargetDeleteNotAllowed     = errors.New("delete not allowed for crawl target")
+	ErrTargetDryrunRunning        = errors.New("cannot mutate crawl target while dryrun is running")
 )

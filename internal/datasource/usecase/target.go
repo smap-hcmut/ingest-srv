@@ -129,6 +129,10 @@ func (uc *implUseCase) UpdateTarget(ctx context.Context, input datasource.Update
 		}
 		return datasource.UpdateTargetOutput{}, datasource.ErrTargetUpdateFailed
 	}
+	if err := uc.ensureTargetDryrunNotRunning(ctx, current.ID); err != nil {
+		uc.l.Warnf(ctx, "datasource.usecase.UpdateTarget.ensureTargetDryrunNotRunning: target_id=%s err=%v", current.ID, err)
+		return datasource.UpdateTargetOutput{}, err
+	}
 
 	var values []string
 	valuesForComparison := current.Values
@@ -193,6 +197,10 @@ func (uc *implUseCase) ActivateTarget(ctx context.Context, input datasource.Acti
 		}
 		return datasource.ActivateTargetOutput{}, datasource.ErrTargetUpdateFailed
 	}
+	if err := uc.ensureTargetDryrunNotRunning(ctx, current.ID); err != nil {
+		uc.l.Warnf(ctx, "datasource.usecase.ActivateTarget.ensureTargetDryrunNotRunning: target_id=%s err=%v", current.ID, err)
+		return datasource.ActivateTargetOutput{}, err
+	}
 
 	if current.IsActive {
 		return datasource.ActivateTargetOutput{Target: current}, nil
@@ -242,6 +250,10 @@ func (uc *implUseCase) DeactivateTarget(ctx context.Context, input datasource.De
 		}
 		return datasource.DeactivateTargetOutput{}, datasource.ErrTargetUpdateFailed
 	}
+	if err := uc.ensureTargetDryrunNotRunning(ctx, current.ID); err != nil {
+		uc.l.Warnf(ctx, "datasource.usecase.DeactivateTarget.ensureTargetDryrunNotRunning: target_id=%s err=%v", current.ID, err)
+		return datasource.DeactivateTargetOutput{}, err
+	}
 
 	if !current.IsActive {
 		return datasource.DeactivateTargetOutput{Target: current}, nil
@@ -288,6 +300,10 @@ func (uc *implUseCase) DeleteTarget(ctx context.Context, input datasource.Delete
 			return datasource.ErrTargetNotFound
 		}
 		return datasource.ErrTargetDeleteFailed
+	}
+	if err := uc.ensureTargetDryrunNotRunning(ctx, current.ID); err != nil {
+		uc.l.Warnf(ctx, "datasource.usecase.DeleteTarget.ensureTargetDryrunNotRunning: target_id=%s err=%v", current.ID, err)
+		return err
 	}
 
 	if err := uc.ensureCanRemoveActiveTarget(ctx, input.DataSourceID, current.IsActive, datasource.ErrTargetDeleteNotAllowed); err != nil {

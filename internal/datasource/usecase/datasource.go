@@ -166,6 +166,10 @@ func (uc *implUseCase) Archive(ctx context.Context, id string) error {
 	if current.ID == "" {
 		return datasource.ErrNotFound
 	}
+	if err := uc.ensureDatasourceTargetsDryrunNotRunning(ctx, current.ID); err != nil {
+		uc.l.Warnf(ctx, "datasource.usecase.Archive.ensureDatasourceTargetsDryrunNotRunning: id=%s err=%v", id, err)
+		return err
+	}
 	if current.Status == model.SourceStatusArchived {
 		return nil
 	}
@@ -195,6 +199,10 @@ func (uc *implUseCase) Delete(ctx context.Context, id string) error {
 	}
 	if current.ID == "" {
 		return datasource.ErrNotFound
+	}
+	if err := uc.ensureDatasourceTargetsDryrunNotRunning(ctx, current.ID); err != nil {
+		uc.l.Warnf(ctx, "datasource.usecase.Delete.ensureDatasourceTargetsDryrunNotRunning: id=%s err=%v", id, err)
+		return err
 	}
 	if current.Status != model.SourceStatusArchived {
 		return datasource.ErrDeleteRequiresArchived

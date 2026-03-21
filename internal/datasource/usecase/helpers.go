@@ -252,6 +252,47 @@ func (uc *implUseCase) ensureDataSourceNotArchived(source model.DataSource) erro
 	return nil
 }
 
+func (uc *implUseCase) getLatestDryrunStatusByTarget(ctx context.Context, targetID string) (model.DryrunStatus, error) {
+	latest, err := uc.repo.GetLatestDryrunByTarget(ctx, strings.TrimSpace(targetID))
+	if err != nil {
+		uc.l.Errorf(ctx, "datasource.usecase.getLatestDryrunStatusByTarget.repo.GetLatestDryrunByTarget: target_id=%s err=%v", targetID, err)
+		return "", datasource.ErrUpdateFailed
+	}
+	if latest.ID == "" {
+		return "", nil
+	}
+	return latest.Status, nil
+}
+
+func (uc *implUseCase) ensureTargetDryrunNotRunning(ctx context.Context, targetID string) error {
+	status, err := uc.getLatestDryrunStatusByTarget(ctx, targetID)
+	if err != nil {
+		return err
+	}
+	if status == model.DryrunStatusRunning {
+		return datasource.ErrTargetDryrunRunning
+	}
+	return nil
+}
+
+func (uc *implUseCase) ensureDatasourceTargetsDryrunNotRunning(ctx context.Context, dataSourceID string) error {
+	targets, err := uc.repo.ListTargets(ctx, repo.ListTargetsOptions{DataSourceID: strings.TrimSpace(dataSourceID)})
+	if err != nil {
+		uc.l.Errorf(ctx, "datasource.usecase.ensureDatasourceTargetsDryrunNotRunning.repo.ListTargets: source_id=%s err=%v", dataSourceID, err)
+		return datasource.ErrUpdateFailed
+	}
+	for _, target := range targets {
+		status, statusErr := uc.getLatestDryrunStatusByTarget(ctx, target.ID)
+		if statusErr != nil {
+			return statusErr
+		}
+		if status == model.DryrunStatusRunning {
+			return datasource.ErrSourceDryrunRunning
+		}
+	}
+	return nil
+}
+
 func (uc *implUseCase) ensureProjectAvailableForDatasourceCreate(ctx context.Context, projectID string) error {
 	if uc.project == nil {
 		uc.l.Errorf(ctx, "datasource.usecase.ensureProjectAvailableForDatasourceCreate: project client is nil")

@@ -14,6 +14,7 @@ var (
 	errTargetRequired     = &pkgErrors.HTTPError{Code: 3, Message: "target_id is required for crawl dryrun", StatusCode: http.StatusBadRequest}
 	errTargetForbidden    = &pkgErrors.HTTPError{Code: 4, Message: "target_id is not allowed for passive dryrun", StatusCode: http.StatusBadRequest}
 	errDryrunNotAllowed   = &pkgErrors.HTTPError{Code: 5, Message: "Dryrun is not allowed in current source state", StatusCode: http.StatusBadRequest}
+	errDryrunAlreadyRunning = &pkgErrors.HTTPError{Code: 15, Message: "Dryrun is already running for target", StatusCode: http.StatusBadRequest}
 	errInvalidSampleLimit = &pkgErrors.HTTPError{Code: 6, Message: "sample_limit must be greater than 0", StatusCode: http.StatusBadRequest}
 	errResultNotFound     = &pkgErrors.HTTPError{Code: 7, Message: "Dryrun result not found", StatusCode: http.StatusBadRequest}
 	errCreateFailed       = &pkgErrors.HTTPError{Code: 8, Message: "Failed to create dryrun result", StatusCode: http.StatusInternalServerError}
@@ -37,6 +38,8 @@ func (h *handler) mapError(err error) error {
 		return errTargetForbidden
 	case errors.Is(err, dryrun.ErrDryrunNotAllowed):
 		return errDryrunNotAllowed
+	case errors.Is(err, dryrun.ErrDryrunAlreadyRunning):
+		return errDryrunAlreadyRunning
 	case errors.Is(err, dryrun.ErrUnsupportedMapping):
 		return errUnsupportedMapping
 	case errors.Is(err, dryrun.ErrInvalidSampleLimit):

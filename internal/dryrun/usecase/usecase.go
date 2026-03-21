@@ -44,6 +44,18 @@ func (uc *implUseCase) Trigger(ctx context.Context, input dryrun.TriggerInput) (
 			uc.l.Errorf(ctx, "dryrun.usecase.Trigger.getTarget: source_id=%s target_id=%s err=%v", source.ID, input.TargetID, err)
 			return dryrun.TriggerOutput{}, err
 		}
+		latest, latestErr := uc.repo.GetLatest(ctx, dryrunRepo.GetLatestOptions{
+			SourceID: source.ID,
+			TargetID: resolvedTarget.ID,
+		})
+		if latestErr == nil && latest.ID != "" && latest.Status == model.DryrunStatusRunning {
+			uc.l.Warnf(ctx, "dryrun.usecase.Trigger.alreadyRunning: source_id=%s target_id=%s latest_id=%s", source.ID, resolvedTarget.ID, latest.ID)
+			return dryrun.TriggerOutput{}, dryrun.ErrDryrunAlreadyRunning
+		}
+		if latestErr != nil && latestErr != dryrunRepo.ErrNotFound {
+			uc.l.Errorf(ctx, "dryrun.usecase.Trigger.repo.GetLatest: source_id=%s target_id=%s err=%v", source.ID, resolvedTarget.ID, latestErr)
+			return dryrun.TriggerOutput{}, dryrun.ErrGetFailed
+		}
 		target = &resolvedTarget
 	} else if strings.TrimSpace(input.TargetID) != "" {
 		uc.l.Warnf(ctx, "dryrun.usecase.Trigger.targetIDNotAllowed: source_id=%s target_id=%s", source.ID, input.TargetID)

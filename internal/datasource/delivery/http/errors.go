@@ -26,6 +26,7 @@ var (
 	errSourceArchived            = &pkgErrors.HTTPError{Code: 24, Message: "Data source is archived", StatusCode: http.StatusBadRequest}
 	errProjectNotFound           = &pkgErrors.HTTPError{Code: 25, Message: "Project not found", StatusCode: http.StatusBadRequest}
 	errProjectArchived           = &pkgErrors.HTTPError{Code: 26, Message: "Project is archived", StatusCode: http.StatusBadRequest}
+	errSourceDryrunRunning       = &pkgErrors.HTTPError{Code: 27, Message: "Datasource has a running dryrun task", StatusCode: http.StatusBadRequest}
 	errListFailed                = &pkgErrors.HTTPError{Code: 12, Message: "Failed to list data sources", StatusCode: http.StatusInternalServerError}
 	errUpdateNotAllowed          = &pkgErrors.HTTPError{Code: 13, Message: "Cannot update config/mapping on an active source", StatusCode: http.StatusBadRequest}
 	errWrongBody                 = &pkgErrors.HTTPError{Code: 14, Message: "Wrong request body", StatusCode: http.StatusBadRequest}
@@ -53,6 +54,7 @@ var (
 	errTargetActivateNotAllowed   = &pkgErrors.HTTPError{Code: 111, Message: "Crawl target cannot be activated in its current state", StatusCode: http.StatusBadRequest}
 	errTargetDeactivateNotAllowed = &pkgErrors.HTTPError{Code: 112, Message: "Crawl target cannot be deactivated in its current state", StatusCode: http.StatusBadRequest}
 	errTargetDeleteNotAllowed     = &pkgErrors.HTTPError{Code: 113, Message: "Crawl target cannot be deleted in its current state", StatusCode: http.StatusBadRequest}
+	errTargetDryrunRunning        = &pkgErrors.HTTPError{Code: 114, Message: "Crawl target has a running dryrun task", StatusCode: http.StatusBadRequest}
 )
 
 func (h *handler) mapError(err error) error {
@@ -67,6 +69,8 @@ func (h *handler) mapError(err error) error {
 		return errProjectNotFound
 	case errors.Is(err, datasource.ErrProjectArchived):
 		return errProjectArchived
+	case errors.Is(err, datasource.ErrSourceDryrunRunning):
+		return errSourceDryrunRunning
 	case errors.Is(err, datasource.ErrSourceTypeRequired):
 		return errSourceTypeRequired
 	case errors.Is(err, datasource.ErrInvalidSourceType):
@@ -131,6 +135,8 @@ func (h *handler) mapError(err error) error {
 		return errTargetDeactivateNotAllowed
 	case errors.Is(err, datasource.ErrTargetDeleteNotAllowed):
 		return errTargetDeleteNotAllowed
+	case errors.Is(err, datasource.ErrTargetDryrunRunning):
+		return errTargetDryrunRunning
 	default:
 		panic(err) // Unexpected error — panic to trigger recovery middleware and alerting.
 	}

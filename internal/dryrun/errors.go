@@ -9,6 +9,7 @@ var (
 	ErrTargetRequired         = errors.New("target_id is required for crawl dryrun")
 	ErrTargetForbidden        = errors.New("target_id is not allowed for passive dryrun")
 	ErrDryrunNotAllowed       = errors.New("dryrun is not allowed in current source state")
+	ErrDryrunAlreadyRunning   = errors.New("dryrun is already running for target")
 	ErrUnsupportedMapping     = errors.New("unsupported dryrun mapping")
 	ErrInvalidSampleLimit     = errors.New("sample_limit must be greater than 0")
 	ErrInvalidCompletionInput = errors.New("invalid dryrun completion input")
