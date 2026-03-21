@@ -15,6 +15,7 @@ var (
 	ErrCreateFailed              = errors.New("failed to create data source")
 	ErrUpdateFailed              = errors.New("failed to update data source")
 	ErrDeleteFailed              = errors.New("failed to delete data source")
+	ErrDeleteRequiresArchived    = errors.New("data source must be archived before delete")
 	ErrListFailed                = errors.New("failed to list data sources")
 	ErrUpdateNotAllowed          = errors.New("cannot update config/mapping on an active source")
 	ErrActivationReadinessFailed = errors.New("project activation readiness failed")

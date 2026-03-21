@@ -21,6 +21,7 @@ type DataSourceUseCase interface {
 	List(ctx context.Context, input ListInput) (ListOutput, error)
 	Update(ctx context.Context, input UpdateInput) (UpdateOutput, error)
 	Archive(ctx context.Context, id string) error
+	Delete(ctx context.Context, id string) error
 	ActivateDataSource(ctx context.Context, id string) (ActivateOutput, error)
 	PauseDataSource(ctx context.Context, id string) (PauseOutput, error)
 	ResumeDataSource(ctx context.Context, id string) (ResumeOutput, error)

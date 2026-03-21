@@ -14,7 +14,8 @@ func (h *handler) RegisterRoutes(r *gin.RouterGroup, mw *middleware.Middleware) 
 		sources.GET("", h.List)
 		sources.GET("/:id", h.Detail)
 		sources.PUT("/:id", h.Update)
-		sources.DELETE("/:id", h.Archive)
+		sources.POST("/:id/archive", h.Archive)
+		sources.DELETE("/:id", h.Delete)
 
 		// CrawlTarget sub-resource routes.
 		targets := sources.Group("/:id/targets")

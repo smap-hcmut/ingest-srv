@@ -269,7 +269,7 @@ func (r *implRepository) UpdateDataSource(ctx context.Context, opt repository.Up
 	return *model.NewDataSourceFromDB(row), nil
 }
 
-// ArchiveDataSource soft-deletes a data source by setting deleted_at.
+// ArchiveDataSource moves a data source into ARCHIVED while keeping it queryable.
 func (r *implRepository) ArchiveDataSource(ctx context.Context, id string) error {
 	row, err := sqlboiler.FindDataSource(ctx, r.db, id)
 	if err != nil {
@@ -281,18 +281,42 @@ func (r *implRepository) ArchiveDataSource(ctx context.Context, id string) error
 	}
 
 	now := time.Now()
-	row.DeletedAt = null.TimeFrom(now)
 	row.ArchivedAt = null.TimeFrom(now)
 	row.Status = sqlboiler.SourceStatusARCHIVED
 
 	_, err = row.Update(ctx, r.db, boil.Whitelist(
-		sqlboiler.DataSourceColumns.DeletedAt,
 		sqlboiler.DataSourceColumns.ArchivedAt,
 		sqlboiler.DataSourceColumns.Status,
 		sqlboiler.DataSourceColumns.UpdatedAt,
 	))
 	if err != nil {
 		r.l.Errorf(ctx, "datasource.repository.ArchiveDataSource.Update: %v", err)
+		return repository.ErrFailedToDelete
+	}
+
+	return nil
+}
+
+// DeleteDataSource soft-deletes a data source by setting deleted_at.
+func (r *implRepository) DeleteDataSource(ctx context.Context, id string) error {
+	row, err := sqlboiler.FindDataSource(ctx, r.db, id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return repository.ErrFailedToGet
+		}
+		r.l.Errorf(ctx, "datasource.repository.DeleteDataSource.Find: %v", err)
+		return repository.ErrFailedToDelete
+	}
+
+	now := time.Now()
+	row.DeletedAt = null.TimeFrom(now)
+
+	_, err = row.Update(ctx, r.db, boil.Whitelist(
+		sqlboiler.DataSourceColumns.DeletedAt,
+		sqlboiler.DataSourceColumns.UpdatedAt,
+	))
+	if err != nil {
+		r.l.Errorf(ctx, "datasource.repository.DeleteDataSource.Update: %v", err)
 		return repository.ErrFailedToDelete
 	}
 

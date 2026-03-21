@@ -22,6 +22,7 @@ var (
 	errCreateFailed              = &pkgErrors.HTTPError{Code: 9, Message: "Failed to create data source", StatusCode: http.StatusInternalServerError}
 	errUpdateFailed              = &pkgErrors.HTTPError{Code: 10, Message: "Failed to update data source", StatusCode: http.StatusInternalServerError}
 	errDeleteFailed              = &pkgErrors.HTTPError{Code: 11, Message: "Failed to delete data source", StatusCode: http.StatusInternalServerError}
+	errDeleteRequiresArchived    = &pkgErrors.HTTPError{Code: 23, Message: "Data source must be archived before delete", StatusCode: http.StatusBadRequest}
 	errListFailed                = &pkgErrors.HTTPError{Code: 12, Message: "Failed to list data sources", StatusCode: http.StatusInternalServerError}
 	errUpdateNotAllowed          = &pkgErrors.HTTPError{Code: 13, Message: "Cannot update config/mapping on an active source", StatusCode: http.StatusBadRequest}
 	errWrongBody                 = &pkgErrors.HTTPError{Code: 14, Message: "Wrong request body", StatusCode: http.StatusBadRequest}
@@ -75,6 +76,8 @@ func (h *handler) mapError(err error) error {
 		return errUpdateFailed
 	case errors.Is(err, datasource.ErrDeleteFailed):
 		return errDeleteFailed
+	case errors.Is(err, datasource.ErrDeleteRequiresArchived):
+		return errDeleteRequiresArchived
 	case errors.Is(err, datasource.ErrListFailed):
 		return errListFailed
 	case errors.Is(err, datasource.ErrUpdateNotAllowed):

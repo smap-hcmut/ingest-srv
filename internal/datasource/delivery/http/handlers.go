@@ -135,14 +135,14 @@ func (h *handler) Update(c *gin.Context) {
 }
 
 // @Summary Archive a data source
-// @Description Soft-delete a data source by ID
+// @Description Transition a data source into ARCHIVED status
 // @Tags DataSource
 // @Produce json
 // @Param id path string true "Data Source ID"
 // @Success 200 {object} response.Resp
 // @Failure 400 {object} response.Resp
 // @Failure 500 {object} response.Resp
-// @Router /datasources/{id} [delete]
+// @Router /datasources/{id}/archive [post]
 func (h *handler) Archive(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -155,6 +155,34 @@ func (h *handler) Archive(c *gin.Context) {
 
 	if err := h.uc.Archive(ctx, req.toInput()); err != nil {
 		h.l.Errorf(ctx, "datasource.delivery.Archive.uc.Archive: id=%s err=%v", req.ID, err)
+		response.Error(c, h.mapError(err), h.discord)
+		return
+	}
+
+	response.OK(c, nil)
+}
+
+// @Summary Delete a data source
+// @Description Soft-delete a data source after it has been archived
+// @Tags DataSource
+// @Produce json
+// @Param id path string true "Data Source ID"
+// @Success 200 {object} response.Resp
+// @Failure 400 {object} response.Resp
+// @Failure 500 {object} response.Resp
+// @Router /datasources/{id} [delete]
+func (h *handler) Delete(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	req, err := h.processArchiveReq(c)
+	if err != nil {
+		h.l.Warnf(ctx, "datasource.delivery.Delete.processArchiveReq: %v", err)
+		response.Error(c, err, h.discord)
+		return
+	}
+
+	if err := h.uc.Delete(ctx, req.toInput()); err != nil {
+		h.l.Errorf(ctx, "datasource.delivery.Delete.uc.Delete: id=%s err=%v", req.ID, err)
 		response.Error(c, h.mapError(err), h.discord)
 		return
 	}

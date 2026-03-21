@@ -147,15 +147,57 @@ func (uc *implUseCase) Update(ctx context.Context, input datasource.UpdateInput)
 	return datasource.UpdateOutput{DataSource: result}, nil
 }
 
-// Archive soft-deletes a data source by ID.
+// Archive moves a data source into ARCHIVED while keeping it queryable.
 func (uc *implUseCase) Archive(ctx context.Context, id string) error {
 	if err := uc.validArchiveInput(id); err != nil {
 		uc.l.Warnf(ctx, "datasource.usecase.Archive.validArchiveInput: %v", err)
 		return err
 	}
 
+	current, err := uc.repo.DetailDataSource(ctx, strings.TrimSpace(id))
+	if err != nil {
+		uc.l.Errorf(ctx, "datasource.usecase.Archive.repo.DetailDataSource: id=%s err=%v", id, err)
+		return datasource.ErrNotFound
+	}
+	if current.ID == "" {
+		return datasource.ErrNotFound
+	}
+	if current.Status == model.SourceStatusArchived {
+		return nil
+	}
+
 	if err := uc.repo.ArchiveDataSource(ctx, strings.TrimSpace(id)); err != nil {
 		uc.l.Errorf(ctx, "datasource.usecase.Archive.repo.ArchiveDataSource: id=%s err=%v", id, err)
+		if err == repo.ErrFailedToGet {
+			return datasource.ErrNotFound
+		}
+		return datasource.ErrDeleteFailed
+	}
+
+	return nil
+}
+
+// Delete soft-deletes a datasource only after it has been archived.
+func (uc *implUseCase) Delete(ctx context.Context, id string) error {
+	if err := uc.validArchiveInput(id); err != nil {
+		uc.l.Warnf(ctx, "datasource.usecase.Delete.validArchiveInput: %v", err)
+		return err
+	}
+
+	current, err := uc.repo.DetailDataSource(ctx, strings.TrimSpace(id))
+	if err != nil {
+		uc.l.Errorf(ctx, "datasource.usecase.Delete.repo.DetailDataSource: id=%s err=%v", id, err)
+		return datasource.ErrNotFound
+	}
+	if current.ID == "" {
+		return datasource.ErrNotFound
+	}
+	if current.Status != model.SourceStatusArchived {
+		return datasource.ErrDeleteRequiresArchived
+	}
+
+	if err := uc.repo.DeleteDataSource(ctx, strings.TrimSpace(id)); err != nil {
+		uc.l.Errorf(ctx, "datasource.usecase.Delete.repo.DeleteDataSource: id=%s err=%v", id, err)
 		if err == repo.ErrFailedToGet {
 			return datasource.ErrNotFound
 		}

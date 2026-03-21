@@ -21,6 +21,7 @@ type Repository interface {
 	UpdateDataSource(ctx context.Context, opt UpdateDataSourceOptions) (model.DataSource, error)
 	UpdateProjectDataSourcesLifecycle(ctx context.Context, opt ProjectLifecycleUpdateOptions) (int64, error)
 	ArchiveDataSource(ctx context.Context, id string) error
+	DeleteDataSource(ctx context.Context, id string) error
 	CountActiveTargets(ctx context.Context, dataSourceID string) (int64, error)
 	CreateCrawlModeChange(ctx context.Context, opt CreateCrawlModeChangeOptions) (model.CrawlModeChange, error)
 
