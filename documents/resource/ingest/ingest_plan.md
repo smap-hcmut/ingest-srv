@@ -83,7 +83,8 @@ ingest-srv/
 | `GET`    | `/datasources`                       | List sources (filter by project_id, status, type)    |
 | `GET`    | `/datasources/:id`                   | Chi tiết source                                      |
 | `PUT`    | `/datasources/:id`                   | Update metadata/config theo state guard              |
-| `DELETE` | `/datasources/:id`                   | Soft delete                                          |
+| `POST`   | `/datasources/:id/archive`           | Archive source                                       |
+| `DELETE` | `/datasources/:id`                   | Soft delete sau khi source đã `ARCHIVED`             |
 | `POST`   | `/datasources/:id/targets/keywords`  | Tạo grouped keyword target với `values[]`            |
 | `POST`   | `/datasources/:id/targets/profiles`  | Tạo grouped profile target với `values[]` URL        |
 | `POST`   | `/datasources/:id/targets/posts`     | Tạo grouped post target với `values[]` URL           |
@@ -311,7 +312,7 @@ raw_batch (RECEIVED)
 - `project.activated`: chỉ activate nguồn đang `READY`, không activate `PENDING` hoặc `FAILED`.
 - `project.paused`: dừng tất cả crawler + webhook + scheduler cho project.
 - `project.resumed`: chỉ resume nguồn trước đó bị `PAUSED` (không tự resume `FAILED`).
-- `project.archived`: soft delete tất cả source, ghi `archived_at`.
+- `project.archived`: chuyển tất cả source runtime về trạng thái archive/pause phù hợp ở orchestration layer; không đồng nghĩa user-facing `DELETE`.
 - Mỗi lần đổi trạng thái source, phát Kafka event tương ứng (`ingest.source.activated`...).
 - Khi consume `project.activated`, ingest chỉ activate source đang `READY`; không bypass bước validate/dry run.
 - Khi consume `project.paused` hoặc `project.archived`, webhook source phải ngừng nhận dữ liệu mới ở receiver layer.

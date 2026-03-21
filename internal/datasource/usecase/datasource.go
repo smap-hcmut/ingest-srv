@@ -17,6 +17,10 @@ func (uc *implUseCase) Create(ctx context.Context, input datasource.CreateInput)
 		uc.l.Warnf(ctx, "datasource.usecase.Create.validCreateInput: %v", err)
 		return datasource.CreateOutput{}, err
 	}
+	if err := uc.ensureProjectAvailableForDatasourceCreate(ctx, input.ProjectID); err != nil {
+		uc.l.Warnf(ctx, "datasource.usecase.Create.ensureProjectAvailableForDatasourceCreate: project_id=%s err=%v", input.ProjectID, err)
+		return datasource.CreateOutput{}, err
+	}
 
 	userID, _ := auth.GetUserIDFromContext(ctx)
 

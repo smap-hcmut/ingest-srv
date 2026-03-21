@@ -38,6 +38,9 @@ func (uc *implUseCase) createTarget(ctx context.Context, input datasource.Create
 	if ds.ID == "" {
 		return datasource.CreateTargetOutput{}, datasource.ErrNotFound
 	}
+	if err := uc.ensureDataSourceNotArchived(ds); err != nil {
+		return datasource.CreateTargetOutput{}, err
+	}
 	if ds.SourceCategory != model.SourceCategoryCrawl {
 		return datasource.CreateTargetOutput{}, datasource.ErrSourceNotCrawl
 	}

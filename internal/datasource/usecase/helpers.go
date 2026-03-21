@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/url"
 	"reflect"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"ingest-srv/internal/datasource"
 	repo "ingest-srv/internal/datasource/repository"
 	"ingest-srv/internal/model"
+	"ingest-srv/pkg/microservice"
 )
 
 // validateSourceType checks if the given source_type is valid.
@@ -240,6 +242,40 @@ func (uc *implUseCase) validDeleteTargetInput(input datasource.DeleteTargetInput
 	if strings.TrimSpace(input.DataSourceID) == "" || strings.TrimSpace(input.ID) == "" {
 		return datasource.ErrTargetNotFound
 	}
+	return nil
+}
+
+func (uc *implUseCase) ensureDataSourceNotArchived(source model.DataSource) error {
+	if source.Status == model.SourceStatusArchived {
+		return datasource.ErrSourceArchived
+	}
+	return nil
+}
+
+func (uc *implUseCase) ensureProjectAvailableForDatasourceCreate(ctx context.Context, projectID string) error {
+	if uc.project == nil {
+		uc.l.Errorf(ctx, "datasource.usecase.ensureProjectAvailableForDatasourceCreate: project client is nil")
+		return datasource.ErrCreateFailed
+	}
+
+	projectDetail, err := uc.project.Detail(ctx, strings.TrimSpace(projectID))
+	if err != nil {
+		switch {
+		case errors.Is(err, microservice.ErrBadRequest):
+			return datasource.ErrProjectNotFound
+		case errors.Is(err, microservice.ErrUnauthorized), errors.Is(err, microservice.ErrForbidden):
+			uc.l.Errorf(ctx, "datasource.usecase.ensureProjectAvailableForDatasourceCreate.project.Detail: project_id=%s auth_err=%v", projectID, err)
+			return datasource.ErrCreateFailed
+		default:
+			uc.l.Errorf(ctx, "datasource.usecase.ensureProjectAvailableForDatasourceCreate.project.Detail: project_id=%s err=%v", projectID, err)
+			return datasource.ErrCreateFailed
+		}
+	}
+
+	if projectDetail.Status == microservice.ProjectStatusArchived {
+		return datasource.ErrProjectArchived
+	}
+
 	return nil
 }
 

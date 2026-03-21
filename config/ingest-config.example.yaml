@@ -50,6 +50,11 @@ rabbitmq:
   url: "amqp://admin:21042004@172.16.21.206:5672/"
   retry_without_timeout: true
 
+microservice:
+  project:
+    base_url: "http://localhost:8082"
+    timeout_ms: 5000
+
 jwt:
   secret_key: "smap-secret-key-at-least-32-chars-long"
 

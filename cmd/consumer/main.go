@@ -74,12 +74,14 @@ func main() {
 	}
 
 	consumerSrv := consumer.NewServer(logger, consumer.ServerConfig{
-		Conn:      rabbitConn,
-		DB:        postgresDB,
-		MinIO:     minioClient,
-		UAPBucket: cfg.MinIO.Bucket,
-		Kafka:     kafkaProducer,
-		UAPTopic:  cfg.Kafka.UAPTopic,
+		Conn:         rabbitConn,
+		DB:           postgresDB,
+		MinIO:        minioClient,
+		UAPBucket:    cfg.MinIO.Bucket,
+		Kafka:        kafkaProducer,
+		UAPTopic:     cfg.Kafka.UAPTopic,
+		Microservice: cfg.Microservice,
+		InternalKey:  cfg.InternalConfig.InternalKey,
 	})
 
 	if err := consumerSrv.Run(ctx); err != nil {

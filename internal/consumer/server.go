@@ -14,6 +14,7 @@ import (
 	uapKafka "ingest-srv/internal/uap/delivery/kafka/producer"
 	uapRepo "ingest-srv/internal/uap/repository/postgre"
 	uapUC "ingest-srv/internal/uap/usecase"
+	projectsrv "ingest-srv/pkg/microservice/project"
 
 	"golang.org/x/sync/errgroup"
 )
@@ -21,7 +22,8 @@ import (
 // Run runs the consumer server.
 func (s Server) Run(ctx context.Context) error {
 	dataSRepo := datasourceRepo.New(s.l, s.db)
-	dataUC := datasourceUC.New(s.l, dataSRepo)
+	projectSrv := projectsrv.New(s.l, s.microservice.Project.BaseURL, s.microservice.Project.TimeoutMS, s.internalKey)
+	dataUC := datasourceUC.New(s.l, dataSRepo, projectSrv)
 
 	dryrunResultRepo := dryrunRepo.New(s.l, s.db)
 	dryrunUseCase := dryrunUC.New(s.l, dryrunResultRepo, dataUC, s.minio, nil)

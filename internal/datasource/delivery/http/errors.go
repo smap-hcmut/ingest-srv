@@ -23,6 +23,9 @@ var (
 	errUpdateFailed              = &pkgErrors.HTTPError{Code: 10, Message: "Failed to update data source", StatusCode: http.StatusInternalServerError}
 	errDeleteFailed              = &pkgErrors.HTTPError{Code: 11, Message: "Failed to delete data source", StatusCode: http.StatusInternalServerError}
 	errDeleteRequiresArchived    = &pkgErrors.HTTPError{Code: 23, Message: "Data source must be archived before delete", StatusCode: http.StatusBadRequest}
+	errSourceArchived            = &pkgErrors.HTTPError{Code: 24, Message: "Data source is archived", StatusCode: http.StatusBadRequest}
+	errProjectNotFound           = &pkgErrors.HTTPError{Code: 25, Message: "Project not found", StatusCode: http.StatusBadRequest}
+	errProjectArchived           = &pkgErrors.HTTPError{Code: 26, Message: "Project is archived", StatusCode: http.StatusBadRequest}
 	errListFailed                = &pkgErrors.HTTPError{Code: 12, Message: "Failed to list data sources", StatusCode: http.StatusInternalServerError}
 	errUpdateNotAllowed          = &pkgErrors.HTTPError{Code: 13, Message: "Cannot update config/mapping on an active source", StatusCode: http.StatusBadRequest}
 	errWrongBody                 = &pkgErrors.HTTPError{Code: 14, Message: "Wrong request body", StatusCode: http.StatusBadRequest}
@@ -60,6 +63,10 @@ func (h *handler) mapError(err error) error {
 		return errNameRequired
 	case errors.Is(err, datasource.ErrProjectIDRequired):
 		return errProjectIDRequired
+	case errors.Is(err, datasource.ErrProjectNotFound):
+		return errProjectNotFound
+	case errors.Is(err, datasource.ErrProjectArchived):
+		return errProjectArchived
 	case errors.Is(err, datasource.ErrSourceTypeRequired):
 		return errSourceTypeRequired
 	case errors.Is(err, datasource.ErrInvalidSourceType):
@@ -78,6 +85,8 @@ func (h *handler) mapError(err error) error {
 		return errDeleteFailed
 	case errors.Is(err, datasource.ErrDeleteRequiresArchived):
 		return errDeleteRequiresArchived
+	case errors.Is(err, datasource.ErrSourceArchived):
+		return errSourceArchived
 	case errors.Is(err, datasource.ErrListFailed):
 		return errListFailed
 	case errors.Is(err, datasource.ErrUpdateNotAllowed):

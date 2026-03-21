@@ -35,6 +35,7 @@ type HTTPServer struct {
 	cookieConfig config.CookieConfig
 	encrypter    encrypter.Encrypter
 	discord      discord.IDiscord
+	microservice Microservice
 }
 
 // Config is dependency bag for HTTPServer.
@@ -55,6 +56,16 @@ type Config struct {
 	CookieConfig config.CookieConfig
 	Encrypter    encrypter.Encrypter
 	Discord      discord.IDiscord
+	Microservice Microservice
+}
+
+type Microservice struct {
+	Project ProjectService
+}
+
+type ProjectService struct {
+	BaseURL   string
+	TimeoutMS int
 }
 
 // New creates a new HTTP server.
@@ -79,6 +90,7 @@ func New(logger log.Logger, cfg Config) (*HTTPServer, error) {
 		cookieConfig: cfg.CookieConfig,
 		encrypter:    cfg.Encrypter,
 		discord:      cfg.Discord,
+		microservice: cfg.Microservice,
 	}
 
 	if err := srv.validate(); err != nil {
@@ -107,6 +119,12 @@ func (srv HTTPServer) validate() error {
 	}
 	if srv.encrypter == nil {
 		return errors.New("encrypter is required")
+	}
+	if srv.microservice.Project.BaseURL == "" {
+		return errors.New("microservice.project.base_url is required")
+	}
+	if srv.microservice.Project.TimeoutMS <= 0 {
+		return errors.New("microservice.project.timeout_ms must be greater than 0")
 	}
 	return nil
 }

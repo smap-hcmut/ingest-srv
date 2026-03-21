@@ -14,11 +14,12 @@ type Config struct {
 	HTTPServer  HTTPServerConfig
 	Logger      LoggerConfig
 
-	Postgres PostgresConfig
-	Redis    RedisConfig
-	MinIO    MinIOConfig
-	Kafka    KafkaConfig
-	RabbitMQ RabbitMQConfig
+	Postgres     PostgresConfig
+	Redis        RedisConfig
+	MinIO        MinIOConfig
+	Kafka        KafkaConfig
+	RabbitMQ     RabbitMQConfig
+	Microservice MicroserviceConfig
 
 	JWT            JWTConfig
 	Cookie         CookieConfig
@@ -83,6 +84,15 @@ type KafkaConfig struct {
 type RabbitMQConfig struct {
 	URL                 string
 	RetryWithoutTimeout bool
+}
+
+type MicroserviceConfig struct {
+	Project ProjectMicroserviceConfig
+}
+
+type ProjectMicroserviceConfig struct {
+	BaseURL   string
+	TimeoutMS int
 }
 
 type JWTConfig struct {
@@ -181,6 +191,9 @@ func Load() (*Config, error) {
 	cfg.RabbitMQ.URL = viper.GetString("rabbitmq.url")
 	cfg.RabbitMQ.RetryWithoutTimeout = viper.GetBool("rabbitmq.retry_without_timeout")
 
+	cfg.Microservice.Project.BaseURL = viper.GetString("microservice.project.base_url")
+	cfg.Microservice.Project.TimeoutMS = viper.GetInt("microservice.project.timeout_ms")
+
 	cfg.JWT.SecretKey = viper.GetString("jwt.secret_key")
 
 	cfg.Cookie.Name = viper.GetString("cookie.name")
@@ -244,6 +257,9 @@ func setDefaults() {
 
 	viper.SetDefault("rabbitmq.url", "amqp://admin:21042004@172.16.21.206:5672/")
 	viper.SetDefault("rabbitmq.retry_without_timeout", true)
+
+	viper.SetDefault("microservice.project.base_url", "http://localhost:8082")
+	viper.SetDefault("microservice.project.timeout_ms", 5000)
 
 	viper.SetDefault("cookie.name", "smap_auth_token")
 	viper.SetDefault("cookie.max_age", 28800) // 8 hours
@@ -320,6 +336,12 @@ func validate(cfg *Config) error {
 
 	if cfg.RabbitMQ.URL == "" {
 		return fmt.Errorf("rabbitmq.url is required")
+	}
+	if cfg.Microservice.Project.BaseURL == "" {
+		return fmt.Errorf("microservice.project.base_url is required")
+	}
+	if cfg.Microservice.Project.TimeoutMS <= 0 {
+		return fmt.Errorf("microservice.project.timeout_ms must be greater than 0")
 	}
 
 	if cfg.Cookie.Name == "" {

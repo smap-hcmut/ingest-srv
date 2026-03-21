@@ -14,6 +14,7 @@ import (
 	executionRepo "ingest-srv/internal/execution/repository/postgre"
 	executionUC "ingest-srv/internal/execution/usecase"
 	"ingest-srv/internal/model"
+	projectsrv "ingest-srv/pkg/microservice/project"
 
 	"github.com/gin-gonic/gin"
 	"github.com/smap-hcmut/shared-libs/go/auth"
@@ -37,7 +38,8 @@ func (srv HTTPServer) mapHandlers() error {
 	srv.registerIngestRoutes()
 
 	dataSRepo := datasourceRepo.New(srv.l, srv.postgresDB)
-	dataUC := datasourceUC.New(srv.l, dataSRepo)
+	projectSrv := projectsrv.New(srv.l, srv.microservice.Project.BaseURL, srv.microservice.Project.TimeoutMS, srv.cfg.InternalConfig.InternalKey)
+	dataUC := datasourceUC.New(srv.l, dataSRepo, projectSrv)
 	datasourceHTTP := datasourceHandler.New(srv.l, dataUC, srv.discord)
 	dryrunResultRepo := dryrunRepo.New(srv.l, srv.postgresDB)
 	dryrunDispatchProducer := dryrunProducer.New(srv.l, srv.rabbitmq)

@@ -176,6 +176,7 @@ Service: `ingest-srv`
 
 - `GET /api/v1/datasources/{dataSourceId}`
 - `PUT /api/v1/datasources/{dataSourceId}`
+- `POST /api/v1/datasources/{dataSourceId}/archive`
 - `DELETE /api/v1/datasources/{dataSourceId}`
 
 Khi nào dùng:
@@ -186,6 +187,8 @@ Khi nào dùng:
 - sửa `account_ref`
 - sửa `mapping_rules`
 - archive datasource đã tạo nhầm hoặc không còn dùng
+- delete datasource chỉ sau khi datasource đã `ARCHIVED`
+- datasource delete là soft delete nếu entity có `deleted_at`
 
 ## 3. Target Flow
 
@@ -424,6 +427,7 @@ Body vẫn theo target cụ thể:
 
 ### Nếu cần xoá datasource
 
+- `POST /api/v1/datasources/{dataSourceId}/archive`
 - `DELETE /api/v1/datasources/{dataSourceId}`
 
 ### Nếu cần xoá project
