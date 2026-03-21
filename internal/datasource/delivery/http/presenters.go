@@ -9,6 +9,7 @@ import (
 	"ingest-srv/internal/datasource"
 	"ingest-srv/internal/model"
 
+	"github.com/google/uuid"
 	"github.com/smap-hcmut/shared-libs/go/paginator"
 )
 
@@ -31,6 +32,9 @@ type createReq struct {
 func (r createReq) validate() error {
 	if strings.TrimSpace(r.ProjectID) == "" {
 		return errProjectIDRequired
+	}
+	if !isValidUUID(strings.TrimSpace(r.ProjectID)) {
+		return errWrongBody
 	}
 	if strings.TrimSpace(r.Name) == "" {
 		return errNameRequired
@@ -87,7 +91,7 @@ type detailReq struct {
 }
 
 func (r detailReq) validate() error {
-	if strings.TrimSpace(r.ID) == "" {
+	if !isValidUUID(strings.TrimSpace(r.ID)) {
 		return errWrongBody
 	}
 	return nil
@@ -109,6 +113,9 @@ type listReq struct {
 }
 
 func (r listReq) validate() error {
+	if strings.TrimSpace(r.ProjectID) != "" && !isValidUUID(strings.TrimSpace(r.ProjectID)) {
+		return errWrongBody
+	}
 	if strings.TrimSpace(r.SourceType) != "" && !isValidSourceType(strings.TrimSpace(r.SourceType)) {
 		return errInvalidSourceType
 	}
@@ -160,7 +167,7 @@ type archiveReq struct {
 }
 
 func (r archiveReq) validate() error {
-	if strings.TrimSpace(r.ID) == "" {
+	if !isValidUUID(strings.TrimSpace(r.ID)) {
 		return errWrongBody
 	}
 	return nil
@@ -179,6 +186,9 @@ func (r projectLifecycleReq) validate() error {
 	if strings.TrimSpace(r.ProjectID) == "" {
 		return errProjectIDRequired
 	}
+	if !isValidUUID(strings.TrimSpace(r.ProjectID)) {
+		return errWrongBody
+	}
 	return nil
 }
 
@@ -194,6 +204,9 @@ type activationReadinessReq struct {
 func (r activationReadinessReq) validate() error {
 	if strings.TrimSpace(r.ProjectID) == "" {
 		return errProjectIDRequired
+	}
+	if !isValidUUID(strings.TrimSpace(r.ProjectID)) {
+		return errWrongBody
 	}
 
 	switch strings.TrimSpace(r.Command) {
@@ -274,7 +287,7 @@ type updateCrawlModeReq struct {
 }
 
 func (r updateCrawlModeReq) validate() error {
-	if strings.TrimSpace(r.ID) == "" {
+	if !isValidUUID(strings.TrimSpace(r.ID)) {
 		return errWrongBody
 	}
 	if !isValidCrawlMode(strings.TrimSpace(r.CrawlMode)) {
@@ -545,7 +558,7 @@ type createTargetGroupReq struct {
 }
 
 func (r createTargetGroupReq) validate(targetType model.TargetType) error {
-	if strings.TrimSpace(r.DataSourceID) == "" {
+	if !isValidUUID(strings.TrimSpace(r.DataSourceID)) {
 		return errWrongBody
 	}
 	values := normalizeRequestValues(r.Values, targetType == model.TargetTypeKeyword)
@@ -582,7 +595,7 @@ type listTargetsReq struct {
 }
 
 func (r listTargetsReq) validate() error {
-	if strings.TrimSpace(r.DataSourceID) == "" {
+	if !isValidUUID(strings.TrimSpace(r.DataSourceID)) {
 		return errWrongBody
 	}
 	if strings.TrimSpace(r.TargetType) != "" && !isValidTargetType(strings.TrimSpace(r.TargetType)) {
@@ -606,7 +619,7 @@ type detailTargetReq struct {
 }
 
 func (r detailTargetReq) validate() error {
-	if strings.TrimSpace(r.DataSourceID) == "" || strings.TrimSpace(r.ID) == "" {
+	if !isValidUUID(strings.TrimSpace(r.DataSourceID)) || !isValidUUID(strings.TrimSpace(r.ID)) {
 		return errWrongBody
 	}
 	return nil
@@ -631,7 +644,7 @@ type updateTargetReq struct {
 }
 
 func (r updateTargetReq) validate() error {
-	if strings.TrimSpace(r.DataSourceID) == "" || strings.TrimSpace(r.ID) == "" {
+	if !isValidUUID(strings.TrimSpace(r.DataSourceID)) || !isValidUUID(strings.TrimSpace(r.ID)) {
 		return errWrongBody
 	}
 	if r.Values != nil && len(normalizeRequestValues(r.Values, false)) == 0 {
@@ -676,7 +689,7 @@ type deleteTargetReq struct {
 }
 
 func (r deleteTargetReq) validate() error {
-	if strings.TrimSpace(r.DataSourceID) == "" || strings.TrimSpace(r.ID) == "" {
+	if !isValidUUID(strings.TrimSpace(r.DataSourceID)) || !isValidUUID(strings.TrimSpace(r.ID)) {
 		return errWrongBody
 	}
 	return nil
@@ -773,4 +786,9 @@ func toCrawlTargetResp(t model.CrawlTarget) crawlTargetResp {
 	resp.LastErrorAt = formatTimePtr(t.LastErrorAt)
 
 	return resp
+}
+
+func isValidUUID(value string) bool {
+	_, err := uuid.Parse(strings.TrimSpace(value))
+	return err == nil
 }

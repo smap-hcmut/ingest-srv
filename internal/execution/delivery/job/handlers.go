@@ -7,10 +7,12 @@ import (
 	"ingest-srv/internal/execution"
 
 	"github.com/smap-hcmut/shared-libs/go/cron"
+	"github.com/smap-hcmut/shared-libs/go/tracing"
 )
 
 func (h handler) DispatchDueTargets() {
-	ctx := context.Background()
+	traceCtx := tracing.NewTraceContext()
+	ctx := traceCtx.WithTraceID(context.Background(), traceCtx.GenerateTraceID())
 
 	h.l.Debugf(ctx, "execution.delivery.job.DispatchDueTargets: Start scheduled dispatch")
 

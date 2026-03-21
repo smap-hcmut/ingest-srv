@@ -117,8 +117,8 @@ func (uc *implUseCase) Update(ctx context.Context, input datasource.UpdateInput)
 		uc.l.Warnf(ctx, "datasource.usecase.Update: not found id=%s", input.ID)
 		return datasource.UpdateOutput{}, datasource.ErrNotFound
 	}
-	if err := uc.ensureDatasourceDryrunNotRunning(current); err != nil {
-		uc.l.Warnf(ctx, "datasource.usecase.Update.ensureDatasourceDryrunNotRunning: id=%s err=%v", input.ID, err)
+	if err := uc.ensureDatasourceTargetsDryrunNotRunning(ctx, current.ID); err != nil {
+		uc.l.Warnf(ctx, "datasource.usecase.Update.ensureDatasourceTargetsDryrunNotRunning: id=%s err=%v", input.ID, err)
 		return datasource.UpdateOutput{}, err
 	}
 
@@ -170,10 +170,6 @@ func (uc *implUseCase) Archive(ctx context.Context, id string) error {
 	if current.ID == "" {
 		return datasource.ErrNotFound
 	}
-	if err := uc.ensureDatasourceDryrunNotRunning(current); err != nil {
-		uc.l.Warnf(ctx, "datasource.usecase.Archive.ensureDatasourceDryrunNotRunning: id=%s err=%v", id, err)
-		return err
-	}
 	if err := uc.ensureDatasourceTargetsDryrunNotRunning(ctx, current.ID); err != nil {
 		uc.l.Warnf(ctx, "datasource.usecase.Archive.ensureDatasourceTargetsDryrunNotRunning: id=%s err=%v", id, err)
 		return err
@@ -207,10 +203,6 @@ func (uc *implUseCase) Delete(ctx context.Context, id string) error {
 	}
 	if current.ID == "" {
 		return datasource.ErrNotFound
-	}
-	if err := uc.ensureDatasourceDryrunNotRunning(current); err != nil {
-		uc.l.Warnf(ctx, "datasource.usecase.Delete.ensureDatasourceDryrunNotRunning: id=%s err=%v", id, err)
-		return err
 	}
 	if err := uc.ensureDatasourceTargetsDryrunNotRunning(ctx, current.ID); err != nil {
 		uc.l.Warnf(ctx, "datasource.usecase.Delete.ensureDatasourceTargetsDryrunNotRunning: id=%s err=%v", id, err)

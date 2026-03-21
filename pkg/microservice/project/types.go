@@ -3,8 +3,8 @@ package project
 import (
 	"encoding/json"
 	"ingest-srv/pkg/microservice"
-	"net/http"
 
+	pkghttp "github.com/smap-hcmut/shared-libs/go/httpclient"
 	"github.com/smap-hcmut/shared-libs/go/log"
 )
 
@@ -12,7 +12,7 @@ type implUseCase struct {
 	l           log.Logger
 	baseURL     string
 	internalKey string
-	client      *http.Client
+	client      *pkghttp.TracedHTTPClient
 }
 
 var _ microservice.ProjectUseCase = (*implUseCase)(nil)

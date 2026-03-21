@@ -8,6 +8,7 @@ import (
 	"ingest-srv/internal/dryrun"
 	"ingest-srv/internal/model"
 
+	"github.com/google/uuid"
 	"github.com/smap-hcmut/shared-libs/go/paginator"
 )
 
@@ -21,7 +22,10 @@ type triggerReq struct {
 }
 
 func (r triggerReq) validate() error {
-	if strings.TrimSpace(r.SourceID) == "" {
+	if !isValidUUID(strings.TrimSpace(r.SourceID)) {
+		return errWrongBody
+	}
+	if strings.TrimSpace(r.TargetID) != "" && !isValidUUID(strings.TrimSpace(r.TargetID)) {
 		return errWrongBody
 	}
 	if r.SampleLimit != nil && *r.SampleLimit <= 0 {
@@ -45,7 +49,10 @@ type latestReq struct {
 }
 
 func (r latestReq) validate() error {
-	if strings.TrimSpace(r.SourceID) == "" {
+	if !isValidUUID(strings.TrimSpace(r.SourceID)) {
+		return errWrongBody
+	}
+	if strings.TrimSpace(r.TargetID) != "" && !isValidUUID(strings.TrimSpace(r.TargetID)) {
 		return errWrongBody
 	}
 	return nil
@@ -65,7 +72,10 @@ type historyReq struct {
 }
 
 func (r historyReq) validate() error {
-	if strings.TrimSpace(r.SourceID) == "" {
+	if !isValidUUID(strings.TrimSpace(r.SourceID)) {
+		return errWrongBody
+	}
+	if strings.TrimSpace(r.TargetID) != "" && !isValidUUID(strings.TrimSpace(r.TargetID)) {
 		return errWrongBody
 	}
 	return nil
@@ -182,4 +192,9 @@ func formatTimePtr(t *time.Time) *string {
 	}
 	s := t.Format(timeFormat)
 	return &s
+}
+
+func isValidUUID(value string) bool {
+	_, err := uuid.Parse(strings.TrimSpace(value))
+	return err == nil
 }
