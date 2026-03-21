@@ -8,6 +8,7 @@ type UseCase interface {
 	DispatchTargetManually(ctx context.Context, input DispatchTargetManuallyInput) (DispatchTargetManuallyOutput, error)
 	ConsumerUseCase
 	CronUseCase
+	RuntimeControlUseCase
 }
 
 type ConsumerUseCase interface {
@@ -16,4 +17,8 @@ type ConsumerUseCase interface {
 
 type CronUseCase interface {
 	DispatchDueTargets(ctx context.Context, input DispatchDueTargetsInput) (DispatchDueTargetsOutput, error)
+}
+
+type RuntimeControlUseCase interface {
+	CancelProjectRuntime(ctx context.Context, input CancelProjectRuntimeInput) error
 }

@@ -32,6 +32,16 @@ func (uc *implUseCase) validateDispatchContext(ctx repo.DispatchContext) error {
 	return nil
 }
 
+func (uc *implUseCase) validateScheduledDispatchContext(ctx repo.DispatchContext) error {
+	if err := uc.validateDispatchContext(ctx); err != nil {
+		return err
+	}
+	if ctx.Source.Status != model.SourceStatusActive {
+		return execution.ErrDispatchNotAllowed
+	}
+	return nil
+}
+
 func (uc *implUseCase) buildDispatchSpecs(source model.DataSource, target model.CrawlTarget) ([]execution.DispatchSpec, error) {
 	switch {
 	case source.SourceType == model.SourceTypeTikTok && target.TargetType == model.TargetTypeKeyword:

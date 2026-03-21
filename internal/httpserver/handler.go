@@ -39,7 +39,14 @@ func (srv HTTPServer) mapHandlers() error {
 
 	dataSRepo := datasourceRepo.New(srv.l, srv.postgresDB)
 	projectSrv := projectsrv.New(srv.l, srv.microservice.Project.BaseURL, srv.microservice.Project.TimeoutMS, srv.cfg.InternalConfig.InternalKey)
-	dataUC := datasourceUC.New(srv.l, dataSRepo, projectSrv)
+	execRepo := executionRepo.New(srv.l, srv.postgresDB)
+	execProducer := executionProducer.New(srv.l, srv.rabbitmq)
+	if err := execProducer.Run(); err != nil {
+		return err
+	}
+	execUseCase := executionUC.New(srv.l, execRepo, srv.minio, execProducer, nil)
+	execHTTP := executionHandler.New(srv.l, execUseCase, srv.discord)
+	dataUC := datasourceUC.New(srv.l, dataSRepo, projectSrv, execUseCase)
 	datasourceHTTP := datasourceHandler.New(srv.l, dataUC, srv.discord)
 	dryrunResultRepo := dryrunRepo.New(srv.l, srv.postgresDB)
 	dryrunDispatchProducer := dryrunProducer.New(srv.l, srv.rabbitmq)
@@ -48,13 +55,6 @@ func (srv HTTPServer) mapHandlers() error {
 	}
 	dryrunUseCase := dryrunUC.New(srv.l, dryrunResultRepo, dataUC, srv.minio, dryrunDispatchProducer)
 	dryrunHTTP := dryrunHandler.New(srv.l, dryrunUseCase, srv.discord)
-	execRepo := executionRepo.New(srv.l, srv.postgresDB)
-	execProducer := executionProducer.New(srv.l, srv.rabbitmq)
-	if err := execProducer.Run(); err != nil {
-		return err
-	}
-	execUseCase := executionUC.New(srv.l, execRepo, srv.minio, execProducer, nil)
-	execHTTP := executionHandler.New(srv.l, execUseCase, srv.discord)
 
 	apiV1 := srv.gin.Group(model.APIV1Prefix)
 	datasourceHTTP.RegisterRoutes(apiV1, mw)

@@ -45,11 +45,11 @@ func (uc *implUseCase) DispatchDueTargets(ctx context.Context, input execution.D
 			Target: dueTarget.Target,
 		}
 
-		if err := uc.validateDispatchContext(dispatchCtx); err != nil {
+		if err := uc.validateScheduledDispatchContext(dispatchCtx); err != nil {
 			output.FailedCount++
 			uc.l.Errorf(
 				ctx,
-				"execution.usecase.DispatchDueTargets.validateDispatchContext: source_id=%s target_id=%s err=%v",
+				"execution.usecase.DispatchDueTargets.validateScheduledDispatchContext: source_id=%s target_id=%s err=%v",
 				dueTarget.Source.ID,
 				dueTarget.Target.ID,
 				err,
@@ -123,6 +123,39 @@ func (uc *implUseCase) DispatchDueTargets(ctx context.Context, input execution.D
 
 		output.ClaimedCount++
 
+		currentDispatchCtx, currentErr := uc.repo.GetDispatchContext(ctx, dueTarget.Source.ID, dueTarget.Target.ID)
+		if currentErr != nil {
+			output.SkippedRaceCount++
+			uc.l.Warnf(
+				ctx,
+				"execution.usecase.DispatchDueTargets.GetDispatchContext.afterClaim: source_id=%s target_id=%s err=%v",
+				dueTarget.Source.ID,
+				dueTarget.Target.ID,
+				currentErr,
+			)
+			_ = uc.repo.ReleaseClaimTarget(ctx, repo.ReleaseClaimTargetOptions{
+				SourceID: dueTarget.Source.ID,
+				TargetID: dueTarget.Target.ID,
+			})
+			continue
+		}
+
+		if err := uc.validateScheduledDispatchContext(currentDispatchCtx); err != nil {
+			output.SkippedRaceCount++
+			uc.l.Warnf(
+				ctx,
+				"execution.usecase.DispatchDueTargets.validateScheduledDispatchContext.afterClaim: source_id=%s target_id=%s err=%v",
+				dueTarget.Source.ID,
+				dueTarget.Target.ID,
+				err,
+			)
+			_ = uc.repo.ReleaseClaimTarget(ctx, repo.ReleaseClaimTargetOptions{
+				SourceID: dueTarget.Source.ID,
+				TargetID: dueTarget.Target.ID,
+			})
+			continue
+		}
+
 		// uc.l.Infof(
 		// 	ctx,
 		// 	"execution.usecase.DispatchDueTargets.claimed: source_id=%s target_id=%s next_crawl_at=%s",
@@ -131,7 +164,7 @@ func (uc *implUseCase) DispatchDueTargets(ctx context.Context, input execution.D
 		// 	now.Add(effectiveInterval).Format(time.RFC3339),
 		// )
 
-		dispatchOutput, dispatchErr := uc.dispatchPrepared(ctx, dispatchCtx, specs, execution.DispatchTargetInput{
+		dispatchOutput, dispatchErr := uc.dispatchPrepared(ctx, currentDispatchCtx, specs, execution.DispatchTargetInput{
 			DataSourceID: dueTarget.Source.ID,
 			TargetID:     dueTarget.Target.ID,
 			TriggerType:  model.TriggerTypeScheduled,

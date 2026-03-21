@@ -28,14 +28,19 @@ type ClaimTargetOptions struct {
 	NextCrawlAt time.Time
 }
 
+type ReleaseClaimTargetOptions struct {
+	SourceID string
+	TargetID string
+}
+
 type CreateScheduledJobOptions struct {
-	Source         model.DataSource
-	Target         model.CrawlTarget
-	TriggerType    model.TriggerType
-	ScheduledFor   time.Time
-	CronExpr       string
-	JobPayload     json.RawMessage
-	CreatedAt      time.Time
+	Source       model.DataSource
+	Target       model.CrawlTarget
+	TriggerType  model.TriggerType
+	ScheduledFor time.Time
+	CronExpr     string
+	JobPayload   json.RawMessage
+	CreatedAt    time.Time
 }
 
 type CreateExternalTaskOptions struct {
@@ -67,6 +72,12 @@ type FinalizeScheduledJobOptions struct {
 	Status         model.JobStatus
 	ErrorMessage   string
 	CompletedAt    *time.Time
+}
+
+type CancelProjectRuntimeOptions struct {
+	ProjectID  string
+	Reason     string
+	CanceledAt time.Time
 }
 
 type CompleteTaskSuccessOptions struct {

@@ -13,6 +13,7 @@ type Repository interface {
 	DispatchRepository
 	CompletionRepository
 	DueTargetRepository
+	RuntimeControlRepository
 }
 type DispatchRepository interface {
 	CreateScheduledJob(ctx context.Context, opt CreateScheduledJobOptions) (model.ScheduledJob, error)
@@ -32,4 +33,9 @@ type CompletionRepository interface {
 type DueTargetRepository interface {
 	ListDueTargets(ctx context.Context, now time.Time, limit int) ([]DueTarget, error)
 	ClaimTarget(ctx context.Context, opt ClaimTargetOptions) (bool, error)
+	ReleaseClaimTarget(ctx context.Context, opt ReleaseClaimTargetOptions) error
+}
+
+type RuntimeControlRepository interface {
+	CancelProjectRuntime(ctx context.Context, opt CancelProjectRuntimeOptions) error
 }

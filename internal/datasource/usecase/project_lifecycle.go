@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"strings"
+	"time"
 
 	"ingest-srv/internal/datasource"
 	repo "ingest-srv/internal/datasource/repository"
@@ -181,6 +182,10 @@ func (uc *implUseCase) Pause(ctx context.Context, projectID string) (datasource.
 	affected, err := uc.repo.UpdateProjectDataSourcesLifecycle(ctx, uc.buildProjectLifecycleUpdateOptions(projectID, "pause"))
 	if err != nil {
 		uc.l.Errorf(ctx, "datasource.usecase.Pause.repo.UpdateProjectDataSourcesLifecycle: project_id=%s err=%v", projectID, err)
+		return datasource.ProjectLifecycleOutput{}, datasource.ErrUpdateFailed
+	}
+	if err := uc.cancelProjectRuntime(ctx, projectID, "cancelled due to project pause", time.Now().UTC()); err != nil {
+		uc.l.Errorf(ctx, "datasource.usecase.Pause.cancelProjectRuntime: project_id=%s err=%v", projectID, err)
 		return datasource.ProjectLifecycleOutput{}, datasource.ErrUpdateFailed
 	}
 

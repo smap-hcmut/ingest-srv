@@ -61,6 +61,12 @@ type DispatchDueTargetsOutput struct {
 	FailedCount      int
 }
 
+type CancelProjectRuntimeInput struct {
+	ProjectID  string
+	Reason     string
+	CanceledAt time.Time
+}
+
 type QueueName string
 
 type ActionName string

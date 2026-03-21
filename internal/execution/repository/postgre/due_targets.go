@@ -2,13 +2,17 @@ package postgre
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	repo "ingest-srv/internal/execution/repository"
 	"ingest-srv/internal/model"
 	"ingest-srv/internal/sqlboiler"
 
+	"github.com/aarondl/null/v8"
+	"github.com/aarondl/sqlboiler/v4/boil"
 	"github.com/aarondl/sqlboiler/v4/queries/qm"
 )
 
@@ -96,4 +100,37 @@ WHERE id = $3
 	}
 
 	return affected > 0, nil
+}
+
+func (r *implRepository) ReleaseClaimTarget(ctx context.Context, opt repo.ReleaseClaimTargetOptions) error {
+	targetID := strings.TrimSpace(opt.TargetID)
+	sourceID := strings.TrimSpace(opt.SourceID)
+	if targetID == "" || sourceID == "" {
+		return nil
+	}
+
+	row, err := sqlboiler.CrawlTargets(
+		sqlboiler.CrawlTargetWhere.ID.EQ(targetID),
+		sqlboiler.CrawlTargetWhere.DataSourceID.EQ(sourceID),
+	).One(ctx, r.db)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil
+		}
+		r.l.Errorf(ctx, "execution.repository.ReleaseClaimTarget.FindTarget: %v", err)
+		return repo.ErrClaimTarget
+	}
+
+	row.NextCrawlAt = null.Time{}
+	row.LastCrawlAt = fallbackLastCrawlAt(row.LastSuccessAt, row.LastErrorAt)
+	if _, err := row.Update(ctx, r.db, boil.Whitelist(
+		sqlboiler.CrawlTargetColumns.NextCrawlAt,
+		sqlboiler.CrawlTargetColumns.LastCrawlAt,
+		sqlboiler.CrawlTargetColumns.UpdatedAt,
+	)); err != nil {
+		r.l.Errorf(ctx, "execution.repository.ReleaseClaimTarget.UpdateTarget: %v", err)
+		return repo.ErrClaimTarget
+	}
+
+	return nil
 }

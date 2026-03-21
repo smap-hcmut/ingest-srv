@@ -8,9 +8,11 @@ import (
 	"net/url"
 	"reflect"
 	"strings"
+	"time"
 
 	"ingest-srv/internal/datasource"
 	repo "ingest-srv/internal/datasource/repository"
+	"ingest-srv/internal/execution"
 	"ingest-srv/internal/model"
 	"ingest-srv/pkg/microservice"
 )
@@ -519,4 +521,17 @@ func (uc *implUseCase) ensureRuntimePrerequisites(ctx context.Context, source mo
 	}
 
 	return nil
+}
+
+func (uc *implUseCase) cancelProjectRuntime(ctx context.Context, projectID, reason string, canceledAt time.Time) error {
+	if uc.exec == nil {
+		uc.l.Warnf(ctx, "datasource.usecase.cancelProjectRuntime: execution usecase is nil project_id=%s", projectID)
+		return nil
+	}
+
+	return uc.exec.CancelProjectRuntime(ctx, execution.CancelProjectRuntimeInput{
+		ProjectID:  strings.TrimSpace(projectID),
+		Reason:     strings.TrimSpace(reason),
+		CanceledAt: canceledAt,
+	})
 }

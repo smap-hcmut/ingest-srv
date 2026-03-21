@@ -25,6 +25,10 @@ func (uc *implUseCase) HandleCompletion(ctx context.Context, input execution.Han
 		uc.l.Errorf(ctx, "execution.usecase.HandleCompletion: failed to get completion context: %v", err)
 		return err
 	}
+	if completionCtx.ExternalTask.Status == model.JobStatusCancelled && completionCtx.ExternalTask.CompletedAt != nil {
+		uc.l.Infof(ctx, "execution.usecase.HandleCompletion: ignore completion for cancelled task_id=%s", input.TaskID)
+		return nil
+	}
 
 	completedAt := uc.now()
 	if parsed, err := time.Parse(time.RFC3339, input.CompletedAt); err == nil {

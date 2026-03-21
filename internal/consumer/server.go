@@ -23,18 +23,16 @@ import (
 func (s Server) Run(ctx context.Context) error {
 	dataSRepo := datasourceRepo.New(s.l, s.db)
 	projectSrv := projectsrv.New(s.l, s.microservice.Project.BaseURL, s.microservice.Project.TimeoutMS, s.internalKey)
-	dataUC := datasourceUC.New(s.l, dataSRepo, projectSrv)
+	execRepo := executionRepo.New(s.l, s.db)
+	uapPublisher := uapKafka.New(s.l, s.kafka)
+	uapParserRepo := uapRepo.New(s.l, s.db)
+	uapParserUC := uapUC.New(s.l, uapParserRepo, s.minio, s.uapBucket, uapPublisher, s.uapTopic)
+	execUC := executionUC.New(s.l, execRepo, s.minio, nil, uapParserUC)
+	dataUC := datasourceUC.New(s.l, dataSRepo, projectSrv, execUC)
 
 	dryrunResultRepo := dryrunRepo.New(s.l, s.db)
 	dryrunUseCase := dryrunUC.New(s.l, dryrunResultRepo, dataUC, s.minio, nil)
 	dryrunCompletionConsumer := dryrunConsumer.NewConsumer(s.l, s.conn, dryrunUseCase)
-
-	uapPublisher := uapKafka.New(s.l, s.kafka)
-	uapParserRepo := uapRepo.New(s.l, s.db)
-	uapParserUC := uapUC.New(s.l, uapParserRepo, s.minio, s.uapBucket, uapPublisher, s.uapTopic)
-
-	execRepo := executionRepo.New(s.l, s.db)
-	execUC := executionUC.New(s.l, execRepo, s.minio, nil, uapParserUC)
 	execConsumer := executionConsumer.NewConsumer(s.l, s.conn, execUC)
 
 	g, gctx := errgroup.WithContext(ctx)

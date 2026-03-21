@@ -70,6 +70,9 @@ func (uc *implUseCase) dispatchPrepared(
 	})
 	if err != nil {
 		uc.l.Errorf(ctx, "execution.usecase.DispatchTarget.CreateScheduledJob: %v", err)
+		if err == repo.ErrDispatchConflict {
+			return execution.DispatchTargetOutput{}, execution.ErrDispatchNotAllowed
+		}
 		return execution.DispatchTargetOutput{}, execution.ErrDispatchFailed
 	}
 
