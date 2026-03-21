@@ -94,6 +94,20 @@ func (h *handler) processProjectLifecycleReq(c *gin.Context) (projectLifecycleRe
 	return req, nil
 }
 
+func (h *handler) processActivationReadinessReq(c *gin.Context) (activationReadinessReq, error) {
+	var req activationReadinessReq
+	if err := c.ShouldBindQuery(&req); err != nil {
+		h.l.Warnf(c.Request.Context(), "datasource.delivery.processActivationReadinessReq.ShouldBindQuery: %v", err)
+		return req, errWrongBody
+	}
+	req.ProjectID = c.Param("project_id")
+	if err := req.validate(); err != nil {
+		h.l.Warnf(c.Request.Context(), "datasource.delivery.processActivationReadinessReq.validate: %v", err)
+		return req, err
+	}
+	return req, nil
+}
+
 // --- CrawlTarget Request Processors ---
 
 // processCreateTargetGroupReq binds JSON + path param for creating a grouped target.

@@ -10,34 +10,47 @@ import (
 )
 
 // GetActivationReadiness evaluates project-level activation prerequisites from datasource/target data.
-func (uc *implUseCase) GetActivationReadiness(ctx context.Context, projectID string) (datasource.ActivationReadinessOutput, error) {
-	projectID = strings.TrimSpace(projectID)
-	if projectID == "" {
-		return datasource.ActivationReadinessOutput{}, datasource.ErrProjectIDRequired
+func (uc *implUseCase) GetActivationReadiness(ctx context.Context, input datasource.ActivationReadinessInput) (datasource.ActivationReadinessOutput, error) {
+	if err := uc.validActivationReadinessInput(input); err != nil {
+		return datasource.ActivationReadinessOutput{}, err
 	}
+
+	projectID := strings.TrimSpace(input.ProjectID)
+	command := uc.normalizeActivationReadinessCommand(input.Command)
 
 	sources, err := uc.repo.ListDataSources(ctx, repo.ListDataSourcesOptions{ProjectID: projectID})
 	if err != nil {
-		uc.l.Errorf(ctx, "datasource.usecase.GetActivationReadiness.repo.ListDataSources: project_id=%s err=%v", projectID, err)
+		uc.l.Errorf(ctx, "datasource.usecase.GetActivationReadiness.repo.ListDataSources: project_id=%s command=%s err=%v", projectID, command, err)
 		return datasource.ActivationReadinessOutput{}, datasource.ErrListFailed
 	}
 
 	out := datasource.ActivationReadinessOutput{
 		ProjectID:       projectID,
+		Command:         command,
 		DataSourceCount: len(sources),
 		HasDatasource:   len(sources) > 0,
 		Errors:          make([]datasource.ActivationReadinessError, 0),
 	}
 	hasDatasourceWithoutActiveTarget := false
+	hasInvalidLifecycleStatus := false
 
 	if !out.HasDatasource {
 		out.Errors = append(out.Errors, datasource.ActivationReadinessError{
 			Code:    datasource.ActivationReadinessCodeDatasourceRequired,
-			Message: "project must have at least one datasource",
+			Message: datasource.ActivationReadinessMessageDatasourceRequired,
 		})
 	}
 
 	for _, source := range sources {
+		if !uc.isStatusAllowedForCommand(source.Status, command) {
+			hasInvalidLifecycleStatus = true
+			out.Errors = append(out.Errors, datasource.ActivationReadinessError{
+				Code:         datasource.ActivationReadinessCodeDatasourceStatus,
+				Message:      datasource.ActivationReadinessMessageDatasourceStatus,
+				DataSourceID: source.ID,
+			})
+		}
+
 		if source.SourceCategory == model.SourceCategoryPassive {
 			// TODO: passive confirm flow will have dedicated state transitions. For now,
 			// onboarding_status=CONFIRMED is treated as the readiness signal.
@@ -45,7 +58,7 @@ func (uc *implUseCase) GetActivationReadiness(ctx context.Context, projectID str
 				out.PassiveUnconfirmedCount++
 				out.Errors = append(out.Errors, datasource.ActivationReadinessError{
 					Code:         datasource.ActivationReadinessCodePassiveUnconfirmed,
-					Message:      "passive datasource is not confirmed",
+					Message:      datasource.ActivationReadinessMessagePassiveUnconfirmed,
 					DataSourceID: source.ID,
 				})
 			}
@@ -60,7 +73,7 @@ func (uc *implUseCase) GetActivationReadiness(ctx context.Context, projectID str
 			DataSourceID: source.ID,
 		})
 		if listErr != nil {
-			uc.l.Errorf(ctx, "datasource.usecase.GetActivationReadiness.repo.ListTargets: source_id=%s err=%v", source.ID, listErr)
+			uc.l.Errorf(ctx, "datasource.usecase.GetActivationReadiness.repo.ListTargets: source_id=%s command=%s err=%v", source.ID, command, listErr)
 			return datasource.ActivationReadinessOutput{}, datasource.ErrListFailed
 		}
 
@@ -72,7 +85,7 @@ func (uc *implUseCase) GetActivationReadiness(ctx context.Context, projectID str
 
 			latest, latestErr := uc.repo.GetLatestDryrunByTarget(ctx, target.ID)
 			if latestErr != nil {
-				uc.l.Errorf(ctx, "datasource.usecase.GetActivationReadiness.repo.GetLatestDryrunByTarget: target_id=%s err=%v", target.ID, latestErr)
+				uc.l.Errorf(ctx, "datasource.usecase.GetActivationReadiness.repo.GetLatestDryrunByTarget: target_id=%s command=%s err=%v", target.ID, command, latestErr)
 				return datasource.ActivationReadinessOutput{}, datasource.ErrListFailed
 			}
 
@@ -80,7 +93,7 @@ func (uc *implUseCase) GetActivationReadiness(ctx context.Context, projectID str
 				out.MissingTargetDryrunCount++
 				out.Errors = append(out.Errors, datasource.ActivationReadinessError{
 					Code:         datasource.ActivationReadinessCodeTargetDryrunMiss,
-					Message:      "crawl target has never been dry-run",
+					Message:      datasource.ActivationReadinessMessageTargetDryrunMissing,
 					DataSourceID: source.ID,
 					TargetID:     target.ID,
 				})
@@ -91,7 +104,7 @@ func (uc *implUseCase) GetActivationReadiness(ctx context.Context, projectID str
 				out.FailedTargetDryrunCount++
 				out.Errors = append(out.Errors, datasource.ActivationReadinessError{
 					Code:         datasource.ActivationReadinessCodeTargetDryrunFailed,
-					Message:      "crawl target latest dry-run is FAILED",
+					Message:      datasource.ActivationReadinessMessageTargetDryrunFailed,
 					DataSourceID: source.ID,
 					TargetID:     target.ID,
 				})
@@ -102,17 +115,19 @@ func (uc *implUseCase) GetActivationReadiness(ctx context.Context, projectID str
 			hasDatasourceWithoutActiveTarget = true
 			out.Errors = append(out.Errors, datasource.ActivationReadinessError{
 				Code:         datasource.ActivationReadinessCodeActiveTargetRequired,
-				Message:      "crawl datasource must have at least one active target",
+				Message:      datasource.ActivationReadinessMessageActiveTargetRequired,
 				DataSourceID: source.ID,
 			})
 		}
 	}
 
-	out.CanActivate = out.HasDatasource &&
+	canProceed := out.HasDatasource &&
 		out.PassiveUnconfirmedCount == 0 &&
 		out.MissingTargetDryrunCount == 0 &&
 		out.FailedTargetDryrunCount == 0 &&
-		!hasDatasourceWithoutActiveTarget
+		!hasDatasourceWithoutActiveTarget &&
+		!hasInvalidLifecycleStatus
+	out.CanProceed = canProceed
 
 	return out, nil
 }
@@ -124,11 +139,14 @@ func (uc *implUseCase) Activate(ctx context.Context, projectID string) (datasour
 		return datasource.ProjectLifecycleOutput{}, datasource.ErrProjectIDRequired
 	}
 
-	readiness, err := uc.GetActivationReadiness(ctx, projectID)
+	readiness, err := uc.GetActivationReadiness(ctx, datasource.ActivationReadinessInput{
+		ProjectID: projectID,
+		Command:   datasource.ActivationReadinessCommandActivate,
+	})
 	if err != nil {
 		return datasource.ProjectLifecycleOutput{}, err
 	}
-	if !readiness.CanActivate {
+	if !readiness.CanProceed {
 		uc.l.Warnf(ctx, "datasource.usecase.Activate: project_id=%s readiness blocked", projectID)
 		return datasource.ProjectLifecycleOutput{}, datasource.ErrActivationReadinessFailed
 	}
@@ -207,11 +225,14 @@ func (uc *implUseCase) Resume(ctx context.Context, projectID string) (datasource
 		return datasource.ProjectLifecycleOutput{}, datasource.ErrProjectIDRequired
 	}
 
-	readiness, err := uc.GetActivationReadiness(ctx, projectID)
+	readiness, err := uc.GetActivationReadiness(ctx, datasource.ActivationReadinessInput{
+		ProjectID: projectID,
+		Command:   datasource.ActivationReadinessCommandResume,
+	})
 	if err != nil {
 		return datasource.ProjectLifecycleOutput{}, err
 	}
-	if !readiness.CanActivate {
+	if !readiness.CanProceed {
 		uc.l.Warnf(ctx, "datasource.usecase.Resume: project_id=%s readiness blocked", projectID)
 		return datasource.ProjectLifecycleOutput{}, datasource.ErrActivationReadinessFailed
 	}

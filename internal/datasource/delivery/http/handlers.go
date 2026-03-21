@@ -198,6 +198,7 @@ func (h *handler) UpdateCrawlMode(c *gin.Context) {
 // @Tags DataSource
 // @Produce json
 // @Param project_id path string true "Project ID"
+// @Param command query string false "Lifecycle command to evaluate" Enums(activate,resume) default(activate)
 // @Success 200 {object} activationReadinessResp
 // @Failure 400 {object} response.Resp
 // @Failure 500 {object} response.Resp
@@ -205,16 +206,16 @@ func (h *handler) UpdateCrawlMode(c *gin.Context) {
 func (h *handler) GetActivationReadiness(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	req, err := h.processProjectLifecycleReq(c)
+	req, err := h.processActivationReadinessReq(c)
 	if err != nil {
-		h.l.Warnf(ctx, "datasource.delivery.GetActivationReadiness.processProjectLifecycleReq: %v", err)
+		h.l.Warnf(ctx, "datasource.delivery.GetActivationReadiness.processActivationReadinessReq: %v", err)
 		response.Error(c, err, h.discord)
 		return
 	}
 
-	o, err := h.uc.GetActivationReadiness(ctx, req.toProjectID())
+	o, err := h.uc.GetActivationReadiness(ctx, req.toInput())
 	if err != nil {
-		h.l.Errorf(ctx, "datasource.delivery.GetActivationReadiness.uc.GetActivationReadiness: project_id=%s err=%v", req.ProjectID, err)
+		h.l.Errorf(ctx, "datasource.delivery.GetActivationReadiness.uc.GetActivationReadiness: project_id=%s command=%s err=%v", req.ProjectID, req.Command, err)
 		response.Error(c, h.mapError(err), h.discord)
 		return
 	}

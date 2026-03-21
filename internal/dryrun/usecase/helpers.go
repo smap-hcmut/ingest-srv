@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -82,12 +83,7 @@ func (uc *implUseCase) parseCompletedAt(raw string) *time.Time {
 }
 
 func (uc *implUseCase) isTerminalDryrunStatus(status model.DryrunStatus) bool {
-	switch status {
-	case model.DryrunStatusFailed, model.DryrunStatusWarning, model.DryrunStatusSuccess:
-		return true
-	default:
-		return false
-	}
+	return model.IsTerminalDryrunStatus(status)
 }
 
 func (uc *implUseCase) getSource(ctx context.Context, id string) (model.DataSource, error) {
@@ -416,8 +412,8 @@ func (uc *implUseCase) appendWarningFromParams(params map[string]interface{}, wa
 	return uc.marshalWarnings(items)
 }
 
-func (uc *implUseCase) ensureActivatedTargetAfterSuccess(ctx context.Context, result model.DryrunResult) error {
-	if result.Status != model.DryrunStatusSuccess {
+func (uc *implUseCase) ensureActivatedTargetAfterUsableDryrun(ctx context.Context, result model.DryrunResult) error {
+	if !model.IsUsableDryrunStatus(result.Status) {
 		return nil
 	}
 	if strings.TrimSpace(result.TargetID) == "" {
@@ -429,7 +425,11 @@ func (uc *implUseCase) ensureActivatedTargetAfterSuccess(ctx context.Context, re
 		ID:           strings.TrimSpace(result.TargetID),
 	})
 	if err != nil {
-		uc.l.Errorf(ctx, "dryrun.usecase.ensureActivatedTargetAfterSuccess.dsUC.ActivateTarget: source_id=%s target_id=%s err=%v", result.SourceID, result.TargetID, err)
+		if errors.Is(err, datasource.ErrTargetNotFound) || errors.Is(err, datasource.ErrTargetActivateNotAllowed) {
+			uc.l.Warnf(ctx, "dryrun.usecase.ensureActivatedTargetAfterUsableDryrun.skip_activate: source_id=%s target_id=%s err=%v", result.SourceID, result.TargetID, err)
+			return nil
+		}
+		uc.l.Errorf(ctx, "dryrun.usecase.ensureActivatedTargetAfterUsableDryrun.dsUC.ActivateTarget: source_id=%s target_id=%s err=%v", result.SourceID, result.TargetID, err)
 		return dryrun.ErrUpdateFailed
 	}
 

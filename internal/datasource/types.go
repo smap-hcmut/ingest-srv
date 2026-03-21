@@ -93,23 +93,46 @@ type ActivationReadinessError struct {
 	TargetID     string
 }
 
+type ActivationReadinessCommand string
+
+const (
+	ActivationReadinessCommandActivate ActivationReadinessCommand = "activate"
+	ActivationReadinessCommandResume   ActivationReadinessCommand = "resume"
+)
+
 const (
 	ActivationReadinessCodeDatasourceRequired   = "DATASOURCE_REQUIRED"
 	ActivationReadinessCodePassiveUnconfirmed   = "PASSIVE_UNCONFIRMED"
 	ActivationReadinessCodeTargetDryrunMiss     = "TARGET_DRYRUN_MISSING"
 	ActivationReadinessCodeTargetDryrunFailed   = "TARGET_DRYRUN_FAILED"
 	ActivationReadinessCodeActiveTargetRequired = "ACTIVE_TARGET_REQUIRED"
+	ActivationReadinessCodeDatasourceStatus     = "DATASOURCE_STATUS_INVALID"
 )
+
+const (
+	ActivationReadinessMessageDatasourceRequired   = "project must have at least one datasource"
+	ActivationReadinessMessagePassiveUnconfirmed   = "passive datasource is not confirmed"
+	ActivationReadinessMessageTargetDryrunMissing  = "crawl target has never been dry-run"
+	ActivationReadinessMessageTargetDryrunFailed   = "crawl target latest dry-run is FAILED"
+	ActivationReadinessMessageActiveTargetRequired = "crawl datasource must have at least one active target"
+	ActivationReadinessMessageDatasourceStatus     = "datasource status is not eligible for project lifecycle command"
+)
+
+type ActivationReadinessInput struct {
+	ProjectID string
+	Command   ActivationReadinessCommand
+}
 
 // ActivationReadinessOutput summarizes activation readiness at project scope.
 type ActivationReadinessOutput struct {
 	ProjectID                string
+	Command                  ActivationReadinessCommand
 	DataSourceCount          int
 	HasDatasource            bool
 	PassiveUnconfirmedCount  int
 	MissingTargetDryrunCount int
 	FailedTargetDryrunCount  int
-	CanActivate              bool
+	CanProceed               bool
 	Errors                   []ActivationReadinessError
 }
 

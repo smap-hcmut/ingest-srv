@@ -29,7 +29,7 @@ type DataSourceUseCase interface {
 
 // ProjectOrchestrationUseCase defines project-scope orchestration over datasource runtime.
 type ProjectOrchestrationUseCase interface {
-	GetActivationReadiness(ctx context.Context, projectID string) (ActivationReadinessOutput, error)
+	GetActivationReadiness(ctx context.Context, input ActivationReadinessInput) (ActivationReadinessOutput, error)
 	Activate(ctx context.Context, projectID string) (ProjectLifecycleOutput, error)
 	Pause(ctx context.Context, projectID string) (ProjectLifecycleOutput, error)
 	Resume(ctx context.Context, projectID string) (ProjectLifecycleOutput, error)

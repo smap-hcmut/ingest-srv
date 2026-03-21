@@ -18,6 +18,7 @@ var (
 	ErrListFailed                = errors.New("failed to list data sources")
 	ErrUpdateNotAllowed          = errors.New("cannot update config/mapping on an active source")
 	ErrActivationReadinessFailed = errors.New("project activation readiness failed")
+	ErrInvalidReadinessCommand   = errors.New("invalid activation readiness command")
 	ErrInvalidTransition         = errors.New("invalid datasource lifecycle transition")
 	ErrActivateNotAllowed        = errors.New("activate not allowed for datasource")
 	ErrPauseNotAllowed           = errors.New("pause not allowed for datasource")
@@ -37,4 +38,5 @@ var (
 	ErrInvalidTargetInterval      = errors.New("invalid crawl_interval_minutes; must be greater than 0")
 	ErrTargetActivateNotAllowed   = errors.New("activate not allowed for crawl target")
 	ErrTargetDeactivateNotAllowed = errors.New("deactivate not allowed for crawl target")
+	ErrTargetDeleteNotAllowed     = errors.New("delete not allowed for crawl target")
 )

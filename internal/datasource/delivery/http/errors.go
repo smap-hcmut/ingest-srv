@@ -32,6 +32,7 @@ var (
 	errResumeNotAllowed          = &pkgErrors.HTTPError{Code: 19, Message: "Datasource cannot be resumed in its current state", StatusCode: http.StatusBadRequest}
 	errCrawlModeNotAllowed       = &pkgErrors.HTTPError{Code: 20, Message: "Crawl mode update is not allowed for this datasource", StatusCode: http.StatusBadRequest}
 	errActivationReadinessFailed = &pkgErrors.HTTPError{Code: 21, Message: "Project activation readiness failed", StatusCode: http.StatusBadRequest}
+	errInvalidReadinessCommand   = &pkgErrors.HTTPError{Code: 22, Message: "Invalid activation readiness command", StatusCode: http.StatusBadRequest}
 	errInternal                  = &pkgErrors.HTTPError{Code: 99, Message: "Internal server error", StatusCode: http.StatusInternalServerError}
 
 	// CrawlTarget errors — 101+ range.
@@ -47,6 +48,7 @@ var (
 	errTargetValuesMustBeURLs     = &pkgErrors.HTTPError{Code: 110, Message: "Crawl target values must be valid URLs", StatusCode: http.StatusBadRequest}
 	errTargetActivateNotAllowed   = &pkgErrors.HTTPError{Code: 111, Message: "Crawl target cannot be activated in its current state", StatusCode: http.StatusBadRequest}
 	errTargetDeactivateNotAllowed = &pkgErrors.HTTPError{Code: 112, Message: "Crawl target cannot be deactivated in its current state", StatusCode: http.StatusBadRequest}
+	errTargetDeleteNotAllowed     = &pkgErrors.HTTPError{Code: 113, Message: "Crawl target cannot be deleted in its current state", StatusCode: http.StatusBadRequest}
 )
 
 func (h *handler) mapError(err error) error {
@@ -89,6 +91,8 @@ func (h *handler) mapError(err error) error {
 		return errCrawlModeNotAllowed
 	case errors.Is(err, datasource.ErrActivationReadinessFailed):
 		return errActivationReadinessFailed
+	case errors.Is(err, datasource.ErrInvalidReadinessCommand):
+		return errInvalidReadinessCommand
 	case errors.Is(err, datasource.ErrTargetNotFound):
 		return errTargetNotFound
 	case errors.Is(err, datasource.ErrTargetValuesRequired):
@@ -113,6 +117,8 @@ func (h *handler) mapError(err error) error {
 		return errTargetActivateNotAllowed
 	case errors.Is(err, datasource.ErrTargetDeactivateNotAllowed):
 		return errTargetDeactivateNotAllowed
+	case errors.Is(err, datasource.ErrTargetDeleteNotAllowed):
+		return errTargetDeleteNotAllowed
 	default:
 		panic(err) // Unexpected error — panic to trigger recovery middleware and alerting.
 	}

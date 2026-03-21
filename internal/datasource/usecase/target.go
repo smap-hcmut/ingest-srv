@@ -128,12 +128,15 @@ func (uc *implUseCase) UpdateTarget(ctx context.Context, input datasource.Update
 	}
 
 	var values []string
+	valuesForComparison := current.Values
 	if input.Values != nil {
 		values, err = uc.prepareTargetValues(current.TargetType, input.Values)
 		if err != nil {
 			return datasource.UpdateTargetOutput{}, err
 		}
+		valuesForComparison = values
 	}
+	materialChanged := uc.hasMaterialTargetChange(current, valuesForComparison, input)
 
 	opt := repo.UpdateTargetOptions{
 		DataSourceID:         strings.TrimSpace(input.DataSourceID),
@@ -144,6 +147,10 @@ func (uc *implUseCase) UpdateTarget(ctx context.Context, input datasource.Update
 		Priority:             input.Priority,
 		CrawlIntervalMinutes: input.CrawlIntervalMinutes,
 	}
+	if materialChanged && current.IsActive {
+		disabled := false
+		opt.IsActive = &disabled
+	}
 
 	result, err := uc.repo.UpdateTarget(ctx, opt)
 	if err != nil {
@@ -152,6 +159,12 @@ func (uc *implUseCase) UpdateTarget(ctx context.Context, input datasource.Update
 			return datasource.UpdateTargetOutput{}, datasource.ErrTargetNotFound
 		}
 		return datasource.UpdateTargetOutput{}, datasource.ErrTargetUpdateFailed
+	}
+	if materialChanged {
+		if err := uc.markDatasourcePendingAfterMaterialTargetChange(ctx, strings.TrimSpace(input.DataSourceID)); err != nil {
+			uc.l.Errorf(ctx, "datasource.usecase.UpdateTarget.markDatasourcePendingAfterMaterialTargetChange: source_id=%s target_id=%s err=%v", input.DataSourceID, input.ID, err)
+			return datasource.UpdateTargetOutput{}, err
+		}
 	}
 
 	return datasource.UpdateTargetOutput{Target: result}, nil
@@ -185,7 +198,7 @@ func (uc *implUseCase) ActivateTarget(ctx context.Context, input datasource.Acti
 		uc.l.Errorf(ctx, "datasource.usecase.ActivateTarget.repo.GetLatestDryrunByTarget: target_id=%s err=%v", current.ID, err)
 		return datasource.ActivateTargetOutput{}, datasource.ErrTargetUpdateFailed
 	}
-	if latest.ID == "" || latest.Status != model.DryrunStatusSuccess {
+	if latest.ID == "" || !model.IsUsableDryrunStatus(latest.Status) {
 		return datasource.ActivateTargetOutput{}, datasource.ErrTargetActivateNotAllowed
 	}
 
@@ -229,6 +242,13 @@ func (uc *implUseCase) DeactivateTarget(ctx context.Context, input datasource.De
 		return datasource.DeactivateTargetOutput{Target: current}, nil
 	}
 
+	if err := uc.ensureCanRemoveActiveTarget(ctx, input.DataSourceID, current.IsActive, datasource.ErrTargetDeactivateNotAllowed); err != nil {
+		if err == datasource.ErrNotFound || err == datasource.ErrTargetDeactivateNotAllowed {
+			return datasource.DeactivateTargetOutput{}, err
+		}
+		return datasource.DeactivateTargetOutput{}, datasource.ErrTargetUpdateFailed
+	}
+
 	disabled := false
 	updated, err := uc.repo.UpdateTarget(ctx, repo.UpdateTargetOptions{
 		DataSourceID: strings.TrimSpace(input.DataSourceID),
@@ -251,6 +271,25 @@ func (uc *implUseCase) DeleteTarget(ctx context.Context, input datasource.Delete
 	if err := uc.validDeleteTargetInput(input); err != nil {
 		uc.l.Warnf(ctx, "datasource.usecase.DeleteTarget.validDeleteTargetInput: %v", err)
 		return err
+	}
+
+	current, err := uc.repo.GetTarget(ctx, repo.GetTargetOptions{
+		DataSourceID: strings.TrimSpace(input.DataSourceID),
+		ID:           strings.TrimSpace(input.ID),
+	})
+	if err != nil {
+		uc.l.Errorf(ctx, "datasource.usecase.DeleteTarget.repo.GetTarget: id=%s err=%v", input.ID, err)
+		if err == repo.ErrTargetNotFound {
+			return datasource.ErrTargetNotFound
+		}
+		return datasource.ErrTargetDeleteFailed
+	}
+
+	if err := uc.ensureCanRemoveActiveTarget(ctx, input.DataSourceID, current.IsActive, datasource.ErrTargetDeleteNotAllowed); err != nil {
+		if err == datasource.ErrNotFound || err == datasource.ErrTargetDeleteNotAllowed {
+			return err
+		}
+		return datasource.ErrTargetDeleteFailed
 	}
 
 	if err := uc.repo.DeleteTarget(ctx, repo.DeleteTargetOptions{

@@ -107,3 +107,21 @@ const (
 	TriggerTypeCrisisEvent  TriggerType = "CRISIS_EVENT"  // Do adaptive crawl/crisis controller yêu cầu.
 	TriggerTypeWebhookPush  TriggerType = "WEBHOOK_PUSH"  // Do dữ liệu được đẩy vào từ webhook.
 )
+
+func IsUsableDryrunStatus(status DryrunStatus) bool {
+	switch status {
+	case DryrunStatusSuccess, DryrunStatusWarning:
+		return true
+	default:
+		return false
+	}
+}
+
+func IsTerminalDryrunStatus(status DryrunStatus) bool {
+	switch status {
+	case DryrunStatusFailed, DryrunStatusWarning, DryrunStatusSuccess:
+		return true
+	default:
+		return false
+	}
+}

@@ -30,31 +30,8 @@ func (uc *implUseCase) ActivateDataSource(ctx context.Context, id string) (datas
 		return datasource.ActivateOutput{}, datasource.ErrActivateNotAllowed
 	}
 
-	switch current.SourceCategory {
-	case model.SourceCategoryCrawl:
-		if current.CrawlMode == nil || current.CrawlIntervalMinutes == nil || *current.CrawlIntervalMinutes <= 0 {
-			return datasource.ActivateOutput{}, datasource.ErrActivateNotAllowed
-		}
-
-		activeTargets, err := uc.repo.CountActiveTargets(ctx, current.ID)
-		if err != nil {
-			uc.l.Errorf(ctx, "datasource.usecase.ActivateDataSource.repo.CountActiveTargets: id=%s err=%v", id, err)
-			return datasource.ActivateOutput{}, datasource.ErrActivateNotAllowed
-		}
-		if activeTargets <= 0 {
-			return datasource.ActivateOutput{}, datasource.ErrActivateNotAllowed
-		}
-	case model.SourceCategoryPassive:
-		switch current.SourceType {
-		case model.SourceTypeWebhook:
-			if current.WebhookID == "" || current.WebhookSecretEncrypted == "" {
-				return datasource.ActivateOutput{}, datasource.ErrActivateNotAllowed
-			}
-		default:
-			return datasource.ActivateOutput{}, datasource.ErrActivateNotAllowed
-		}
-	default:
-		return datasource.ActivateOutput{}, datasource.ErrActivateNotAllowed
+	if err := uc.ensureRuntimePrerequisites(ctx, current, datasource.ErrActivateNotAllowed); err != nil {
+		return datasource.ActivateOutput{}, err
 	}
 
 	updated, err := uc.repo.UpdateDataSource(ctx, repo.UpdateDataSourceOptions{
@@ -120,6 +97,9 @@ func (uc *implUseCase) ResumeDataSource(ctx context.Context, id string) (datasou
 	if current.Status != model.SourceStatusPaused {
 		uc.l.Warnf(ctx, "datasource.usecase.ResumeDataSource: id=%s status=%s not paused", id, current.Status)
 		return datasource.ResumeOutput{}, datasource.ErrResumeNotAllowed
+	}
+	if err := uc.ensureRuntimePrerequisites(ctx, current, datasource.ErrResumeNotAllowed); err != nil {
+		return datasource.ResumeOutput{}, err
 	}
 
 	updated, err := uc.repo.UpdateDataSource(ctx, repo.UpdateDataSourceOptions{

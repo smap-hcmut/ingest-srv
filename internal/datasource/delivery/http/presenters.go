@@ -186,6 +186,31 @@ func (r projectLifecycleReq) toProjectID() string {
 	return strings.TrimSpace(r.ProjectID)
 }
 
+type activationReadinessReq struct {
+	ProjectID string `form:"-"`
+	Command   string `form:"command" example:"activate" enums:"activate,resume"`
+}
+
+func (r activationReadinessReq) validate() error {
+	if strings.TrimSpace(r.ProjectID) == "" {
+		return errProjectIDRequired
+	}
+
+	switch strings.TrimSpace(r.Command) {
+	case "", string(datasource.ActivationReadinessCommandActivate), string(datasource.ActivationReadinessCommandResume):
+		return nil
+	default:
+		return errInvalidReadinessCommand
+	}
+}
+
+func (r activationReadinessReq) toInput() datasource.ActivationReadinessInput {
+	return datasource.ActivationReadinessInput{
+		ProjectID: strings.TrimSpace(r.ProjectID),
+		Command:   datasource.ActivationReadinessCommand(strings.TrimSpace(r.Command)),
+	}
+}
+
 // --- Response DTOs ---
 
 // dataSourceResp represents data source data in API responses.
@@ -284,12 +309,13 @@ type activationReadinessErrorResp struct {
 
 type activationReadinessResp struct {
 	ProjectID                string                         `json:"project_id" example:"550e8400-e29b-41d4-a716-446655440000"`
+	Command                  string                         `json:"command" example:"activate"`
 	DataSourceCount          int                            `json:"datasource_count" example:"2"`
 	HasDatasource            bool                           `json:"has_datasource" example:"true"`
 	PassiveUnconfirmedCount  int                            `json:"passive_unconfirmed_count" example:"0"`
 	MissingTargetDryrunCount int                            `json:"missing_target_dryrun_count" example:"1"`
 	FailedTargetDryrunCount  int                            `json:"failed_target_dryrun_count" example:"0"`
-	CanActivate              bool                           `json:"can_activate" example:"false"`
+	CanProceed               bool                           `json:"can_proceed" example:"false"`
 	Errors                   []activationReadinessErrorResp `json:"errors"`
 }
 
@@ -340,12 +366,13 @@ func (h *handler) newActivationReadinessResp(o datasource.ActivationReadinessOut
 
 	return activationReadinessResp{
 		ProjectID:                o.ProjectID,
+		Command:                  string(o.Command),
 		DataSourceCount:          o.DataSourceCount,
 		HasDatasource:            o.HasDatasource,
 		PassiveUnconfirmedCount:  o.PassiveUnconfirmedCount,
 		MissingTargetDryrunCount: o.MissingTargetDryrunCount,
 		FailedTargetDryrunCount:  o.FailedTargetDryrunCount,
-		CanActivate:              o.CanActivate,
+		CanProceed:               o.CanProceed,
 		Errors:                   errors,
 	}
 }
