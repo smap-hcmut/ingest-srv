@@ -3,6 +3,8 @@ package repository
 import (
 	"encoding/json"
 
+	"ingest-srv/internal/model"
+
 	"github.com/smap-hcmut/shared-libs/go/paginator"
 )
 
@@ -71,6 +73,16 @@ type UpdateDataSourceOptions struct {
 	WebhookID              string
 	WebhookSecretEncrypted string
 	ClearPausedAt          bool
+}
+
+// ProjectLifecycleUpdateOptions contains data for one project-scope lifecycle transition.
+type ProjectLifecycleUpdateOptions struct {
+	ProjectID      string
+	FromStatuses   []model.SourceStatus
+	ToStatus       model.SourceStatus
+	SetActivatedAt bool
+	SetPausedAt    bool
+	ClearPausedAt  bool
 }
 
 // --- CrawlTarget Options ---

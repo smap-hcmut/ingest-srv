@@ -151,38 +151,23 @@ func (uc *implUseCase) Activate(ctx context.Context, projectID string) (datasour
 		return datasource.ProjectLifecycleOutput{}, datasource.ErrActivationReadinessFailed
 	}
 
-	sources, err := uc.repo.ListDataSources(ctx, repo.ListDataSourcesOptions{ProjectID: projectID})
+	sources, err := uc.listProjectLifecycleSources(ctx, projectID, "Activate")
 	if err != nil {
-		uc.l.Errorf(ctx, "datasource.usecase.Activate.repo.ListDataSources: project_id=%s err=%v", projectID, err)
-		return datasource.ProjectLifecycleOutput{}, datasource.ErrListFailed
+		return datasource.ProjectLifecycleOutput{}, err
+	}
+	if err := uc.ensureProjectSourcesEligible(ctx, projectID, sources, datasource.ActivationReadinessCommandActivate, datasource.ErrActivateNotAllowed, "Activate"); err != nil {
+		return datasource.ProjectLifecycleOutput{}, err
 	}
 
-	for _, source := range sources {
-		switch source.Status {
-		case model.SourceStatusReady, model.SourceStatusActive:
-			// allowed
-		default:
-			uc.l.Warnf(ctx, "datasource.usecase.Activate: project_id=%s source_id=%s status=%s not eligible", projectID, source.ID, source.Status)
-			return datasource.ProjectLifecycleOutput{}, datasource.ErrActivateNotAllowed
-		}
-	}
-
-	affected := 0
-	for _, source := range sources {
-		if source.Status == model.SourceStatusActive {
-			continue
-		}
-
-		if _, activateErr := uc.ActivateDataSource(ctx, source.ID); activateErr != nil {
-			uc.l.Errorf(ctx, "datasource.usecase.Activate.uc.ActivateDataSource: project_id=%s source_id=%s err=%v", projectID, source.ID, activateErr)
-			return datasource.ProjectLifecycleOutput{}, activateErr
-		}
-		affected++
+	affected, err := uc.repo.UpdateProjectDataSourcesLifecycle(ctx, uc.buildProjectLifecycleUpdateOptions(projectID, "activate"))
+	if err != nil {
+		uc.l.Errorf(ctx, "datasource.usecase.Activate.repo.UpdateProjectDataSourcesLifecycle: project_id=%s err=%v", projectID, err)
+		return datasource.ProjectLifecycleOutput{}, datasource.ErrUpdateFailed
 	}
 
 	return datasource.ProjectLifecycleOutput{
 		ProjectID:               projectID,
-		AffectedDataSourceCount: affected,
+		AffectedDataSourceCount: int(affected),
 	}, nil
 }
 
@@ -193,28 +178,15 @@ func (uc *implUseCase) Pause(ctx context.Context, projectID string) (datasource.
 		return datasource.ProjectLifecycleOutput{}, datasource.ErrProjectIDRequired
 	}
 
-	sources, err := uc.repo.ListDataSources(ctx, repo.ListDataSourcesOptions{ProjectID: projectID})
+	affected, err := uc.repo.UpdateProjectDataSourcesLifecycle(ctx, uc.buildProjectLifecycleUpdateOptions(projectID, "pause"))
 	if err != nil {
-		uc.l.Errorf(ctx, "datasource.usecase.Pause.repo.ListDataSources: project_id=%s err=%v", projectID, err)
-		return datasource.ProjectLifecycleOutput{}, datasource.ErrListFailed
-	}
-
-	affected := 0
-	for _, source := range sources {
-		if source.Status != model.SourceStatusActive {
-			continue
-		}
-
-		if _, pauseErr := uc.PauseDataSource(ctx, source.ID); pauseErr != nil {
-			uc.l.Errorf(ctx, "datasource.usecase.Pause.uc.PauseDataSource: project_id=%s source_id=%s err=%v", projectID, source.ID, pauseErr)
-			return datasource.ProjectLifecycleOutput{}, pauseErr
-		}
-		affected++
+		uc.l.Errorf(ctx, "datasource.usecase.Pause.repo.UpdateProjectDataSourcesLifecycle: project_id=%s err=%v", projectID, err)
+		return datasource.ProjectLifecycleOutput{}, datasource.ErrUpdateFailed
 	}
 
 	return datasource.ProjectLifecycleOutput{
 		ProjectID:               projectID,
-		AffectedDataSourceCount: affected,
+		AffectedDataSourceCount: int(affected),
 	}, nil
 }
 
@@ -237,37 +209,22 @@ func (uc *implUseCase) Resume(ctx context.Context, projectID string) (datasource
 		return datasource.ProjectLifecycleOutput{}, datasource.ErrActivationReadinessFailed
 	}
 
-	sources, err := uc.repo.ListDataSources(ctx, repo.ListDataSourcesOptions{ProjectID: projectID})
+	sources, err := uc.listProjectLifecycleSources(ctx, projectID, "Resume")
 	if err != nil {
-		uc.l.Errorf(ctx, "datasource.usecase.Resume.repo.ListDataSources: project_id=%s err=%v", projectID, err)
-		return datasource.ProjectLifecycleOutput{}, datasource.ErrListFailed
+		return datasource.ProjectLifecycleOutput{}, err
+	}
+	if err := uc.ensureProjectSourcesEligible(ctx, projectID, sources, datasource.ActivationReadinessCommandResume, datasource.ErrResumeNotAllowed, "Resume"); err != nil {
+		return datasource.ProjectLifecycleOutput{}, err
 	}
 
-	for _, source := range sources {
-		switch source.Status {
-		case model.SourceStatusPaused, model.SourceStatusActive:
-			// allowed
-		default:
-			uc.l.Warnf(ctx, "datasource.usecase.Resume: project_id=%s source_id=%s status=%s not eligible", projectID, source.ID, source.Status)
-			return datasource.ProjectLifecycleOutput{}, datasource.ErrResumeNotAllowed
-		}
-	}
-
-	affected := 0
-	for _, source := range sources {
-		if source.Status != model.SourceStatusPaused {
-			continue
-		}
-
-		if _, resumeErr := uc.ResumeDataSource(ctx, source.ID); resumeErr != nil {
-			uc.l.Errorf(ctx, "datasource.usecase.Resume.uc.ResumeDataSource: project_id=%s source_id=%s err=%v", projectID, source.ID, resumeErr)
-			return datasource.ProjectLifecycleOutput{}, resumeErr
-		}
-		affected++
+	affected, err := uc.repo.UpdateProjectDataSourcesLifecycle(ctx, uc.buildProjectLifecycleUpdateOptions(projectID, "resume"))
+	if err != nil {
+		uc.l.Errorf(ctx, "datasource.usecase.Resume.repo.UpdateProjectDataSourcesLifecycle: project_id=%s err=%v", projectID, err)
+		return datasource.ProjectLifecycleOutput{}, datasource.ErrUpdateFailed
 	}
 
 	return datasource.ProjectLifecycleOutput{
 		ProjectID:               projectID,
-		AffectedDataSourceCount: affected,
+		AffectedDataSourceCount: int(affected),
 	}, nil
 }

@@ -14,11 +14,15 @@ For each **entity** (table) in `repository/<driver>/` you have:
 1. **`<entity>.go` (Coordinator)**
    - Methods gọi `buildXxxQuery(opt)` → driver → map sang `model.Entity`.
    - Ví dụ: `document.go` cho bảng indexed_documents, `dlq.go` cho indexing_dlq.
+   - Tên file phải bám theo **entity/table đang thao tác thật sự**, không bám theo orchestration scope.
+   - Ví dụ: nếu method đang update bảng `data_sources` cho project lifecycle thì vẫn đặt trong `datasource.go` hoặc `datasource_lifecycle.go`, **không** đặt `project_lifecycle.go`.
 
 2. **`<entity>_query.go` (Builder)**
    - Chỉ build query: trả về `[]qm.QueryMod` (hoặc filter tương đương).
    - Không gọi DB, không map domain.
    - Ví dụ: `document_query.go`, `dlq_query.go`.
+   - Mọi hàm `build...Query(...)` của entity phải nằm ở đúng file `\<entity\>_query.go`.
+   - Không để query-builder trong file coordinator hay file lifecycle/update file khác.
 
 3. **Mapper**
    - Dùng `internal/model.NewXxxFromDB(dbRow)` (và `util.MapSlice` nếu cần).
@@ -139,6 +143,31 @@ repository/
     ├── new.go    # New(client, log) QdrantRepository
     └── point.go  # UpsertPoint (collection name const trong package)
 ```
+
+### 4.1.1 Naming rule for repository/postgre files
+
+- File name phải phản ánh **entity được đọc/ghi**, không phản ánh usecase scope.
+- Nếu logic đang đọc/ghi bảng `data_sources`:
+  - dùng `datasource.go`
+  - hoặc `datasource_lifecycle.go`
+  - hoặc `datasource_build.go`
+  - hoặc `datasource_query.go`
+- Không tạo tên kiểu:
+  - `project_lifecycle.go`
+  - `activate_project.go`
+  - `resume_project.go`
+  nếu phần code thực tế vẫn chỉ đọc/ghi entity `data_sources`.
+
+### 4.1.2 Query builder placement rule
+
+- Hàm `build...Query(...)` bắt buộc nằm trong `\<entity\>_query.go`.
+- Hàm `build...Columns(...)`, `toDomain(...)`, `toDB(...)` hoặc helper build payload/update map có thể nằm ở:
+  - `\<entity\>_build.go` nếu thiên về build data/map/conversion
+  - file logic entity tương ứng nếu đó là helper rất sát một method cụ thể
+- Không để `build...Query(...)` trong:
+  - `\<entity\>.go`
+  - `\<entity\>_lifecycle.go`
+  - file scope-oriented khác
 
 ### 4.2 Method Implementation Pattern
 

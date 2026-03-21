@@ -312,3 +312,31 @@ func (r *implRepository) CountActiveTargets(ctx context.Context, dataSourceID st
 
 	return total, nil
 }
+
+func (r *implRepository) UpdateProjectDataSourcesLifecycle(ctx context.Context, opt repository.ProjectLifecycleUpdateOptions) (int64, error) {
+	now := time.Now()
+	queryMods := r.buildProjectLifecycleUpdateQuery(opt)
+
+	updateCols := sqlboiler.M{
+		sqlboiler.DataSourceColumns.Status:    sqlboiler.SourceStatus(opt.ToStatus),
+		sqlboiler.DataSourceColumns.UpdatedAt: now,
+	}
+
+	if opt.SetActivatedAt {
+		updateCols[sqlboiler.DataSourceColumns.ActivatedAt] = null.TimeFrom(now)
+	}
+	if opt.SetPausedAt {
+		updateCols[sqlboiler.DataSourceColumns.PausedAt] = null.TimeFrom(now)
+	}
+	if opt.ClearPausedAt {
+		updateCols[sqlboiler.DataSourceColumns.PausedAt] = null.Time{}
+	}
+
+	affected, err := sqlboiler.DataSources(queryMods...).UpdateAll(ctx, r.db, updateCols)
+	if err != nil {
+		r.l.Errorf(ctx, "datasource.repository.UpdateProjectDataSourcesLifecycle.UpdateAll: project_id=%s err=%v", opt.ProjectID, err)
+		return 0, repository.ErrFailedToUpdate
+	}
+
+	return affected, nil
+}

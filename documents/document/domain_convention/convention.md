@@ -387,6 +387,27 @@ Both MongoDB and PostgreSQL implementations **MUST** follow this file structure 
    └── new.go              # Factory
    ```
 
+6. **Repository file naming follows the entity/table, not the usecase scope.**
+
+   ```text
+   # ✅ Good
+   repository/postgre/
+   ├── datasource.go
+   ├── datasource_query.go
+   ├── datasource_build.go
+   └── datasource_lifecycle.go
+
+   # ❌ Bad
+   repository/postgre/
+   ├── project_lifecycle.go   # but code still updates data_sources
+   ├── activate_project.go    # but code still updates data_sources
+   └── resume_project.go      # but code still updates data_sources
+   ```
+
+   - Nếu method đang thao tác bảng `data_sources`, tên file phải mang prefix `datasource`.
+   - Scope như `project`, `workflow`, `lifecycle`, `cron` chỉ là hậu tố concern, không được thay thế tên entity chính.
+   - `build...Query(...)` bắt buộc nằm trong `\<entity\>_query.go`.
+
 ---
 
 ## Naming Conventions & Rules

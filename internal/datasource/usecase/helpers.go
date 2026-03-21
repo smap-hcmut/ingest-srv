@@ -276,6 +276,59 @@ func (uc *implUseCase) isStatusAllowedForCommand(status model.SourceStatus, comm
 	}
 }
 
+func (uc *implUseCase) listProjectLifecycleSources(ctx context.Context, projectID string, action string) ([]model.DataSource, error) {
+	sources, err := uc.repo.ListDataSources(ctx, repo.ListDataSourcesOptions{ProjectID: projectID})
+	if err != nil {
+		uc.l.Errorf(ctx, "datasource.usecase.%s.repo.ListDataSources: project_id=%s err=%v", action, projectID, err)
+		return nil, datasource.ErrListFailed
+	}
+
+	return sources, nil
+}
+
+func (uc *implUseCase) ensureProjectSourcesEligible(ctx context.Context, projectID string, sources []model.DataSource, command datasource.ActivationReadinessCommand, notAllowedErr error, action string) error {
+	for _, source := range sources {
+		if uc.isStatusAllowedForCommand(source.Status, command) {
+			continue
+		}
+
+		uc.l.Warnf(ctx, "datasource.usecase.%s: project_id=%s source_id=%s status=%s not eligible", action, projectID, source.ID, source.Status)
+		return notAllowedErr
+	}
+
+	return nil
+}
+
+func (uc *implUseCase) buildProjectLifecycleUpdateOptions(projectID string, action string) repo.ProjectLifecycleUpdateOptions {
+	switch action {
+	case "activate":
+		return repo.ProjectLifecycleUpdateOptions{
+			ProjectID:      projectID,
+			FromStatuses:   []model.SourceStatus{model.SourceStatusReady},
+			ToStatus:       model.SourceStatusActive,
+			SetActivatedAt: true,
+			ClearPausedAt:  true,
+		}
+	case "pause":
+		return repo.ProjectLifecycleUpdateOptions{
+			ProjectID:    projectID,
+			FromStatuses: []model.SourceStatus{model.SourceStatusActive},
+			ToStatus:     model.SourceStatusPaused,
+			SetPausedAt:  true,
+		}
+	case "resume":
+		return repo.ProjectLifecycleUpdateOptions{
+			ProjectID:      projectID,
+			FromStatuses:   []model.SourceStatus{model.SourceStatusPaused},
+			ToStatus:       model.SourceStatusActive,
+			SetActivatedAt: true,
+			ClearPausedAt:  true,
+		}
+	default:
+		return repo.ProjectLifecycleUpdateOptions{ProjectID: projectID}
+	}
+}
+
 func (uc *implUseCase) ensureCanRemoveActiveTarget(ctx context.Context, dataSourceID string, isActive bool, notAllowedErr error) error {
 	if !isActive {
 		return nil
