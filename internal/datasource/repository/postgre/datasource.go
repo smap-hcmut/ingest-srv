@@ -22,13 +22,17 @@ import (
 // CreateDataSource inserts a new data source into the database.
 func (r *implRepository) CreateDataSource(ctx context.Context, opt repository.CreateDataSourceOptions) (model.DataSource, error) {
 	row := &sqlboiler.DataSource{
-		ID:               uuid.NewString(),
-		ProjectID:        opt.ProjectID,
-		Name:             opt.Name,
-		SourceType:       sqlboiler.SourceType(opt.SourceType),
-		SourceCategory:   sqlboiler.SourceCategory(opt.SourceCategory),
-		Status:           sqlboiler.SourceStatusPENDING,
-		Config:           types.JSON("{}"),
+		ID:             uuid.NewString(),
+		ProjectID:      opt.ProjectID,
+		Name:           opt.Name,
+		SourceType:     sqlboiler.SourceType(opt.SourceType),
+		SourceCategory: sqlboiler.SourceCategory(opt.SourceCategory),
+		Status:         sqlboiler.SourceStatusPENDING,
+		Config:         types.JSON("{}"),
+		// TODO(passive-onboarding): replace this default once FILE_UPLOAD/WEBHOOK
+		// onboarding flow is implemented. Passive sources should move through
+		// onboarding states (PENDING/SUGGESTED/CONFIRMED) instead of falling back
+		// to NOT_REQUIRED at create time.
 		OnboardingStatus: sqlboiler.OnboardingStatusNOT_REQUIRED,
 		DryrunStatus:     sqlboiler.DryrunStatusNOT_REQUIRED,
 	}

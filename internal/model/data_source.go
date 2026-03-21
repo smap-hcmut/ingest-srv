@@ -18,7 +18,7 @@ type DataSource struct {
 	Config                 json.RawMessage  `json:"config,omitempty"`                   // Cấu hình nghiệp vụ theo platform, dùng làm input chính cho runtime.
 	AccountRef             json.RawMessage  `json:"account_ref,omitempty"`              // Tham chiếu page/profile/keyword/file gốc để hiển thị và trace.
 	MappingRules           json.RawMessage  `json:"mapping_rules,omitempty"`            // Rule chuẩn hóa raw sang UAP cho upload/webhook/parser.
-	OnboardingStatus       OnboardingStatus `json:"onboarding_status"`                  // Theo dõi tiến trình setup mapping/onboarding của passive source.
+	OnboardingStatus       OnboardingStatus `json:"onboarding_status"`                  // Theo dõi tiến trình setup mapping/onboarding của passive source. TODO(passive-onboarding): flow thật cho FILE_UPLOAD/WEBHOOK chưa hoàn thiện.
 	DryrunStatus           DryrunStatus     `json:"dryrun_status"`                      // Theo dõi trạng thái validate trước khi source được activate.
 	DryrunLastResultID     string           `json:"dryrun_last_result_id,omitempty"`    // Link nhanh tới kết quả dry run gần nhất cho UI/API.
 	CrawlMode              *CrawlMode       `json:"crawl_mode,omitempty"`               // Mode crawl hiện hành để scheduler tính tần suất chạy.

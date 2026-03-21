@@ -53,8 +53,11 @@ func (uc *implUseCase) GetActivationReadiness(ctx context.Context, input datasou
 		}
 
 		if source.SourceCategory == model.SourceCategoryPassive {
-			// TODO: passive confirm flow will have dedicated state transitions. For now,
-			// onboarding_status=CONFIRMED is treated as the readiness signal.
+			// TODO(passive-onboarding): this is only a temporary readiness gate.
+			// Real FILE_UPLOAD/WEBHOOK onboarding flow is not implemented yet, so
+			// we only read onboarding_status as a placeholder signal here.
+			// When passive onboarding is completed, move this branch to the real
+			// passive lifecycle contract and remove the placeholder assumption.
 			if source.OnboardingStatus != model.OnboardingStatusConfirmed {
 				out.PassiveUnconfirmedCount++
 				out.Errors = append(out.Errors, datasource.ActivationReadinessError{

@@ -250,6 +250,10 @@ func (uc *implUseCase) validCreateInput(input datasource.CreateInput) error {
 			return datasource.ErrCrawlConfigRequired
 		}
 	}
+	// TODO(passive-onboarding): passive source create currently stops at base
+	// datasource persistence only. Preview/confirm onboarding APIs for
+	// FILE_UPLOAD/WEBHOOK are not implemented yet, so we intentionally do not
+	// enforce onboarding-specific create contract here.
 	if strings.TrimSpace(input.CrawlMode) != "" {
 		if err := uc.validateCrawlMode(strings.TrimSpace(input.CrawlMode)); err != nil {
 			return err
