@@ -217,7 +217,7 @@ func (uc *implUseCase) applyDatasourceResult(ctx context.Context, sourceID, resu
 }
 
 func (uc *implUseCase) failDispatch(ctx context.Context, running model.DryrunResult, errorMessage string) (model.DryrunResult, model.DataSource, error) {
-	failedResult, err := uc.repo.UpdateResult(ctx, dryrunRepo.UpdateResultOptions{
+	failedResult, updatedSource, err := uc.repo.CompleteResult(ctx, dryrunRepo.CompleteResultOptions{
 		ID:           running.ID,
 		Status:       string(model.DryrunStatusFailed),
 		SampleCount:  0,
@@ -225,13 +225,8 @@ func (uc *implUseCase) failDispatch(ctx context.Context, running model.DryrunRes
 		ErrorMessage: strings.TrimSpace(errorMessage),
 	})
 	if err != nil {
-		uc.l.Errorf(ctx, "dryrun.usecase.failDispatch.repo.UpdateResult: result_id=%s err=%v", running.ID, err)
+		uc.l.Errorf(ctx, "dryrun.usecase.failDispatch.repo.CompleteResult: result_id=%s err=%v", running.ID, err)
 		return model.DryrunResult{}, model.DataSource{}, dryrun.ErrUpdateFailed
-	}
-
-	updatedSource, err := uc.applyDatasourceResult(ctx, running.SourceID, failedResult.ID, model.DryrunStatusFailed)
-	if err != nil {
-		return model.DryrunResult{}, model.DataSource{}, err
 	}
 
 	return failedResult, updatedSource, nil

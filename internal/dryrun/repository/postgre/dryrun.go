@@ -3,6 +3,7 @@ package postgre
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"sync"
 	"time"
 
@@ -102,6 +103,87 @@ func (r *implRepository) UpdateResult(ctx context.Context, opt dryrunRepo.Update
 	}
 
 	return *model.NewDryrunResultFromDB(row), nil
+}
+
+// CompleteResult finalizes one dryrun result and synchronizes datasource/target state in one transaction.
+func (r *implRepository) CompleteResult(ctx context.Context, opt dryrunRepo.CompleteResultOptions) (model.DryrunResult, model.DataSource, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		r.l.Errorf(ctx, "dryrun.repository.CompleteResult.BeginTx: %v", err)
+		return model.DryrunResult{}, model.DataSource{}, dryrunRepo.ErrFailedToUpdate
+	}
+	defer rollbackTx(tx)
+
+	resultRow, err := sqlboiler.FindDryrunResult(ctx, tx, opt.ID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return model.DryrunResult{}, model.DataSource{}, dryrunRepo.ErrNotFound
+		}
+		r.l.Errorf(ctx, "dryrun.repository.CompleteResult.FindResult: %v", err)
+		return model.DryrunResult{}, model.DataSource{}, dryrunRepo.ErrFailedToUpdate
+	}
+
+	if err := r.applyResultUpdate(ctx, tx, resultRow, opt); err != nil {
+		return model.DryrunResult{}, model.DataSource{}, err
+	}
+
+	sourceRow, err := sqlboiler.FindDataSource(ctx, tx, resultRow.SourceID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return model.DryrunResult{}, model.DataSource{}, dryrunRepo.ErrNotFound
+		}
+		r.l.Errorf(ctx, "dryrun.repository.CompleteResult.FindSource: %v", err)
+		return model.DryrunResult{}, model.DataSource{}, dryrunRepo.ErrFailedToUpdate
+	}
+	if sourceRow.DeletedAt.Valid {
+		return model.DryrunResult{}, model.DataSource{}, dryrunRepo.ErrNotFound
+	}
+
+	sourceRow.DryrunStatus = sqlboiler.DryrunStatus(opt.Status)
+	sourceRow.DryrunLastResultID = null.StringFrom(resultRow.ID)
+	switch sourceRow.Status {
+	case sqlboiler.SourceStatusPENDING, sqlboiler.SourceStatusREADY:
+		if opt.Status == string(model.DryrunStatusFailed) {
+			sourceRow.Status = sqlboiler.SourceStatusPENDING
+		} else {
+			sourceRow.Status = sqlboiler.SourceStatusREADY
+		}
+	}
+	if _, err := sourceRow.Update(ctx, tx, boil.Whitelist(
+		sqlboiler.DataSourceColumns.Status,
+		sqlboiler.DataSourceColumns.DryrunStatus,
+		sqlboiler.DataSourceColumns.DryrunLastResultID,
+		sqlboiler.DataSourceColumns.UpdatedAt,
+	)); err != nil {
+		r.l.Errorf(ctx, "dryrun.repository.CompleteResult.UpdateSource: %v", err)
+		return model.DryrunResult{}, model.DataSource{}, dryrunRepo.ErrFailedToUpdate
+	}
+
+	if opt.ActivateTarget && resultRow.TargetID.Valid && resultRow.TargetID.String != "" {
+		targetRow, targetErr := sqlboiler.FindCrawlTarget(ctx, tx, resultRow.TargetID.String)
+		if targetErr != nil {
+			if !errors.Is(targetErr, sql.ErrNoRows) {
+				r.l.Errorf(ctx, "dryrun.repository.CompleteResult.FindTarget: %v", targetErr)
+				return model.DryrunResult{}, model.DataSource{}, dryrunRepo.ErrFailedToUpdate
+			}
+		} else if !targetRow.IsActive {
+			targetRow.IsActive = true
+			if _, targetErr = targetRow.Update(ctx, tx, boil.Whitelist(
+				sqlboiler.CrawlTargetColumns.IsActive,
+				sqlboiler.CrawlTargetColumns.UpdatedAt,
+			)); targetErr != nil {
+				r.l.Errorf(ctx, "dryrun.repository.CompleteResult.UpdateTarget: %v", targetErr)
+				return model.DryrunResult{}, model.DataSource{}, dryrunRepo.ErrFailedToUpdate
+			}
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		r.l.Errorf(ctx, "dryrun.repository.CompleteResult.Commit: %v", err)
+		return model.DryrunResult{}, model.DataSource{}, dryrunRepo.ErrFailedToUpdate
+	}
+
+	return *model.NewDryrunResultFromDB(resultRow), *model.NewDataSourceFromDB(sourceRow), nil
 }
 
 // GetLatest returns the latest dryrun result for the given filter.

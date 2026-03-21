@@ -41,7 +41,7 @@ func (uc *implUseCase) HandleCompletion(ctx context.Context, input dryrun.Handle
 			errorMessage = "crawler returned error completion without error message"
 		}
 
-		finalResult, updateErr := uc.repo.UpdateResult(ctx, dryrunRepo.UpdateResultOptions{
+		_, _, updateErr := uc.repo.CompleteResult(ctx, dryrunRepo.CompleteResultOptions{
 			ID:           result.ID,
 			Status:       string(model.DryrunStatusFailed),
 			SampleCount:  0,
@@ -49,12 +49,8 @@ func (uc *implUseCase) HandleCompletion(ctx context.Context, input dryrun.Handle
 			ErrorMessage: errorMessage,
 		})
 		if updateErr != nil {
-			uc.l.Errorf(ctx, "dryrun.usecase.HandleCompletion.repo.UpdateResult.failed: result_id=%s err=%v", result.ID, updateErr)
+			uc.l.Errorf(ctx, "dryrun.usecase.HandleCompletion.repo.CompleteResult.failed: result_id=%s err=%v", result.ID, updateErr)
 			return dryrun.ErrUpdateFailed
-		}
-
-		if _, applyErr := uc.applyDatasourceResult(ctx, finalResult.SourceID, finalResult.ID, model.DryrunStatusFailed); applyErr != nil {
-			return applyErr
 		}
 
 		return nil
@@ -63,7 +59,7 @@ func (uc *implUseCase) HandleCompletion(ctx context.Context, input dryrun.Handle
 	rawBytes, err := uc.downloadArtifactBytes(ctx, input.StorageBucket, input.StoragePath)
 	if err != nil {
 		errorMessage := fmt.Sprintf("download dryrun artifact: %v", err)
-		finalResult, updateErr := uc.repo.UpdateResult(ctx, dryrunRepo.UpdateResultOptions{
+		_, _, updateErr := uc.repo.CompleteResult(ctx, dryrunRepo.CompleteResultOptions{
 			ID:           result.ID,
 			Status:       string(model.DryrunStatusFailed),
 			SampleCount:  0,
@@ -71,12 +67,8 @@ func (uc *implUseCase) HandleCompletion(ctx context.Context, input dryrun.Handle
 			ErrorMessage: errorMessage,
 		})
 		if updateErr != nil {
-			uc.l.Errorf(ctx, "dryrun.usecase.HandleCompletion.repo.UpdateResult.download_failed: result_id=%s err=%v", result.ID, updateErr)
+			uc.l.Errorf(ctx, "dryrun.usecase.HandleCompletion.repo.CompleteResult.download_failed: result_id=%s err=%v", result.ID, updateErr)
 			return dryrun.ErrUpdateFailed
-		}
-
-		if _, applyErr := uc.applyDatasourceResult(ctx, finalResult.SourceID, finalResult.ID, model.DryrunStatusFailed); applyErr != nil {
-			return applyErr
 		}
 
 		return nil
@@ -90,20 +82,20 @@ func (uc *implUseCase) HandleCompletion(ctx context.Context, input dryrun.Handle
 	updateOpt.ID = result.ID
 	updateOpt.CompletedAt = uc.parseCompletedAt(input.CompletedAt)
 
-	finalResult, err := uc.repo.UpdateResult(ctx, updateOpt)
+	_, _, err = uc.repo.CompleteResult(ctx, dryrunRepo.CompleteResultOptions{
+		ID:             updateOpt.ID,
+		Status:         updateOpt.Status,
+		SampleCount:    updateOpt.SampleCount,
+		CompletedAt:    updateOpt.CompletedAt,
+		TotalFound:     updateOpt.TotalFound,
+		SampleData:     updateOpt.SampleData,
+		Warnings:       updateOpt.Warnings,
+		ErrorMessage:   updateOpt.ErrorMessage,
+		ActivateTarget: model.IsUsableDryrunStatus(finalStatus),
+	})
 	if err != nil {
-		uc.l.Errorf(ctx, "dryrun.usecase.HandleCompletion.repo.UpdateResult.success: result_id=%s err=%v", result.ID, err)
+		uc.l.Errorf(ctx, "dryrun.usecase.HandleCompletion.repo.CompleteResult.success: result_id=%s err=%v", result.ID, err)
 		return dryrun.ErrUpdateFailed
-	}
-
-	if _, applyErr := uc.applyDatasourceResult(ctx, finalResult.SourceID, finalResult.ID, finalStatus); applyErr != nil {
-		uc.l.Errorf(ctx, "dryrun.usecase.HandleCompletion.applyDatasourceResult: result_id=%s err=%v", result.ID, applyErr)
-		return applyErr
-	}
-
-	if activateErr := uc.ensureActivatedTargetAfterUsableDryrun(ctx, finalResult); activateErr != nil {
-		uc.l.Errorf(ctx, "dryrun.usecase.HandleCompletion.ensureActivatedTargetAfterUsableDryrun: result_id=%s err=%v", result.ID, activateErr)
-		return activateErr
 	}
 
 	return nil

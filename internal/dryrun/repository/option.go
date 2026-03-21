@@ -30,6 +30,19 @@ type UpdateResultOptions struct {
 	ErrorMessage string
 }
 
+// CompleteResultOptions atomically finalizes one dryrun result and syncs datasource/target snapshots.
+type CompleteResultOptions struct {
+	ID             string
+	Status         string
+	SampleCount    int
+	CompletedAt    *time.Time
+	TotalFound     *int
+	SampleData     json.RawMessage
+	Warnings       json.RawMessage
+	ErrorMessage   string
+	ActivateTarget bool
+}
+
 // GetLatestOptions contains filters for retrieving the latest dryrun result.
 type GetLatestOptions struct {
 	SourceID string
