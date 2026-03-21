@@ -5,6 +5,7 @@ import (
 
 	"ingest-srv/internal/model"
 
+	"github.com/aarondl/sqlboiler/v4/types"
 	"github.com/smap-hcmut/shared-libs/go/paginator"
 )
 
@@ -91,7 +92,7 @@ type ProjectLifecycleUpdateOptions struct {
 type CreateTargetOptions struct {
 	DataSourceID         string
 	TargetType           string
-	Values               []string
+	Values               types.JSON
 	Label                string
 	PlatformMeta         json.RawMessage
 	IsActive             bool
@@ -117,7 +118,7 @@ type ListTargetsOptions struct {
 type UpdateTargetOptions struct {
 	DataSourceID         string
 	ID                   string
-	Values               []string
+	Values               types.JSON
 	Label                string
 	PlatformMeta         json.RawMessage
 	IsActive             *bool

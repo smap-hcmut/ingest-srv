@@ -50,7 +50,7 @@ func (uc *implUseCase) createTarget(ctx context.Context, input datasource.Create
 	opt := repo.CreateTargetOptions{
 		DataSourceID:         strings.TrimSpace(input.DataSourceID),
 		TargetType:           string(targetType),
-		Values:               values,
+		Values:               model.TypesJSONFromStringSlice(values),
 		Label:                input.Label,
 		PlatformMeta:         input.PlatformMeta,
 		IsActive:             false,
@@ -141,11 +141,13 @@ func (uc *implUseCase) UpdateTarget(ctx context.Context, input datasource.Update
 	opt := repo.UpdateTargetOptions{
 		DataSourceID:         strings.TrimSpace(input.DataSourceID),
 		ID:                   strings.TrimSpace(input.ID),
-		Values:               values,
 		Label:                input.Label,
 		PlatformMeta:         input.PlatformMeta,
 		Priority:             input.Priority,
 		CrawlIntervalMinutes: input.CrawlIntervalMinutes,
+	}
+	if input.Values != nil {
+		opt.Values = model.TypesJSONFromStringSlice(values)
 	}
 	if materialChanged && current.IsActive {
 		disabled := false
