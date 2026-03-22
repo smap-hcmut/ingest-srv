@@ -17,6 +17,10 @@ func (uc *implUseCase) Create(ctx context.Context, input datasource.CreateInput)
 		uc.l.Warnf(ctx, "datasource.usecase.Create.validCreateInput: %v", err)
 		return datasource.CreateOutput{}, err
 	}
+	if err := uc.ensureProjectAvailableForDatasourceCreate(ctx, input.ProjectID); err != nil {
+		uc.l.Warnf(ctx, "datasource.usecase.Create.ensureProjectAvailableForDatasourceCreate: project_id=%s err=%v", input.ProjectID, err)
+		return datasource.CreateOutput{}, err
+	}
 
 	userID, _ := auth.GetUserIDFromContext(ctx)
 
@@ -113,6 +117,10 @@ func (uc *implUseCase) Update(ctx context.Context, input datasource.UpdateInput)
 		uc.l.Warnf(ctx, "datasource.usecase.Update: not found id=%s", input.ID)
 		return datasource.UpdateOutput{}, datasource.ErrNotFound
 	}
+	if err := uc.ensureDatasourceTargetsDryrunNotRunning(ctx, current.ID); err != nil {
+		uc.l.Warnf(ctx, "datasource.usecase.Update.ensureDatasourceTargetsDryrunNotRunning: id=%s err=%v", input.ID, err)
+		return datasource.UpdateOutput{}, err
+	}
 
 	hasRuntimeChange := len(input.Config) > 0 || len(input.MappingRules) > 0
 	if hasRuntimeChange && current.Status == model.SourceStatusActive {
@@ -147,15 +155,65 @@ func (uc *implUseCase) Update(ctx context.Context, input datasource.UpdateInput)
 	return datasource.UpdateOutput{DataSource: result}, nil
 }
 
-// Archive soft-deletes a data source by ID.
+// Archive moves a data source into ARCHIVED while keeping it queryable.
 func (uc *implUseCase) Archive(ctx context.Context, id string) error {
 	if err := uc.validArchiveInput(id); err != nil {
 		uc.l.Warnf(ctx, "datasource.usecase.Archive.validArchiveInput: %v", err)
 		return err
 	}
 
+	current, err := uc.repo.DetailDataSource(ctx, strings.TrimSpace(id))
+	if err != nil {
+		uc.l.Errorf(ctx, "datasource.usecase.Archive.repo.DetailDataSource: id=%s err=%v", id, err)
+		return datasource.ErrNotFound
+	}
+	if current.ID == "" {
+		return datasource.ErrNotFound
+	}
+	if err := uc.ensureDatasourceTargetsDryrunNotRunning(ctx, current.ID); err != nil {
+		uc.l.Warnf(ctx, "datasource.usecase.Archive.ensureDatasourceTargetsDryrunNotRunning: id=%s err=%v", id, err)
+		return err
+	}
+	if current.Status == model.SourceStatusArchived {
+		return nil
+	}
+
 	if err := uc.repo.ArchiveDataSource(ctx, strings.TrimSpace(id)); err != nil {
 		uc.l.Errorf(ctx, "datasource.usecase.Archive.repo.ArchiveDataSource: id=%s err=%v", id, err)
+		if err == repo.ErrFailedToGet {
+			return datasource.ErrNotFound
+		}
+		return datasource.ErrDeleteFailed
+	}
+
+	return nil
+}
+
+// Delete soft-deletes a datasource only after it has been archived.
+func (uc *implUseCase) Delete(ctx context.Context, id string) error {
+	if err := uc.validArchiveInput(id); err != nil {
+		uc.l.Warnf(ctx, "datasource.usecase.Delete.validArchiveInput: %v", err)
+		return err
+	}
+
+	current, err := uc.repo.DetailDataSource(ctx, strings.TrimSpace(id))
+	if err != nil {
+		uc.l.Errorf(ctx, "datasource.usecase.Delete.repo.DetailDataSource: id=%s err=%v", id, err)
+		return datasource.ErrNotFound
+	}
+	if current.ID == "" {
+		return datasource.ErrNotFound
+	}
+	if err := uc.ensureDatasourceTargetsDryrunNotRunning(ctx, current.ID); err != nil {
+		uc.l.Warnf(ctx, "datasource.usecase.Delete.ensureDatasourceTargetsDryrunNotRunning: id=%s err=%v", id, err)
+		return err
+	}
+	if current.Status != model.SourceStatusArchived {
+		return datasource.ErrDeleteRequiresArchived
+	}
+
+	if err := uc.repo.DeleteDataSource(ctx, strings.TrimSpace(id)); err != nil {
+		uc.l.Errorf(ctx, "datasource.usecase.Delete.repo.DeleteDataSource: id=%s err=%v", id, err)
 		if err == repo.ErrFailedToGet {
 			return datasource.ErrNotFound
 		}
@@ -192,6 +250,10 @@ func (uc *implUseCase) validCreateInput(input datasource.CreateInput) error {
 			return datasource.ErrCrawlConfigRequired
 		}
 	}
+	// TODO(passive-onboarding): passive source create currently stops at base
+	// datasource persistence only. Preview/confirm onboarding APIs for
+	// FILE_UPLOAD/WEBHOOK are not implemented yet, so we intentionally do not
+	// enforce onboarding-specific create contract here.
 	if strings.TrimSpace(input.CrawlMode) != "" {
 		if err := uc.validateCrawlMode(strings.TrimSpace(input.CrawlMode)); err != nil {
 			return err

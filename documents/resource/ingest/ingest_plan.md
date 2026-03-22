@@ -83,7 +83,8 @@ ingest-srv/
 | `GET`    | `/datasources`                       | List sources (filter by project_id, status, type)    |
 | `GET`    | `/datasources/:id`                   | Chi tiết source                                      |
 | `PUT`    | `/datasources/:id`                   | Update metadata/config theo state guard              |
-| `DELETE` | `/datasources/:id`                   | Soft delete                                          |
+| `POST`   | `/datasources/:id/archive`           | Archive source                                       |
+| `DELETE` | `/datasources/:id`                   | Soft delete sau khi source đã `ARCHIVED`             |
 | `POST`   | `/datasources/:id/targets/keywords`  | Tạo grouped keyword target với `values[]`            |
 | `POST`   | `/datasources/:id/targets/profiles`  | Tạo grouped profile target với `values[]` URL        |
 | `POST`   | `/datasources/:id/targets/posts`     | Tạo grouped post target với `values[]` URL           |
@@ -136,7 +137,7 @@ ingest-srv/
 
 ### Module 2: Dry Run & Onboarding (`dryrun`)
 
-**Trách nhiệm:** Chạy dry run validation-only trước khi activate, hỗ trợ preview/confirm mapping cho passive source, lưu kết quả sample/control-plane.
+**Trách nhiệm:** Chạy dry run async qua RabbitMQ + `scapper-srv` trước khi activate, hỗ trợ preview/confirm mapping cho passive source, lưu kết quả sample/control-plane.
 
 **Endpoints:**
 
@@ -151,11 +152,14 @@ ingest-srv/
 **Business Rules:**
 
 - Dry run chỉ chạy khi source ở `PENDING` hoặc `READY`.
-- Phase 2 hiện là **control-plane only**: không publish RabbitMQ, không tạo `external_task`, không gọi crawler thật.
+- Dry run cho crawl source publish task qua RabbitMQ, không tạo `scheduled_job`/`external_task`; lineage chính nằm ở `dryrun_results.job_id = task_id`.
+- Completion của worker quay về queue `ingest_task_completions`; ingest consumer branch execution completion và dry-run completion trên cùng queue.
+- Nếu request không truyền `sample_limit` thì mặc định dùng `10`.
 - Kết quả pass hiện trả `WARNING` → source chuyển `READY`, cập nhật `dryrun_last_result_id`.
 - Kết quả WARNING → source vẫn `READY` nhưng hiển thị warning.
 - Kết quả FAILED → source vẫn `PENDING`, user phải sửa config.
 - Dry run cho CRAWL source: thực hiện **per-target-group**; request phải có `target_id`.
+- Activation readiness của crawl chỉ pass khi mọi grouped target đều đã có latest dry run và không có target nào `FAILED`.
 - Dry run cho FILE_UPLOAD: TODO - parse sample từ file đã upload.
 - Với `FILE_UPLOAD` và `WEBHOOK`, preview/confirm mapping cập nhật trực tiếp `data_sources.mapping_rules` trong V1. (TODO)
 - Mapping preview/confirm chỉ áp dụng cho source `PASSIVE`; source `CRAWL` không dùng flow này.
@@ -308,7 +312,7 @@ raw_batch (RECEIVED)
 - `project.activated`: chỉ activate nguồn đang `READY`, không activate `PENDING` hoặc `FAILED`.
 - `project.paused`: dừng tất cả crawler + webhook + scheduler cho project.
 - `project.resumed`: chỉ resume nguồn trước đó bị `PAUSED` (không tự resume `FAILED`).
-- `project.archived`: soft delete tất cả source, ghi `archived_at`.
+- `project.archived`: chuyển tất cả source runtime về trạng thái archive/pause phù hợp ở orchestration layer; không đồng nghĩa user-facing `DELETE`.
 - Mỗi lần đổi trạng thái source, phát Kafka event tương ứng (`ingest.source.activated`...).
 - Khi consume `project.activated`, ingest chỉ activate source đang `READY`; không bypass bước validate/dry run.
 - Khi consume `project.paused` hoặc `project.archived`, webhook source phải ngừng nhận dữ liệu mới ở receiver layer.

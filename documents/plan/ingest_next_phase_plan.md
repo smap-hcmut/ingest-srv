@@ -194,7 +194,7 @@ Gap còn lại chủ yếu là:
 - update/delete/detail target sai datasource owner -> fail
 
 2. Repository tests
-- create/detail/list/update/archive datasource
+- create/detail/list/update/archive/delete datasource
 - create/detail/list/update/delete target
 - query ownership theo `(data_source_id, target_id)`
 

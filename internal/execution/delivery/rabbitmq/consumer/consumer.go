@@ -30,8 +30,8 @@ func (c Consumer) consume(ctx context.Context, queue rabbitmq.QueueArgs, consume
 	if c.conn == nil {
 		return fmt.Errorf("rabbitmq client is required")
 	}
-	if c.uc == nil {
-		return fmt.Errorf("execution usecase is required")
+	if c.execUC == nil {
+		return fmt.Errorf("execution consumer usecase is required")
 	}
 
 	ch, err := c.conn.Channel()

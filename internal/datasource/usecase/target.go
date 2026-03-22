@@ -38,6 +38,9 @@ func (uc *implUseCase) createTarget(ctx context.Context, input datasource.Create
 	if ds.ID == "" {
 		return datasource.CreateTargetOutput{}, datasource.ErrNotFound
 	}
+	if err := uc.ensureDataSourceNotArchived(ds); err != nil {
+		return datasource.CreateTargetOutput{}, err
+	}
 	if ds.SourceCategory != model.SourceCategoryCrawl {
 		return datasource.CreateTargetOutput{}, datasource.ErrSourceNotCrawl
 	}
@@ -50,10 +53,10 @@ func (uc *implUseCase) createTarget(ctx context.Context, input datasource.Create
 	opt := repo.CreateTargetOptions{
 		DataSourceID:         strings.TrimSpace(input.DataSourceID),
 		TargetType:           string(targetType),
-		Values:               values,
+		Values:               model.TypesJSONFromStringSlice(values),
 		Label:                input.Label,
 		PlatformMeta:         input.PlatformMeta,
-		IsActive:             input.IsActive,
+		IsActive:             false,
 		Priority:             input.Priority,
 		CrawlIntervalMinutes: input.CrawlIntervalMinutes,
 	}
@@ -126,24 +129,36 @@ func (uc *implUseCase) UpdateTarget(ctx context.Context, input datasource.Update
 		}
 		return datasource.UpdateTargetOutput{}, datasource.ErrTargetUpdateFailed
 	}
+	if err := uc.ensureTargetDryrunNotRunning(ctx, current.ID); err != nil {
+		uc.l.Warnf(ctx, "datasource.usecase.UpdateTarget.ensureTargetDryrunNotRunning: target_id=%s err=%v", current.ID, err)
+		return datasource.UpdateTargetOutput{}, err
+	}
 
 	var values []string
+	valuesForComparison := current.Values
 	if input.Values != nil {
 		values, err = uc.prepareTargetValues(current.TargetType, input.Values)
 		if err != nil {
 			return datasource.UpdateTargetOutput{}, err
 		}
+		valuesForComparison = values
 	}
+	materialChanged := uc.hasMaterialTargetChange(current, valuesForComparison, input)
 
 	opt := repo.UpdateTargetOptions{
 		DataSourceID:         strings.TrimSpace(input.DataSourceID),
 		ID:                   strings.TrimSpace(input.ID),
-		Values:               values,
 		Label:                input.Label,
 		PlatformMeta:         input.PlatformMeta,
-		IsActive:             input.IsActive,
 		Priority:             input.Priority,
 		CrawlIntervalMinutes: input.CrawlIntervalMinutes,
+	}
+	if input.Values != nil {
+		opt.Values = model.TypesJSONFromStringSlice(values)
+	}
+	if materialChanged && current.IsActive {
+		disabled := false
+		opt.IsActive = &disabled
 	}
 
 	result, err := uc.repo.UpdateTarget(ctx, opt)
@@ -154,8 +169,118 @@ func (uc *implUseCase) UpdateTarget(ctx context.Context, input datasource.Update
 		}
 		return datasource.UpdateTargetOutput{}, datasource.ErrTargetUpdateFailed
 	}
+	if materialChanged {
+		if err := uc.markDatasourcePendingAfterMaterialTargetChange(ctx, strings.TrimSpace(input.DataSourceID)); err != nil {
+			uc.l.Errorf(ctx, "datasource.usecase.UpdateTarget.markDatasourcePendingAfterMaterialTargetChange: source_id=%s target_id=%s err=%v", input.DataSourceID, input.ID, err)
+			return datasource.UpdateTargetOutput{}, err
+		}
+	}
 
 	return datasource.UpdateTargetOutput{Target: result}, nil
+}
+
+// ActivateTarget enables one crawl target after dryrun evidence is available.
+func (uc *implUseCase) ActivateTarget(ctx context.Context, input datasource.ActivateTargetInput) (datasource.ActivateTargetOutput, error) {
+	if err := uc.validActivateTargetInput(input); err != nil {
+		uc.l.Warnf(ctx, "datasource.usecase.ActivateTarget.validActivateTargetInput: %v", err)
+		return datasource.ActivateTargetOutput{}, err
+	}
+
+	current, err := uc.repo.GetTarget(ctx, repo.GetTargetOptions{
+		DataSourceID: strings.TrimSpace(input.DataSourceID),
+		ID:           strings.TrimSpace(input.ID),
+	})
+	if err != nil {
+		uc.l.Errorf(ctx, "datasource.usecase.ActivateTarget.repo.GetTarget: id=%s err=%v", input.ID, err)
+		if err == repo.ErrTargetNotFound {
+			return datasource.ActivateTargetOutput{}, datasource.ErrTargetNotFound
+		}
+		return datasource.ActivateTargetOutput{}, datasource.ErrTargetUpdateFailed
+	}
+	if err := uc.ensureTargetDryrunNotRunning(ctx, current.ID); err != nil {
+		uc.l.Warnf(ctx, "datasource.usecase.ActivateTarget.ensureTargetDryrunNotRunning: target_id=%s err=%v", current.ID, err)
+		return datasource.ActivateTargetOutput{}, err
+	}
+
+	if current.IsActive {
+		return datasource.ActivateTargetOutput{Target: current}, nil
+	}
+
+	latest, err := uc.repo.GetLatestDryrunByTarget(ctx, current.ID)
+	if err != nil {
+		uc.l.Errorf(ctx, "datasource.usecase.ActivateTarget.repo.GetLatestDryrunByTarget: target_id=%s err=%v", current.ID, err)
+		return datasource.ActivateTargetOutput{}, datasource.ErrTargetUpdateFailed
+	}
+	if latest.ID == "" || !model.IsUsableDryrunStatus(latest.Status) {
+		return datasource.ActivateTargetOutput{}, datasource.ErrTargetActivateNotAllowed
+	}
+
+	enabled := true
+	updated, err := uc.repo.UpdateTarget(ctx, repo.UpdateTargetOptions{
+		DataSourceID: strings.TrimSpace(input.DataSourceID),
+		ID:           strings.TrimSpace(input.ID),
+		IsActive:     &enabled,
+	})
+	if err != nil {
+		uc.l.Errorf(ctx, "datasource.usecase.ActivateTarget.repo.UpdateTarget: id=%s err=%v", input.ID, err)
+		if err == repo.ErrTargetNotFound {
+			return datasource.ActivateTargetOutput{}, datasource.ErrTargetNotFound
+		}
+		return datasource.ActivateTargetOutput{}, datasource.ErrTargetUpdateFailed
+	}
+
+	return datasource.ActivateTargetOutput{Target: updated}, nil
+}
+
+// DeactivateTarget disables one crawl target.
+func (uc *implUseCase) DeactivateTarget(ctx context.Context, input datasource.DeactivateTargetInput) (datasource.DeactivateTargetOutput, error) {
+	if err := uc.validDeactivateTargetInput(input); err != nil {
+		uc.l.Warnf(ctx, "datasource.usecase.DeactivateTarget.validDeactivateTargetInput: %v", err)
+		return datasource.DeactivateTargetOutput{}, err
+	}
+
+	current, err := uc.repo.GetTarget(ctx, repo.GetTargetOptions{
+		DataSourceID: strings.TrimSpace(input.DataSourceID),
+		ID:           strings.TrimSpace(input.ID),
+	})
+	if err != nil {
+		uc.l.Errorf(ctx, "datasource.usecase.DeactivateTarget.repo.GetTarget: id=%s err=%v", input.ID, err)
+		if err == repo.ErrTargetNotFound {
+			return datasource.DeactivateTargetOutput{}, datasource.ErrTargetNotFound
+		}
+		return datasource.DeactivateTargetOutput{}, datasource.ErrTargetUpdateFailed
+	}
+	if err := uc.ensureTargetDryrunNotRunning(ctx, current.ID); err != nil {
+		uc.l.Warnf(ctx, "datasource.usecase.DeactivateTarget.ensureTargetDryrunNotRunning: target_id=%s err=%v", current.ID, err)
+		return datasource.DeactivateTargetOutput{}, err
+	}
+
+	if !current.IsActive {
+		return datasource.DeactivateTargetOutput{Target: current}, nil
+	}
+
+	if err := uc.ensureCanRemoveActiveTarget(ctx, input.DataSourceID, current.IsActive, datasource.ErrTargetDeactivateNotAllowed); err != nil {
+		if err == datasource.ErrNotFound || err == datasource.ErrTargetDeactivateNotAllowed {
+			return datasource.DeactivateTargetOutput{}, err
+		}
+		return datasource.DeactivateTargetOutput{}, datasource.ErrTargetUpdateFailed
+	}
+
+	disabled := false
+	updated, err := uc.repo.UpdateTarget(ctx, repo.UpdateTargetOptions{
+		DataSourceID: strings.TrimSpace(input.DataSourceID),
+		ID:           strings.TrimSpace(input.ID),
+		IsActive:     &disabled,
+	})
+	if err != nil {
+		uc.l.Errorf(ctx, "datasource.usecase.DeactivateTarget.repo.UpdateTarget: id=%s err=%v", input.ID, err)
+		if err == repo.ErrTargetNotFound {
+			return datasource.DeactivateTargetOutput{}, datasource.ErrTargetNotFound
+		}
+		return datasource.DeactivateTargetOutput{}, datasource.ErrTargetUpdateFailed
+	}
+
+	return datasource.DeactivateTargetOutput{Target: updated}, nil
 }
 
 // DeleteTarget hard-deletes a crawl target by ID with datasource ownership check.
@@ -163,6 +288,29 @@ func (uc *implUseCase) DeleteTarget(ctx context.Context, input datasource.Delete
 	if err := uc.validDeleteTargetInput(input); err != nil {
 		uc.l.Warnf(ctx, "datasource.usecase.DeleteTarget.validDeleteTargetInput: %v", err)
 		return err
+	}
+
+	current, err := uc.repo.GetTarget(ctx, repo.GetTargetOptions{
+		DataSourceID: strings.TrimSpace(input.DataSourceID),
+		ID:           strings.TrimSpace(input.ID),
+	})
+	if err != nil {
+		uc.l.Errorf(ctx, "datasource.usecase.DeleteTarget.repo.GetTarget: id=%s err=%v", input.ID, err)
+		if err == repo.ErrTargetNotFound {
+			return datasource.ErrTargetNotFound
+		}
+		return datasource.ErrTargetDeleteFailed
+	}
+	if err := uc.ensureTargetDryrunNotRunning(ctx, current.ID); err != nil {
+		uc.l.Warnf(ctx, "datasource.usecase.DeleteTarget.ensureTargetDryrunNotRunning: target_id=%s err=%v", current.ID, err)
+		return err
+	}
+
+	if err := uc.ensureCanRemoveActiveTarget(ctx, input.DataSourceID, current.IsActive, datasource.ErrTargetDeleteNotAllowed); err != nil {
+		if err == datasource.ErrNotFound || err == datasource.ErrTargetDeleteNotAllowed {
+			return err
+		}
+		return datasource.ErrTargetDeleteFailed
 	}
 
 	if err := uc.repo.DeleteTarget(ctx, repo.DeleteTargetOptions{

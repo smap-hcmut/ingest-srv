@@ -1,30 +1,36 @@
 package usecase
 
 import (
-	dsRepo "ingest-srv/internal/datasource/repository"
+	"time"
+
+	"ingest-srv/internal/datasource"
 	"ingest-srv/internal/dryrun"
+	dryrunProducer "ingest-srv/internal/dryrun/delivery/rabbitmq/producer"
 	dryrunRepo "ingest-srv/internal/dryrun/repository"
 
 	"github.com/smap-hcmut/shared-libs/go/log"
+	"github.com/smap-hcmut/shared-libs/go/minio"
 )
 
-type executor interface {
-	Execute(input executionInput) executionResult
-}
-
 type implUseCase struct {
-	l      log.Logger
-	repo   dryrunRepo.Repository
-	dsRepo dsRepo.Repository
-	exec   executor
+	l         log.Logger
+	repo      dryrunRepo.Repository
+	dsUC      datasource.UseCase
+	minio     minio.MinIO
+	publisher dryrunProducer.Producer
+	now       func() time.Time
 }
 
-// New creates a dryrun usecase with the local validation executor.
-func New(l log.Logger, repo dryrunRepo.Repository, dsRepo dsRepo.Repository) dryrun.UseCase {
+var _ dryrun.UseCase = (*implUseCase)(nil)
+
+// New creates a new dryrun usecase.
+func New(l log.Logger, repo dryrunRepo.Repository, dsUC datasource.UseCase, minioClient minio.MinIO, publisher dryrunProducer.Producer) dryrun.UseCase {
 	return &implUseCase{
-		l:      l,
-		repo:   repo,
-		dsRepo: dsRepo,
-		exec:   localExecutor{},
+		l:         l,
+		repo:      repo,
+		dsUC:      dsUC,
+		minio:     minioClient,
+		publisher: publisher,
+		now:       func() time.Time { return time.Now().UTC() },
 	}
 }

@@ -14,7 +14,8 @@ func (h *handler) RegisterRoutes(r *gin.RouterGroup, mw *middleware.Middleware) 
 		sources.GET("", h.List)
 		sources.GET("/:id", h.Detail)
 		sources.PUT("/:id", h.Update)
-		sources.DELETE("/:id", h.Archive)
+		sources.POST("/:id/archive", h.Archive)
+		sources.DELETE("/:id", h.Delete)
 
 		// CrawlTarget sub-resource routes.
 		targets := sources.Group("/:id/targets")
@@ -25,6 +26,8 @@ func (h *handler) RegisterRoutes(r *gin.RouterGroup, mw *middleware.Middleware) 
 			targets.GET("", h.ListTargets)
 			targets.GET("/:target_id", h.DetailTarget)
 			targets.PUT("/:target_id", h.UpdateTarget)
+			targets.POST("/:target_id/activate", h.ActivateTarget)
+			targets.POST("/:target_id/deactivate", h.DeactivateTarget)
 			targets.DELETE("/:target_id", h.DeleteTarget)
 		}
 	}
@@ -36,5 +39,14 @@ func (h *handler) RegisterInternalRoutes(r *gin.RouterGroup, mw *middleware.Midd
 	sources.Use(mw.InternalAuth())
 	{
 		sources.PUT("/:id/crawl-mode", h.UpdateCrawlMode)
+	}
+
+	projects := r.Group("/projects")
+	projects.Use(mw.InternalAuth())
+	{
+		projects.GET("/:project_id/activation-readiness", h.GetActivationReadiness)
+		projects.POST("/:project_id/activate", h.Activate)
+		projects.POST("/:project_id/pause", h.Pause)
+		projects.POST("/:project_id/resume", h.Resume)
 	}
 }

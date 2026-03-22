@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"ingest-srv/internal/execution"
+	executionRabbit "ingest-srv/internal/execution/delivery/rabbitmq"
 	repo "ingest-srv/internal/execution/repository"
 	"ingest-srv/internal/model"
 
@@ -31,10 +32,20 @@ func (uc *implUseCase) validateDispatchContext(ctx repo.DispatchContext) error {
 	return nil
 }
 
+func (uc *implUseCase) validateScheduledDispatchContext(ctx repo.DispatchContext) error {
+	if err := uc.validateDispatchContext(ctx); err != nil {
+		return err
+	}
+	if ctx.Source.Status != model.SourceStatusActive {
+		return execution.ErrDispatchNotAllowed
+	}
+	return nil
+}
+
 func (uc *implUseCase) buildDispatchSpecs(source model.DataSource, target model.CrawlTarget) ([]execution.DispatchSpec, error) {
 	switch {
 	case source.SourceType == model.SourceTypeTikTok && target.TargetType == model.TargetTypeKeyword:
-		keywords := extractKeywords(target.Values)
+		keywords := uc.extractKeywords(target.Values)
 		if len(keywords) == 0 {
 			uc.l.Warnf(context.Background(), "execution.usecase.buildDispatchSpecs.tiktokFullFlowInvalidKeywordTarget: target_id=%s keyword_count=%d", target.ID, len(target.Values))
 			return nil, execution.ErrDispatchNotAllowed
@@ -42,26 +53,26 @@ func (uc *implUseCase) buildDispatchSpecs(source model.DataSource, target model.
 		specs := make([]execution.DispatchSpec, 0, len(keywords))
 		for _, keyword := range keywords {
 			specs = append(specs, execution.DispatchSpec{
-				Queue:   tikTokTasksQueue,
-				Action:  actionFullFlow,
+				Queue:   execution.QueueName(executionRabbit.TikTokTasksQueueName),
+				Action:  execution.ActionNameFullFlow,
 				Keyword: keyword,
 				Params: map[string]interface{}{
 					"keyword":       keyword,
-					"limit":         tikTokFullFlowLimit,
-					"threshold":     tikTokFullFlowThreshold,
-					"comment_count": tikTokFullFlowCommentCount,
+					"limit":         execution.TikTokFullFlowLimit,
+					"threshold":     execution.TikTokFullFlowThreshold,
+					"comment_count": execution.TikTokFullFlowCommentCount,
 				},
 			})
 		}
 		return specs, nil
 	case source.SourceType == model.SourceTypeFacebook && target.TargetType == model.TargetTypePostURL:
-		parseIDs, err := parseFacebookParseIDs(target.PlatformMeta)
+		parseIDs, err := uc.parseFacebookParseIDs(target.PlatformMeta)
 		if err != nil {
 			return nil, err
 		}
 		return []execution.DispatchSpec{{
-			Queue:  facebookTasksQueue,
-			Action: actionPostDetail,
+			Queue:  execution.QueueName(executionRabbit.FacebookTasksQueueName),
+			Action: execution.ActionNamePostDetail,
 			Params: map[string]interface{}{
 				"parse_ids": parseIDs,
 			},
@@ -84,7 +95,7 @@ func (uc *implUseCase) verifyMinIOObject(ctx context.Context, bucket, path strin
 	}
 
 	var lastErr error
-	for attempt := 0; attempt < minioVerifyRetryAttempts; attempt++ {
+	for attempt := 0; attempt < execution.MinioVerifyRetryAttempts; attempt++ {
 		exists, err := uc.minio.FileExists(ctx, bucket, path)
 		if err == nil && exists {
 			info, statErr := uc.minio.GetFileInfo(ctx, bucket, path)
@@ -97,7 +108,7 @@ func (uc *implUseCase) verifyMinIOObject(ctx context.Context, bucket, path strin
 		} else {
 			lastErr = fmt.Errorf("minio object missing bucket=%s path=%s", bucket, path)
 		}
-		if attempt < minioVerifyRetryAttempts-1 {
+		if attempt < execution.MinioVerifyRetryAttempts-1 {
 			uc.sleep(200 * time.Millisecond)
 		}
 	}
@@ -116,7 +127,7 @@ func (uc *implUseCase) mapRepositoryError(err error) error {
 	}
 }
 
-func validateCompletionInput(input execution.HandleCompletionInput) error {
+func (uc *implUseCase) validateCompletionInput(input execution.HandleCompletionInput) error {
 	if strings.TrimSpace(input.TaskID) == "" {
 		return execution.ErrInvalidCompletionInput
 	}
@@ -132,29 +143,46 @@ func validateCompletionInput(input execution.HandleCompletionInput) error {
 	return nil
 }
 
-func parseFacebookParseIDs(platformMeta json.RawMessage) ([]string, error) {
+func (uc *implUseCase) parseFacebookParseIDs(platformMeta json.RawMessage) ([]string, error) {
 	if len(platformMeta) == 0 {
 		return nil, execution.ErrPlatformMetaParseIDs
 	}
 
-	var payload struct {
-		ParseIDs []string `json:"parse_ids"`
-	}
+	var payload map[string]interface{}
 	if err := json.Unmarshal(platformMeta, &payload); err != nil {
 		return nil, execution.ErrPlatformMetaParseIDs
 	}
-	if len(payload.ParseIDs) == 0 {
+
+	rawParseIDs, ok := payload["parse_ids"].([]interface{})
+	if !ok || len(rawParseIDs) == 0 {
 		return nil, execution.ErrPlatformMetaParseIDs
 	}
-	return payload.ParseIDs, nil
+
+	parseIDs := make([]string, 0, len(rawParseIDs))
+	for _, item := range rawParseIDs {
+		id, ok := item.(string)
+		if !ok {
+			return nil, execution.ErrPlatformMetaParseIDs
+		}
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		parseIDs = append(parseIDs, id)
+	}
+	if len(parseIDs) == 0 {
+		return nil, execution.ErrPlatformMetaParseIDs
+	}
+
+	return parseIDs, nil
 }
 
-func buildJobPayload(specs []execution.DispatchSpec, input execution.DispatchTargetInput) json.RawMessage {
+func (uc *implUseCase) buildJobPayload(specs []execution.DispatchSpec, input execution.DispatchTargetInput) json.RawMessage {
 	var queue string
 	var action string
 	if len(specs) > 0 {
-		queue = specs[0].Queue
-		action = specs[0].Action
+		queue = string(specs[0].Queue)
+		action = string(specs[0].Action)
 	}
 
 	tasks := make([]map[string]interface{}, 0, len(specs))
@@ -167,7 +195,7 @@ func buildJobPayload(specs []execution.DispatchSpec, input execution.DispatchTar
 			task["keyword"] = spec.Keyword
 		}
 		if len(spec.Params) > 0 {
-			task["params"] = cloneParams(spec.Params)
+			task["params"] = uc.cloneParams(spec.Params)
 		}
 		tasks = append(tasks, task)
 	}
@@ -198,7 +226,7 @@ func buildJobPayload(specs []execution.DispatchSpec, input execution.DispatchTar
 	return data
 }
 
-func cloneParams(input map[string]interface{}) map[string]interface{} {
+func (uc *implUseCase) cloneParams(input map[string]interface{}) map[string]interface{} {
 	if len(input) == 0 {
 		return nil
 	}
@@ -210,7 +238,7 @@ func cloneParams(input map[string]interface{}) map[string]interface{} {
 	return out
 }
 
-func parseInt64(v interface{}) *int64 {
+func (uc *implUseCase) parseInt64(v interface{}) *int64 {
 	switch val := v.(type) {
 	case int:
 		parsed := int64(val)
@@ -231,7 +259,7 @@ func parseInt64(v interface{}) *int64 {
 	return nil
 }
 
-func marshalMetadata(metadata map[string]interface{}) (json.RawMessage, error) {
+func (uc *implUseCase) marshalMetadata(metadata map[string]interface{}) (json.RawMessage, error) {
 	if len(metadata) == 0 {
 		return nil, nil
 	}
@@ -242,11 +270,11 @@ func marshalMetadata(metadata map[string]interface{}) (json.RawMessage, error) {
 	return data, nil
 }
 
-func isTerminalFailure(status model.JobStatus) bool {
+func (uc *implUseCase) isTerminalFailure(status model.JobStatus) bool {
 	return status == model.JobStatusFailed || status == model.JobStatusCancelled
 }
 
-func computeEffectiveInterval(source model.DataSource, target model.CrawlTarget) (time.Duration, error) {
+func (uc *implUseCase) computeEffectiveInterval(source model.DataSource, target model.CrawlTarget) (time.Duration, error) {
 	if source.CrawlMode == nil {
 		return 0, fmt.Errorf("crawl mode is required")
 	}
@@ -254,50 +282,50 @@ func computeEffectiveInterval(source model.DataSource, target model.CrawlTarget)
 		return 0, fmt.Errorf("crawl interval minutes must be greater than 0")
 	}
 
-	multiplier, err := getModeMultiplier(*source.CrawlMode)
+	multiplier, err := uc.getModeMultiplier(*source.CrawlMode)
 	if err != nil {
 		return 0, err
 	}
 
 	effectiveMinutes := int(math.Round(float64(target.CrawlIntervalMinutes) * multiplier))
-	if effectiveMinutes < defaultMinIntervalMinute {
-		effectiveMinutes = defaultMinIntervalMinute
+	if effectiveMinutes < execution.DefaultMinIntervalMinute {
+		effectiveMinutes = execution.DefaultMinIntervalMinute
 	}
-	if effectiveMinutes > defaultMaxIntervalMinute {
-		effectiveMinutes = defaultMaxIntervalMinute
+	if effectiveMinutes > execution.DefaultMaxIntervalMinute {
+		effectiveMinutes = execution.DefaultMaxIntervalMinute
 	}
 
 	return time.Duration(effectiveMinutes) * time.Minute, nil
 }
 
-func getModeMultiplier(mode model.CrawlMode) (float64, error) {
+func (uc *implUseCase) getModeMultiplier(mode model.CrawlMode) (float64, error) {
 	switch mode {
 	case model.CrawlModeNormal:
-		return normalModeMultiplier, nil
+		return execution.NormalModeMultiplier, nil
 	case model.CrawlModeCrisis:
-		return crisisModeMultiplier, nil
+		return execution.CrisisModeMultiplier, nil
 	case model.CrawlModeSleep:
-		return sleepModeMultiplier, nil
+		return execution.SleepModeMultiplier, nil
 	default:
 		return 0, fmt.Errorf("unsupported crawl mode %s", mode)
 	}
 }
 
-func derefCrawlMode(mode *model.CrawlMode) string {
+func (uc *implUseCase) derefCrawlMode(mode *model.CrawlMode) string {
 	if mode == nil {
 		return ""
 	}
 	return string(*mode)
 }
 
-func formatTimePtr(value *time.Time) string {
+func (uc *implUseCase) formatTimePtr(value *time.Time) string {
 	if value == nil {
 		return ""
 	}
 	return value.Format(time.RFC3339)
 }
 
-func extractKeywords(values []string) []string {
+func (uc *implUseCase) extractKeywords(values []string) []string {
 	keywords := make([]string, 0, len(values))
 	for _, value := range values {
 		keyword := strings.TrimSpace(value)

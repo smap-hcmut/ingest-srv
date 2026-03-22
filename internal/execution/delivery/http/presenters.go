@@ -3,6 +3,7 @@ package http
 import (
 	"strings"
 
+	"github.com/google/uuid"
 	"ingest-srv/internal/execution"
 )
 
@@ -12,7 +13,7 @@ type dispatchReq struct {
 }
 
 func (r dispatchReq) validate() error {
-	if strings.TrimSpace(r.DataSourceID) == "" || strings.TrimSpace(r.TargetID) == "" {
+	if !isValidUUID(strings.TrimSpace(r.DataSourceID)) || !isValidUUID(strings.TrimSpace(r.TargetID)) {
 		return errWrongPath
 	}
 	return nil
@@ -26,11 +27,11 @@ func (r dispatchReq) toInput() execution.DispatchTargetManuallyInput {
 }
 
 type dispatchResp struct {
-	ScheduledJobID string `json:"scheduled_job_id"`
-	Status         string `json:"status"`
-	TaskCount      int    `json:"task_count"`
-	PublishedCount int    `json:"published_count"`
-	FailedCount    int    `json:"failed_count"`
+	ScheduledJobID string             `json:"scheduled_job_id"`
+	Status         string             `json:"status"`
+	TaskCount      int                `json:"task_count"`
+	PublishedCount int                `json:"published_count"`
+	FailedCount    int                `json:"failed_count"`
 	Tasks          []dispatchTaskResp `json:"tasks"`
 }
 
@@ -66,4 +67,9 @@ func (h *handler) newDispatchResp(o execution.DispatchTargetManuallyOutput) disp
 		FailedCount:    o.FailedCount,
 		Tasks:          tasks,
 	}
+}
+
+func isValidUUID(value string) bool {
+	_, err := uuid.Parse(strings.TrimSpace(value))
+	return err == nil
 }

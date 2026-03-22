@@ -162,12 +162,10 @@ func (r *implRepository) updateTargetSuccess(ctx context.Context, exec boil.Cont
 		r.l.Errorf(ctx, "execution.repository.updateTargetSuccess.FindTarget: %v", err)
 		return repository.ErrCompleteTask
 	}
-	row.LastCrawlAt = null.TimeFrom(completedAt)
 	row.LastSuccessAt = null.TimeFrom(completedAt)
 	row.LastErrorAt = null.Time{}
 	row.LastErrorMessage = null.String{}
 	if _, err := row.Update(ctx, exec, boil.Whitelist(
-		sqlboiler.CrawlTargetColumns.LastCrawlAt,
 		sqlboiler.CrawlTargetColumns.LastSuccessAt,
 		sqlboiler.CrawlTargetColumns.LastErrorAt,
 		sqlboiler.CrawlTargetColumns.LastErrorMessage,
@@ -187,11 +185,9 @@ func (r *implRepository) updateTargetFailure(ctx context.Context, exec boil.Cont
 		r.l.Errorf(ctx, "execution.repository.updateTargetFailure.FindTarget: %v", err)
 		return repository.ErrUpdateDispatch
 	}
-	row.LastCrawlAt = null.TimeFrom(completedAt)
 	row.LastErrorAt = null.TimeFrom(completedAt)
 	row.LastErrorMessage = null.StringFrom(errorMessage)
 	if _, err := row.Update(ctx, exec, boil.Whitelist(
-		sqlboiler.CrawlTargetColumns.LastCrawlAt,
 		sqlboiler.CrawlTargetColumns.LastErrorAt,
 		sqlboiler.CrawlTargetColumns.LastErrorMessage,
 	)); err != nil {
@@ -207,12 +203,10 @@ func (r *implRepository) updateSourceSuccess(ctx context.Context, exec boil.Cont
 		r.l.Errorf(ctx, "execution.repository.updateSourceSuccess.FindSource: %v", err)
 		return repository.ErrCompleteTask
 	}
-	row.LastCrawlAt = null.TimeFrom(completedAt)
 	row.LastSuccessAt = null.TimeFrom(completedAt)
 	row.LastErrorAt = null.Time{}
 	row.LastErrorMessage = null.String{}
 	if _, err := row.Update(ctx, exec, boil.Whitelist(
-		sqlboiler.DataSourceColumns.LastCrawlAt,
 		sqlboiler.DataSourceColumns.LastSuccessAt,
 		sqlboiler.DataSourceColumns.LastErrorAt,
 		sqlboiler.DataSourceColumns.LastErrorMessage,
@@ -229,11 +223,9 @@ func (r *implRepository) updateSourceFailure(ctx context.Context, exec boil.Cont
 		r.l.Errorf(ctx, "execution.repository.updateSourceFailure.FindSource: %v", err)
 		return repository.ErrUpdateDispatch
 	}
-	row.LastCrawlAt = null.TimeFrom(completedAt)
 	row.LastErrorAt = null.TimeFrom(completedAt)
 	row.LastErrorMessage = null.StringFrom(errorMessage)
 	if _, err := row.Update(ctx, exec, boil.Whitelist(
-		sqlboiler.DataSourceColumns.LastCrawlAt,
 		sqlboiler.DataSourceColumns.LastErrorAt,
 		sqlboiler.DataSourceColumns.LastErrorMessage,
 	)); err != nil {
@@ -270,14 +262,25 @@ func expectedDispatchTaskCount(payload null.JSON, fallback int) int {
 		return fallback
 	}
 
-	var decoded struct {
-		TaskCount int `json:"task_count"`
-	}
+	var decoded map[string]interface{}
 	if err := json.Unmarshal(payload.JSON, &decoded); err != nil {
 		return fallback
 	}
-	if decoded.TaskCount <= 0 {
+	taskCount, ok := decoded["task_count"]
+	if !ok {
 		return fallback
 	}
-	return decoded.TaskCount
+
+	switch v := taskCount.(type) {
+	case float64:
+		if int(v) > 0 {
+			return int(v)
+		}
+	case int:
+		if v > 0 {
+			return v
+		}
+	}
+
+	return fallback
 }

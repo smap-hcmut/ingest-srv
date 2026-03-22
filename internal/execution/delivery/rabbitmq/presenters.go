@@ -33,7 +33,7 @@ type CompletionMessage struct {
 func NewDispatchMessage(input execution.PublishDispatchInput) DispatchMessage {
 	return DispatchMessage{
 		TaskID:    input.TaskID,
-		Action:    input.Action,
+		Action:    string(input.Action),
 		Params:    input.Params,
 		CreatedAt: input.CreatedAt.Format(time.RFC3339),
 	}

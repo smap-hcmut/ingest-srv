@@ -1,10 +1,10 @@
 package usecase
 
 import (
-	"context"
 	"time"
 
 	"ingest-srv/internal/execution"
+	executionProducer "ingest-srv/internal/execution/delivery/rabbitmq/producer"
 	repo "ingest-srv/internal/execution/repository"
 	"ingest-srv/internal/uap"
 
@@ -12,20 +12,12 @@ import (
 	"github.com/smap-hcmut/shared-libs/go/minio"
 )
 
-type taskPublisher interface {
-	PublishDispatch(ctx context.Context, input execution.PublishDispatchInput) error
-}
-
-type rawBatchParser interface {
-	ParseAndStoreRawBatch(ctx context.Context, input uap.ParseAndStoreRawBatchInput) error
-}
-
 type implUseCase struct {
 	l         log.Logger
 	repo      repo.Repository
 	minio     minio.MinIO
-	publisher taskPublisher
-	parser    rawBatchParser
+	publisher executionProducer.Producer
+	parser    uap.UseCase
 	now       func() time.Time
 	sleep     func(time.Duration)
 }
@@ -33,7 +25,7 @@ type implUseCase struct {
 var _ execution.UseCase = (*implUseCase)(nil)
 
 // New creates a new execution usecase.
-func New(l log.Logger, repository repo.Repository, minioClient minio.MinIO, publisher taskPublisher, parser rawBatchParser) execution.UseCase {
+func New(l log.Logger, repository repo.Repository, minioClient minio.MinIO, publisher executionProducer.Producer, parser uap.UseCase) execution.UseCase {
 	return &implUseCase{
 		l:         l,
 		repo:      repository,

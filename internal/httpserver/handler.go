@@ -6,6 +6,7 @@ import (
 	datasourceRepo "ingest-srv/internal/datasource/repository/postgre"
 	datasourceUC "ingest-srv/internal/datasource/usecase"
 	dryrunHandler "ingest-srv/internal/dryrun/delivery/http"
+	dryrunProducer "ingest-srv/internal/dryrun/delivery/rabbitmq/producer"
 	dryrunRepo "ingest-srv/internal/dryrun/repository/postgre"
 	dryrunUC "ingest-srv/internal/dryrun/usecase"
 	executionHandler "ingest-srv/internal/execution/delivery/http"
@@ -13,6 +14,7 @@ import (
 	executionRepo "ingest-srv/internal/execution/repository/postgre"
 	executionUC "ingest-srv/internal/execution/usecase"
 	"ingest-srv/internal/model"
+	projectsrv "ingest-srv/pkg/microservice/project"
 
 	"github.com/gin-gonic/gin"
 	"github.com/smap-hcmut/shared-libs/go/auth"
@@ -36,11 +38,7 @@ func (srv HTTPServer) mapHandlers() error {
 	srv.registerIngestRoutes()
 
 	dataSRepo := datasourceRepo.New(srv.l, srv.postgresDB)
-	dataUC := datasourceUC.New(srv.l, dataSRepo)
-	datasourceHTTP := datasourceHandler.New(srv.l, dataUC, srv.discord)
-	dryrunResultRepo := dryrunRepo.New(srv.l, srv.postgresDB)
-	dryrunUseCase := dryrunUC.New(srv.l, dryrunResultRepo, dataSRepo)
-	dryrunHTTP := dryrunHandler.New(srv.l, dryrunUseCase, srv.discord)
+	projectSrv := projectsrv.New(srv.l, srv.microservice.Project.BaseURL, srv.microservice.Project.TimeoutMS, srv.cfg.InternalConfig.InternalKey)
 	execRepo := executionRepo.New(srv.l, srv.postgresDB)
 	execProducer := executionProducer.New(srv.l, srv.rabbitmq)
 	if err := execProducer.Run(); err != nil {
@@ -48,13 +46,23 @@ func (srv HTTPServer) mapHandlers() error {
 	}
 	execUseCase := executionUC.New(srv.l, execRepo, srv.minio, execProducer, nil)
 	execHTTP := executionHandler.New(srv.l, execUseCase, srv.discord)
+	dataUC := datasourceUC.New(srv.l, dataSRepo, projectSrv, execUseCase)
+	datasourceHTTP := datasourceHandler.New(srv.l, dataUC, srv.discord)
+	dryrunResultRepo := dryrunRepo.New(srv.l, srv.postgresDB)
+	dryrunDispatchProducer := dryrunProducer.New(srv.l, srv.rabbitmq)
+	if err := dryrunDispatchProducer.Run(); err != nil {
+		return err
+	}
+	dryrunUseCase := dryrunUC.New(srv.l, dryrunResultRepo, dataUC, srv.minio, dryrunDispatchProducer)
+	dryrunHTTP := dryrunHandler.New(srv.l, dryrunUseCase, srv.discord)
 
 	apiV1 := srv.gin.Group(model.APIV1Prefix)
 	datasourceHTTP.RegisterRoutes(apiV1, mw)
 	dryrunHTTP.RegisterRoutes(apiV1, mw)
-	ingestAPI := apiV1.Group("/ingest")
-	datasourceHTTP.RegisterInternalRoutes(ingestAPI, mw)
-	execHTTP.RegisterInternalRoutes(ingestAPI, mw)
+
+	internalAPI := apiV1.Group("/internal")
+	datasourceHTTP.RegisterInternalRoutes(internalAPI, mw)
+	execHTTP.RegisterInternalRoutes(internalAPI, mw)
 
 	return nil
 }

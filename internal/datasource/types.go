@@ -66,9 +66,80 @@ type UpdateOutput struct {
 	DataSource model.DataSource
 }
 
-// ActivateInput transitions a datasource into ACTIVE when preconditions are met.
-type ActivateInput struct {
-	ID string
+type MarkDryrunRunningInput struct {
+	ID                 string
+	DryrunLastResultID string
+}
+
+type MarkDryrunRunningOutput struct {
+	DataSource model.DataSource
+}
+
+type ApplyDryrunResultInput struct {
+	ID                 string
+	DryrunLastResultID string
+	DryrunStatus       string
+}
+
+type ApplyDryrunResultOutput struct {
+	DataSource model.DataSource
+}
+
+// ActivationReadinessError describes one readiness blocker.
+type ActivationReadinessError struct {
+	Code         string
+	Message      string
+	DataSourceID string
+	TargetID     string
+}
+
+type ActivationReadinessCommand string
+
+const (
+	ActivationReadinessCommandActivate ActivationReadinessCommand = "activate"
+	ActivationReadinessCommandResume   ActivationReadinessCommand = "resume"
+)
+
+const (
+	ActivationReadinessCodeDatasourceRequired   = "DATASOURCE_REQUIRED"
+	ActivationReadinessCodePassiveUnconfirmed   = "PASSIVE_UNCONFIRMED"
+	ActivationReadinessCodeTargetDryrunMiss     = "TARGET_DRYRUN_MISSING"
+	ActivationReadinessCodeTargetDryrunFailed   = "TARGET_DRYRUN_FAILED"
+	ActivationReadinessCodeActiveTargetRequired = "ACTIVE_TARGET_REQUIRED"
+	ActivationReadinessCodeDatasourceStatus     = "DATASOURCE_STATUS_INVALID"
+)
+
+const (
+	ActivationReadinessMessageDatasourceRequired   = "project must have at least one datasource"
+	ActivationReadinessMessagePassiveUnconfirmed   = "passive datasource is not confirmed"
+	ActivationReadinessMessageTargetDryrunMissing  = "crawl target has never been dry-run"
+	ActivationReadinessMessageTargetDryrunFailed   = "crawl target latest dry-run is FAILED"
+	ActivationReadinessMessageActiveTargetRequired = "crawl datasource must have at least one active target"
+	ActivationReadinessMessageDatasourceStatus     = "datasource status is not eligible for project lifecycle command"
+)
+
+type ActivationReadinessInput struct {
+	ProjectID string
+	Command   ActivationReadinessCommand
+}
+
+// ActivationReadinessOutput summarizes activation readiness at project scope.
+type ActivationReadinessOutput struct {
+	ProjectID                string
+	Command                  ActivationReadinessCommand
+	DataSourceCount          int
+	HasDatasource            bool
+	PassiveUnconfirmedCount  int
+	MissingTargetDryrunCount int
+	FailedTargetDryrunCount  int
+	CanProceed               bool
+	Errors                   []ActivationReadinessError
+}
+
+// ProjectLifecycleOutput returns the number of affected datasources at project scope.
+type ProjectLifecycleOutput struct {
+	ProjectID               string
+	AffectedDataSourceCount int
 }
 
 // ActivateOutput is the output after activating a datasource.
@@ -76,19 +147,9 @@ type ActivateOutput struct {
 	DataSource model.DataSource
 }
 
-// PauseInput transitions a datasource into PAUSED.
-type PauseInput struct {
-	ID string
-}
-
 // PauseOutput is the output after pausing a datasource.
 type PauseOutput struct {
 	DataSource model.DataSource
-}
-
-// ResumeInput transitions a datasource from PAUSED back to ACTIVE.
-type ResumeInput struct {
-	ID string
 }
 
 // ResumeOutput is the output after resuming a datasource.
@@ -118,7 +179,6 @@ type CreateTargetGroupInput struct {
 	Values               []string
 	Label                string
 	PlatformMeta         json.RawMessage
-	IsActive             bool
 	Priority             int
 	CrawlIntervalMinutes int
 }
@@ -158,13 +218,34 @@ type UpdateTargetInput struct {
 	Values               []string
 	Label                string
 	PlatformMeta         json.RawMessage
-	IsActive             *bool
 	Priority             *int
 	CrawlIntervalMinutes *int
 }
 
 // UpdateTargetOutput is the output after updating a crawl target.
 type UpdateTargetOutput struct {
+	Target model.CrawlTarget
+}
+
+// ActivateTargetInput is the input for activating a crawl target.
+type ActivateTargetInput struct {
+	DataSourceID string
+	ID           string
+}
+
+// ActivateTargetOutput is the output after activating a crawl target.
+type ActivateTargetOutput struct {
+	Target model.CrawlTarget
+}
+
+// DeactivateTargetInput is the input for deactivating a crawl target.
+type DeactivateTargetInput struct {
+	DataSourceID string
+	ID           string
+}
+
+// DeactivateTargetOutput is the output after deactivating a crawl target.
+type DeactivateTargetOutput struct {
 	Target model.CrawlTarget
 }
 

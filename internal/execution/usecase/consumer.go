@@ -12,7 +12,7 @@ import (
 )
 
 func (uc *implUseCase) HandleCompletion(ctx context.Context, input execution.HandleCompletionInput) error {
-	if err := validateCompletionInput(input); err != nil {
+	if err := uc.validateCompletionInput(input); err != nil {
 		uc.l.Errorf(ctx, "execution.usecase.HandleCompletion: invalid input: %v", err)
 		return err
 	}
@@ -20,11 +20,14 @@ func (uc *implUseCase) HandleCompletion(ctx context.Context, input execution.Han
 	completionCtx, err := uc.repo.GetCompletionContext(ctx, input.TaskID)
 	if err != nil {
 		if err == repo.ErrExternalTaskNotFound {
-			uc.l.Warnf(ctx, "execution.usecase.HandleCompletion: unknown task_id=%s", input.TaskID)
-			return nil
+			return execution.ErrCompletionTaskNotFound
 		}
 		uc.l.Errorf(ctx, "execution.usecase.HandleCompletion: failed to get completion context: %v", err)
 		return err
+	}
+	if completionCtx.ExternalTask.Status == model.JobStatusCancelled && completionCtx.ExternalTask.CompletedAt != nil {
+		uc.l.Infof(ctx, "execution.usecase.HandleCompletion: ignore completion for cancelled task_id=%s", input.TaskID)
+		return nil
 	}
 
 	completedAt := uc.now()
@@ -34,7 +37,7 @@ func (uc *implUseCase) HandleCompletion(ctx context.Context, input execution.Han
 
 	switch strings.ToLower(strings.TrimSpace(input.Status)) {
 	case "error":
-		if isTerminalFailure(completionCtx.ExternalTask.Status) && completionCtx.ExternalTask.CompletedAt != nil {
+		if uc.isTerminalFailure(completionCtx.ExternalTask.Status) && completionCtx.ExternalTask.CompletedAt != nil {
 			uc.l.Infof(ctx, "execution.usecase.HandleCompletion: duplicate error completion task_id=%s", input.TaskID)
 			return nil
 		}
@@ -70,7 +73,7 @@ func (uc *implUseCase) HandleCompletion(ctx context.Context, input execution.Han
 
 		var sizeBytes *int64
 		if rawSize, ok := input.Metadata["size_bytes"]; ok {
-			if parsed := parseInt64(rawSize); parsed != nil {
+			if parsed := uc.parseInt64(rawSize); parsed != nil {
 				sizeBytes = parsed
 			}
 		}
@@ -79,7 +82,7 @@ func (uc *implUseCase) HandleCompletion(ctx context.Context, input execution.Han
 			sizeBytes = &size
 		}
 
-		rawMetadata, err := marshalMetadata(input.Metadata)
+		rawMetadata, err := uc.marshalMetadata(input.Metadata)
 		if err != nil {
 			uc.l.Errorf(ctx, "execution.usecase.HandleCompletion.marshalMetadata: %v", err)
 			return execution.ErrInvalidCompletionInput
@@ -137,6 +140,6 @@ func (uc *implUseCase) shouldParseUAP(task model.ExternalTask) bool {
 		return false
 	}
 
-	return strings.EqualFold(strings.TrimSpace(task.Platform), "tiktok") &&
-		strings.EqualFold(strings.TrimSpace(task.TaskType), "full_flow")
+	return strings.EqualFold(strings.TrimSpace(task.Platform), uap.PlatformTikTok) &&
+		strings.EqualFold(strings.TrimSpace(task.TaskType), uap.TaskTypeFullFlow)
 }

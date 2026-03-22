@@ -9,6 +9,7 @@ import (
 	"ingest-srv/internal/datasource"
 	"ingest-srv/internal/model"
 
+	"github.com/google/uuid"
 	"github.com/smap-hcmut/shared-libs/go/paginator"
 )
 
@@ -31,6 +32,9 @@ type createReq struct {
 func (r createReq) validate() error {
 	if strings.TrimSpace(r.ProjectID) == "" {
 		return errProjectIDRequired
+	}
+	if !isValidUUID(strings.TrimSpace(r.ProjectID)) {
+		return errWrongBody
 	}
 	if strings.TrimSpace(r.Name) == "" {
 		return errNameRequired
@@ -87,7 +91,7 @@ type detailReq struct {
 }
 
 func (r detailReq) validate() error {
-	if strings.TrimSpace(r.ID) == "" {
+	if !isValidUUID(strings.TrimSpace(r.ID)) {
 		return errWrongBody
 	}
 	return nil
@@ -109,6 +113,9 @@ type listReq struct {
 }
 
 func (r listReq) validate() error {
+	if strings.TrimSpace(r.ProjectID) != "" && !isValidUUID(strings.TrimSpace(r.ProjectID)) {
+		return errWrongBody
+	}
 	if strings.TrimSpace(r.SourceType) != "" && !isValidSourceType(strings.TrimSpace(r.SourceType)) {
 		return errInvalidSourceType
 	}
@@ -160,7 +167,7 @@ type archiveReq struct {
 }
 
 func (r archiveReq) validate() error {
-	if strings.TrimSpace(r.ID) == "" {
+	if !isValidUUID(strings.TrimSpace(r.ID)) {
 		return errWrongBody
 	}
 	return nil
@@ -168,6 +175,53 @@ func (r archiveReq) validate() error {
 
 func (r archiveReq) toInput() string {
 	return strings.TrimSpace(r.ID)
+}
+
+// projectLifecycleReq extracts project_id from path param for internal project lifecycle APIs.
+type projectLifecycleReq struct {
+	ProjectID string
+}
+
+func (r projectLifecycleReq) validate() error {
+	if strings.TrimSpace(r.ProjectID) == "" {
+		return errProjectIDRequired
+	}
+	if !isValidUUID(strings.TrimSpace(r.ProjectID)) {
+		return errWrongBody
+	}
+	return nil
+}
+
+func (r projectLifecycleReq) toProjectID() string {
+	return strings.TrimSpace(r.ProjectID)
+}
+
+type activationReadinessReq struct {
+	ProjectID string `form:"-"`
+	Command   string `form:"command" example:"activate" enums:"activate,resume"`
+}
+
+func (r activationReadinessReq) validate() error {
+	if strings.TrimSpace(r.ProjectID) == "" {
+		return errProjectIDRequired
+	}
+	if !isValidUUID(strings.TrimSpace(r.ProjectID)) {
+		return errWrongBody
+	}
+
+	switch strings.TrimSpace(r.Command) {
+	case "", string(datasource.ActivationReadinessCommandActivate), string(datasource.ActivationReadinessCommandResume):
+		return nil
+	default:
+		return errInvalidReadinessCommand
+	}
+}
+
+func (r activationReadinessReq) toInput() datasource.ActivationReadinessInput {
+	return datasource.ActivationReadinessInput{
+		ProjectID: strings.TrimSpace(r.ProjectID),
+		Command:   datasource.ActivationReadinessCommand(strings.TrimSpace(r.Command)),
+	}
 }
 
 // --- Response DTOs ---
@@ -233,7 +287,7 @@ type updateCrawlModeReq struct {
 }
 
 func (r updateCrawlModeReq) validate() error {
-	if strings.TrimSpace(r.ID) == "" {
+	if !isValidUUID(strings.TrimSpace(r.ID)) {
 		return errWrongBody
 	}
 	if !isValidCrawlMode(strings.TrimSpace(r.CrawlMode)) {
@@ -257,6 +311,30 @@ func (r updateCrawlModeReq) toInput() datasource.UpdateCrawlModeInput {
 
 type updateCrawlModeResp struct {
 	DataSource dataSourceResp `json:"data_source"`
+}
+
+type activationReadinessErrorResp struct {
+	Code         string `json:"code" example:"TARGET_DRYRUN_MISSING"`
+	Message      string `json:"message" example:"crawl target has never been dry-run"`
+	DataSourceID string `json:"datasource_id,omitempty" example:"550e8400-e29b-41d4-a716-446655440011"`
+	TargetID     string `json:"target_id,omitempty" example:"550e8400-e29b-41d4-a716-446655440012"`
+}
+
+type activationReadinessResp struct {
+	ProjectID                string                         `json:"project_id" example:"550e8400-e29b-41d4-a716-446655440000"`
+	Command                  string                         `json:"command" example:"activate"`
+	DataSourceCount          int                            `json:"datasource_count" example:"2"`
+	HasDatasource            bool                           `json:"has_datasource" example:"true"`
+	PassiveUnconfirmedCount  int                            `json:"passive_unconfirmed_count" example:"0"`
+	MissingTargetDryrunCount int                            `json:"missing_target_dryrun_count" example:"1"`
+	FailedTargetDryrunCount  int                            `json:"failed_target_dryrun_count" example:"0"`
+	CanProceed               bool                           `json:"can_proceed" example:"false"`
+	Errors                   []activationReadinessErrorResp `json:"errors"`
+}
+
+type projectLifecycleResp struct {
+	ProjectID               string `json:"project_id" example:"550e8400-e29b-41d4-a716-446655440000"`
+	AffectedDataSourceCount int    `json:"affected_datasource_count" example:"2"`
 }
 
 // --- Response Mappers ---
@@ -286,6 +364,37 @@ func (h *handler) newUpdateResp(o datasource.UpdateOutput) updateResp {
 
 func (h *handler) newUpdateCrawlModeResp(o datasource.UpdateCrawlModeOutput) updateCrawlModeResp {
 	return updateCrawlModeResp{DataSource: toDataSourceResp(o.DataSource)}
+}
+
+func (h *handler) newActivationReadinessResp(o datasource.ActivationReadinessOutput) activationReadinessResp {
+	errors := make([]activationReadinessErrorResp, 0, len(o.Errors))
+	for _, e := range o.Errors {
+		errors = append(errors, activationReadinessErrorResp{
+			Code:         e.Code,
+			Message:      e.Message,
+			DataSourceID: e.DataSourceID,
+			TargetID:     e.TargetID,
+		})
+	}
+
+	return activationReadinessResp{
+		ProjectID:                o.ProjectID,
+		Command:                  string(o.Command),
+		DataSourceCount:          o.DataSourceCount,
+		HasDatasource:            o.HasDatasource,
+		PassiveUnconfirmedCount:  o.PassiveUnconfirmedCount,
+		MissingTargetDryrunCount: o.MissingTargetDryrunCount,
+		FailedTargetDryrunCount:  o.FailedTargetDryrunCount,
+		CanProceed:               o.CanProceed,
+		Errors:                   errors,
+	}
+}
+
+func (h *handler) newProjectLifecycleResp(o datasource.ProjectLifecycleOutput) projectLifecycleResp {
+	return projectLifecycleResp{
+		ProjectID:               o.ProjectID,
+		AffectedDataSourceCount: o.AffectedDataSourceCount,
+	}
 }
 
 // --- Internal Mapper ---
@@ -444,13 +553,12 @@ type createTargetGroupReq struct {
 	Values               []string        `json:"values" binding:"required" example:"vinfast"`
 	Label                string          `json:"label" example:"VinFast keyword"`
 	PlatformMeta         json.RawMessage `json:"platform_meta,omitempty" swaggertype:"object"`
-	IsActive             bool            `json:"is_active" example:"true"`
 	Priority             int             `json:"priority" example:"0"`
 	CrawlIntervalMinutes int             `json:"crawl_interval_minutes" example:"11"`
 }
 
 func (r createTargetGroupReq) validate(targetType model.TargetType) error {
-	if strings.TrimSpace(r.DataSourceID) == "" {
+	if !isValidUUID(strings.TrimSpace(r.DataSourceID)) {
 		return errWrongBody
 	}
 	values := normalizeRequestValues(r.Values, targetType == model.TargetTypeKeyword)
@@ -474,7 +582,6 @@ func (r createTargetGroupReq) toInput(targetType model.TargetType) datasource.Cr
 		Values:               normalizeRequestValues(r.Values, targetType == model.TargetTypeKeyword),
 		Label:                r.Label,
 		PlatformMeta:         r.PlatformMeta,
-		IsActive:             r.IsActive,
 		Priority:             r.Priority,
 		CrawlIntervalMinutes: r.CrawlIntervalMinutes,
 	}
@@ -488,7 +595,7 @@ type listTargetsReq struct {
 }
 
 func (r listTargetsReq) validate() error {
-	if strings.TrimSpace(r.DataSourceID) == "" {
+	if !isValidUUID(strings.TrimSpace(r.DataSourceID)) {
 		return errWrongBody
 	}
 	if strings.TrimSpace(r.TargetType) != "" && !isValidTargetType(strings.TrimSpace(r.TargetType)) {
@@ -512,7 +619,7 @@ type detailTargetReq struct {
 }
 
 func (r detailTargetReq) validate() error {
-	if strings.TrimSpace(r.DataSourceID) == "" || strings.TrimSpace(r.ID) == "" {
+	if !isValidUUID(strings.TrimSpace(r.DataSourceID)) || !isValidUUID(strings.TrimSpace(r.ID)) {
 		return errWrongBody
 	}
 	return nil
@@ -532,13 +639,12 @@ type updateTargetReq struct {
 	Values               []string        `json:"values,omitempty"`
 	Label                string          `json:"label" example:"Updated label"`
 	PlatformMeta         json.RawMessage `json:"platform_meta,omitempty" swaggertype:"object"`
-	IsActive             *bool           `json:"is_active,omitempty"`
 	Priority             *int            `json:"priority,omitempty"`
 	CrawlIntervalMinutes *int            `json:"crawl_interval_minutes,omitempty"`
 }
 
 func (r updateTargetReq) validate() error {
-	if strings.TrimSpace(r.DataSourceID) == "" || strings.TrimSpace(r.ID) == "" {
+	if !isValidUUID(strings.TrimSpace(r.DataSourceID)) || !isValidUUID(strings.TrimSpace(r.ID)) {
 		return errWrongBody
 	}
 	if r.Values != nil && len(normalizeRequestValues(r.Values, false)) == 0 {
@@ -557,9 +663,22 @@ func (r updateTargetReq) toInput() datasource.UpdateTargetInput {
 		Values:               normalizeRequestValues(r.Values, false),
 		Label:                r.Label,
 		PlatformMeta:         r.PlatformMeta,
-		IsActive:             r.IsActive,
 		Priority:             r.Priority,
 		CrawlIntervalMinutes: r.CrawlIntervalMinutes,
+	}
+}
+
+func (r detailTargetReq) toActivateInput() datasource.ActivateTargetInput {
+	return datasource.ActivateTargetInput{
+		DataSourceID: strings.TrimSpace(r.DataSourceID),
+		ID:           strings.TrimSpace(r.ID),
+	}
+}
+
+func (r detailTargetReq) toDeactivateInput() datasource.DeactivateTargetInput {
+	return datasource.DeactivateTargetInput{
+		DataSourceID: strings.TrimSpace(r.DataSourceID),
+		ID:           strings.TrimSpace(r.ID),
 	}
 }
 
@@ -570,7 +689,7 @@ type deleteTargetReq struct {
 }
 
 func (r deleteTargetReq) validate() error {
-	if strings.TrimSpace(r.DataSourceID) == "" || strings.TrimSpace(r.ID) == "" {
+	if !isValidUUID(strings.TrimSpace(r.DataSourceID)) || !isValidUUID(strings.TrimSpace(r.ID)) {
 		return errWrongBody
 	}
 	return nil
@@ -667,4 +786,9 @@ func toCrawlTargetResp(t model.CrawlTarget) crawlTargetResp {
 	resp.LastErrorAt = formatTimePtr(t.LastErrorAt)
 
 	return resp
+}
+
+func isValidUUID(value string) bool {
+	_, err := uuid.Parse(strings.TrimSpace(value))
+	return err == nil
 }

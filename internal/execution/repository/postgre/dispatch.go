@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -80,8 +81,54 @@ func (r *implRepository) CreateScheduledJob(ctx context.Context, opt repository.
 		jobRow.Payload = null.JSONFrom(opt.JobPayload)
 	}
 
-	if err := jobRow.Insert(ctx, r.db, boil.Infer()); err != nil {
-		r.l.Errorf(ctx, "execution.repository.CreateScheduledJob.Insert: %v", err)
+	if strings.TrimSpace(opt.Target.ID) == "" {
+		if err := jobRow.Insert(ctx, r.db, boil.Infer()); err != nil {
+			r.l.Errorf(ctx, "execution.repository.CreateScheduledJob.Insert: %v", err)
+			return model.ScheduledJob{}, repository.ErrCreateDispatch
+		}
+		return *model.NewScheduledJobFromDB(jobRow), nil
+	}
+
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		r.l.Errorf(ctx, "execution.repository.CreateScheduledJob.BeginTx: %v", err)
+		return model.ScheduledJob{}, repository.ErrCreateDispatch
+	}
+	defer rollbackTx(tx)
+
+	lockQuery := fmt.Sprintf(
+		`SELECT id FROM "schema_ingest"."%s" WHERE id = $1 AND data_source_id = $2 FOR UPDATE`,
+		sqlboiler.TableNames.CrawlTargets,
+	)
+	var lockedTargetID string
+	if err := tx.QueryRowContext(ctx, lockQuery, opt.Target.ID, opt.Source.ID).Scan(&lockedTargetID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			r.l.Warnf(ctx, "execution.repository.CreateScheduledJob.LockTarget: not found source_id=%s target_id=%s", opt.Source.ID, opt.Target.ID)
+			return model.ScheduledJob{}, repository.ErrTargetNotFound
+		}
+		r.l.Errorf(ctx, "execution.repository.CreateScheduledJob.LockTarget: %v", err)
+		return model.ScheduledJob{}, repository.ErrCreateDispatch
+	}
+
+	runningJobExists, err := sqlboiler.ScheduledJobs(
+		sqlboiler.ScheduledJobWhere.TargetID.EQ(null.StringFrom(opt.Target.ID)),
+		sqlboiler.ScheduledJobWhere.Status.EQ(sqlboiler.JobStatus(model.JobStatusRunning)),
+	).Exists(ctx, tx)
+	if err != nil {
+		r.l.Errorf(ctx, "execution.repository.CreateScheduledJob.CheckRunningScheduledJob: %v", err)
+		return model.ScheduledJob{}, repository.ErrCreateDispatch
+	}
+	if runningJobExists {
+		r.l.Warnf(ctx, "execution.repository.CreateScheduledJob: source_id=%s target_id=%s already has running job", opt.Source.ID, opt.Target.ID)
+		return model.ScheduledJob{}, repository.ErrDispatchConflict
+	}
+
+	if err := jobRow.Insert(ctx, tx, boil.Infer()); err != nil {
+		r.l.Errorf(ctx, "execution.repository.CreateScheduledJob.InsertTx: %v", err)
+		return model.ScheduledJob{}, repository.ErrCreateDispatch
+	}
+	if err := tx.Commit(); err != nil {
+		r.l.Errorf(ctx, "execution.repository.CreateScheduledJob.Commit: %v", err)
 		return model.ScheduledJob{}, repository.ErrCreateDispatch
 	}
 

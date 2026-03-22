@@ -93,3 +93,17 @@ func (r *implRepository) buildListQuery(opt repository.ListDataSourcesOptions) [
 
 	return mods
 }
+
+func (r *implRepository) buildProjectLifecycleUpdateQuery(opt repository.ProjectLifecycleUpdateOptions) []qm.QueryMod {
+	var statuses []sqlboiler.SourceStatus
+
+	for _, status := range opt.FromStatuses {
+		statuses = append(statuses, sqlboiler.SourceStatus(status))
+	}
+
+	return []qm.QueryMod{
+		sqlboiler.DataSourceWhere.ProjectID.EQ(opt.ProjectID),
+		sqlboiler.DataSourceWhere.DeletedAt.IsNull(),
+		sqlboiler.DataSourceWhere.Status.IN(statuses),
+	}
+}

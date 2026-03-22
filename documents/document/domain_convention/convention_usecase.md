@@ -22,7 +22,20 @@ graph TD
 1.  **Framework Agnostic**: This layer **MUST NOT** import `gin`, `sqlboiler`, `mongo-driver`, or `amqp`. It only knows about _Interfaces_ and _Standard Library_.
 2.  **Interface Driven**: Dependencies are injected.
 3.  **Strict Inputs/Outputs**: Every public method uses a dedicated struct in `types.go`.
-4.  **One File, One Concern**: Logic files contain ONLY logic. Struct definitions live in type files.
+4.  **One File, One Concern**: Logic files contain ONLY logic. Data struct definitions live in module root `types.go`.
+5.  **No Magic Event Names**: Event names **MUST** be typed constants (enum style) in module `types.go`, never hardcoded strings inside usecase methods.
+6.  **Microservice Dependency Rule**: Usecase must depend on interfaces in `pkg/microservice` root package, not concrete service packages.
+7.  **Downstream Error Mapping Rule**: Mapping from downstream client errors to module domain errors belongs to module `errors.go` (root), then usecase reuses that mapper.
+8.  **No Wire Tags in UseCase Types**: `json/form/binding` tags are only allowed in delivery DTOs.
+9.  **Constant Placement Rule**:
+   - Entity intrinsic constants (state/attributes shared system-wide) go to `internal/model`.
+   - Module-level/process constants go to module root `types.go`.
+   - Usecase implementation files must not define `const`.
+10. **Helper Receiver Rule**:
+   - Private helpers in `helpers.go` must be methods with receiver `func (uc *implUseCase) ...`.
+11. **No Delivery Import Rule**:
+   - Usecase must not import `internal/<module>/delivery/...`.
+   - Delivery is responsible for mapping transport payloads to module/usecase types before calling usecase.
 
 ---
 
@@ -40,13 +53,47 @@ The UseCase layer follows the **File Responsibility Principle**: every file has 
 
 ### Implementation Files (`usecase/`)
 
-| File           | Contents                                                                                                               |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `new.go`       | **Factory ONLY**: `implUseCase` struct + `New()` + optional setter methods. **No interfaces, no types, no constants.** |
-| `<entity>.go`  | Interface method implementations for a specific entity (e.g., `event.go`, `user.go`)                                   |
-| `<concern>.go` | Logic separated by business concern (e.g., `session.go`, `notification.go`, `oauth.go`)                                |
-| `helpers.go`   | Shared private helper methods used across multiple logic files                                                         |
-| `types.go`     | Private struct definitions internal to the usecase package (NOT public Input/Output types)                             |
+| File          | Contents                                                                                                               |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `new.go`      | **Factory ONLY**: `implUseCase` struct + `New()` + optional setter methods. **No interfaces, no extra helper types, no constants.** |
+| `<concern>.go` | Group method implementations by **sub-interface / business concern** (e.g., `usecase.go`, `consumer.go`, `cron.go`, `dryrun.go`, `target.go`) |
+| `helpers.go`  | ALL private helper methods (validation, formatting, parsing, etc.) used by public methods                              |
+
+**File Naming Rules:**
+
+- ✅ Name files by concern/sub-interface: `usecase.go`, `consumer.go`, `cron.go`, `publisher.go`, `target.go`, `project_lifecycle.go`, `dryrun.go`
+- ✅ If module `UseCase` embeds 3 sub-interfaces, aim for 3 corresponding implementation files (excluding `new.go`, `helpers.go`, tests)
+- ❌ Do not split into one file per method by default
+- ❌ NEVER create separate files for helpers (e.g., `validation.go`, `embedding.go`, `qdrant.go`) → ALL go to `helpers.go`
+
+**Example: Bad vs Good Structure**
+
+❌ **BAD** (Too fragmented by method):
+
+```text
+usecase/
+├── new.go
+├── create.go
+├── detail.go
+├── list.go
+├── update.go
+├── pause.go
+├── resume.go
+├── activate.go
+└── helpers.go
+```
+
+✅ **GOOD** (Grouped by concern/sub-interface):
+
+```text
+usecase/
+├── new.go                 ← Factory
+├── usecase.go             ← Main usecase concern (CRUD / primary flow)
+├── project_lifecycle.go   ← Project orchestration concern
+├── target.go              ← Target concern
+├── dryrun.go              ← Dry-run concern
+└── helpers.go             ← ALL private helpers
+```
 
 ### Example: Complex Module
 
@@ -56,24 +103,25 @@ internal/authentication/
 ├── types.go                # OAuthCallbackInput, TokenValidationResult, etc.
 ├── errors.go               # ErrUserNotFound, ErrDomainNotAllowed, etc.
 └── usecase/
-    ├── new.go              # implUsecase struct + New() + setters
-    ├── authentication.go   # GetCurrentUser, Logout, ValidateToken
-    ├── oauth.go            # ProcessOAuthCallback, InitiateOAuthLogin
-    ├── helpers.go          # createSession, generateToken (private)
-    ├── session.go          # SessionManager (concern-based split)
-    └── types.go            # Private types used only within usecase package
+    ├── new.go              # implUsecase struct + New() + setters (50 lines)
+    ├── get_current_user.go # GetCurrentUser() + validateSession (80 lines)
+    ├── logout.go           # Logout() + cleanupSession (60 lines)
+    ├── validate_token.go   # ValidateToken() + parseToken + checkExpiry (120 lines)
+    └── process_oauth_callback.go  # ProcessOAuthCallback() + createSession + validateDomain + generateToken (200 lines)
 ```
+
+**Note:** `helpers.go` is shared across concern files; private helpers should not be scattered.
 
 ### Splitting Decision Tree
 
 ```mermaid
 graph TD
     A["New struct/interface?"] -->|Public Input/Output| B["types.go (module root)"]
-    A -->|Private helper struct| C["usecase/types.go"]
+    A -->|Any data struct| C["types.go (module root)"]
     A -->|Dependency interface| D["Import from pkg/ or define in interface.go"]
-    E["New method?"] -->|Interface method| F["usecase/<entity>.go"]
-    E -->|Private helper| G["usecase/helpers.go"]
-    E -->|Distinct business concern| H["usecase/<concern>.go"]
+    E["New business concern/sub-interface?"] -->|Yes| F["usecase/<concern>.go"]
+    E -->|No, existing concern| H["Add method to existing concern file"]
+    E -->|Private helper function| G["usecase/helpers.go"]
 ```
 
 ---
@@ -98,7 +146,7 @@ Distinguish these two.
 - Optional setter methods for late-bound dependencies
 
 > [!CAUTION]
-> **NEVER** define interfaces, constants, helper types, or business logic in `new.go`. If you need a dependency interface, import it from `pkg/` or define it in the module's `interface.go`.
+> **NEVER** define interfaces, constants, extra helper/data types, or business logic in `new.go`. If you need a dependency interface, import it from `pkg/` or define it in the module's `interface.go`.
 
 ```go
 // ✅ Correct: new.go contains ONLY struct + factory + setters
@@ -174,12 +222,24 @@ func (uc *implUseCase) Dashboard(ctx context.Context, id string) (DashboardOut, 
   - Returning `models.User` directly exposes DB structure. Wrap it in `UserOutput`.
 - ❌ **Silent Logs**:
   - `if err != nil { log.Error(err); return nil }` -> **WRONG**. Return the error!
-- ❌ **Defining structs in logic files**:
-  - All public types go in `types.go` (module root). All private types go in `usecase/types.go`.
+- ❌ **Defining structs in usecase logic files**:
+  - Keep struct type declarations in module root `types.go` (except `implUseCase` in `new.go` and test-only types in `_test.go`).
 - ❌ **God files**:
   - A single `usecase.go` with 800+ lines handling multiple concerns. Split by entity/concern.
 - ❌ **Defining interfaces in `new.go`**:
   - `new.go` is factory-only. Dependency interfaces belong in `pkg/` or `interface.go`.
+- ❌ **Usecase depending on `pkg/microservice/<service>` contract types**:
+  - Contract interface/types must come from `pkg/microservice` root package.
+- ❌ **Placing downstream error mapping in arbitrary usecase files**:
+  - Keep downstream-to-domain mapping centralized in module `errors.go`.
+- ❌ **Magic strings for event names in usecase files**:
+  - Event names must use typed constants from `types.go` (e.g., `LifecycleEventName`), not `"module.event.name"` literals.
+- ❌ **Scattering helper functions across usecase files**:
+  - Private helper methods must live in `helpers.go` (except truly method-local private closures).
+- ❌ **Declaring constants in usecase implementation files**:
+  - Put constants in module `types.go` or `internal/model` only.
+- ❌ **Helpers without receiver**:
+  - In `helpers.go`, use `func (uc *implUseCase) helper(...)`, not standalone `func helper(...)`.
 
 ---
 

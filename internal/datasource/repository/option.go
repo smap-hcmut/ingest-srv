@@ -3,6 +3,9 @@ package repository
 import (
 	"encoding/json"
 
+	"ingest-srv/internal/model"
+
+	"github.com/aarondl/sqlboiler/v4/types"
 	"github.com/smap-hcmut/shared-libs/go/paginator"
 )
 
@@ -73,13 +76,23 @@ type UpdateDataSourceOptions struct {
 	ClearPausedAt          bool
 }
 
+// ProjectLifecycleUpdateOptions contains data for one project-scope lifecycle transition.
+type ProjectLifecycleUpdateOptions struct {
+	ProjectID      string
+	FromStatuses   []model.SourceStatus
+	ToStatus       model.SourceStatus
+	SetActivatedAt bool
+	SetPausedAt    bool
+	ClearPausedAt  bool
+}
+
 // --- CrawlTarget Options ---
 
 // CreateTargetOptions contains data needed to insert a new crawl target.
 type CreateTargetOptions struct {
 	DataSourceID         string
 	TargetType           string
-	Values               []string
+	Values               types.JSON
 	Label                string
 	PlatformMeta         json.RawMessage
 	IsActive             bool
@@ -105,7 +118,7 @@ type ListTargetsOptions struct {
 type UpdateTargetOptions struct {
 	DataSourceID         string
 	ID                   string
-	Values               []string
+	Values               types.JSON
 	Label                string
 	PlatformMeta         json.RawMessage
 	IsActive             *bool

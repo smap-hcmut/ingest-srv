@@ -18,22 +18,22 @@ type DispatchTargetInput struct {
 
 // DispatchTargetOutput contains the created runtime lineage for a dispatch.
 type DispatchTaskOutput struct {
-	ExternalTaskID string `json:"external_task_id"`
-	TaskID         string `json:"task_id"`
-	Queue          string `json:"queue"`
-	Action         string `json:"action"`
-	Status         string `json:"status"`
-	Keyword        string `json:"keyword,omitempty"`
-	ErrorMessage   string `json:"error_message,omitempty"`
+	ExternalTaskID string
+	TaskID         string
+	Queue          string
+	Action         string
+	Status         string
+	Keyword        string
+	ErrorMessage   string
 }
 
 type DispatchTargetOutput struct {
-	ScheduledJobID string `json:"scheduled_job_id"`
-	Status         string `json:"status"`
-	TaskCount      int    `json:"task_count"`
-	PublishedCount int    `json:"published_count"`
-	FailedCount    int    `json:"failed_count"`
-	Tasks          []DispatchTaskOutput `json:"tasks"`
+	ScheduledJobID string
+	Status         string
+	TaskCount      int
+	PublishedCount int
+	FailedCount    int
+	Tasks          []DispatchTaskOutput
 }
 
 // DispatchTargetManuallyInput triggers one execution unit for an existing crawl target.
@@ -54,26 +54,53 @@ type DispatchDueTargetsInput struct {
 
 // DispatchDueTargetsOutput summarizes one scheduler tick.
 type DispatchDueTargetsOutput struct {
-	DueCount         int `json:"due_count"`
-	ClaimedCount     int `json:"claimed_count"`
-	DispatchedCount  int `json:"dispatched_count"`
-	SkippedRaceCount int `json:"skipped_race_count"`
-	FailedCount      int `json:"failed_count"`
+	DueCount         int
+	ClaimedCount     int
+	DispatchedCount  int
+	SkippedRaceCount int
+	FailedCount      int
 }
+
+type CancelProjectRuntimeInput struct {
+	ProjectID  string
+	Reason     string
+	CanceledAt time.Time
+}
+
+type QueueName string
+
+type ActionName string
+
+const (
+	ActionNamePostDetail ActionName = "post_detail"
+	ActionNameFullFlow   ActionName = "full_flow"
+)
+
+const (
+	MinioVerifyRetryAttempts   = 3
+	DefaultMinIntervalMinute   = 1
+	DefaultMaxIntervalMinute   = 1440
+	NormalModeMultiplier       = 1.0
+	CrisisModeMultiplier       = 0.2
+	SleepModeMultiplier        = 5.0
+	TikTokFullFlowLimit        = 50
+	TikTokFullFlowThreshold    = 0.3
+	TikTokFullFlowCommentCount = 500
+)
 
 // DispatchSpec is the normalized runtime dispatch shape built by the usecase.
 type DispatchSpec struct {
-	Queue  string
-	Action string
-	Params map[string]interface{}
+	Queue   QueueName
+	Action  ActionName
+	Params  map[string]interface{}
 	Keyword string
 }
 
 // PublishDispatchInput is the usecase-facing payload passed to the RabbitMQ producer.
 type PublishDispatchInput struct {
-	Queue     string
+	Queue     QueueName
 	TaskID    string
-	Action    string
+	Action    ActionName
 	Params    map[string]interface{}
 	CreatedAt time.Time
 }

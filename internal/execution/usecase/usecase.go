@@ -65,11 +65,14 @@ func (uc *implUseCase) dispatchPrepared(
 		TriggerType:  triggerType,
 		ScheduledFor: scheduledFor,
 		CronExpr:     input.CronExpr,
-		JobPayload:   buildJobPayload(specs, input),
+		JobPayload:   uc.buildJobPayload(specs, input),
 		CreatedAt:    requestedAt,
 	})
 	if err != nil {
 		uc.l.Errorf(ctx, "execution.usecase.DispatchTarget.CreateScheduledJob: %v", err)
+		if err == repo.ErrDispatchConflict {
+			return execution.DispatchTargetOutput{}, execution.ErrDispatchNotAllowed
+		}
 		return execution.DispatchTargetOutput{}, execution.ErrDispatchFailed
 	}
 
@@ -96,7 +99,7 @@ func (uc *implUseCase) dispatchPrepared(
 	switch {
 	case output.PublishedCount == 0:
 		completedAt := requestedAt
-		finalErrMsg := summarizeDispatchFailures(failureMessages, output.TaskCount)
+		finalErrMsg := uc.summarizeDispatchFailures(failureMessages, output.TaskCount)
 		if err := uc.repo.FinalizeScheduledJob(ctx, repo.FinalizeScheduledJobOptions{
 			ScheduledJobID: scheduledJob.ID,
 			SourceID:       dispatchCtx.Source.ID,
@@ -110,7 +113,7 @@ func (uc *implUseCase) dispatchPrepared(
 		output.Status = string(model.JobStatusFailed)
 		return output, execution.ErrDispatchFailed
 	case output.FailedCount > 0:
-		finalErrMsg := summarizeDispatchFailures(failureMessages, output.TaskCount)
+		finalErrMsg := uc.summarizeDispatchFailures(failureMessages, output.TaskCount)
 		if err := uc.repo.FinalizeScheduledJob(ctx, repo.FinalizeScheduledJobOptions{
 			ScheduledJobID: scheduledJob.ID,
 			SourceID:       dispatchCtx.Source.ID,
@@ -149,13 +152,13 @@ func (uc *implUseCase) dispatchOneSpec(
 	requestedAt time.Time,
 ) (execution.DispatchTaskOutput, error) {
 	taskID := uuid.NewString()
-	requestPayload, err := buildRequestPayload(taskID, spec.Action, spec.Params, requestedAt)
+	requestPayload, err := uc.buildRequestPayload(taskID, spec.Action, spec.Params, requestedAt)
 	if err != nil {
 		uc.l.Errorf(ctx, "execution.usecase.dispatchOneSpec.buildRequestPayload: %v", err)
 		return execution.DispatchTaskOutput{
 			TaskID:       taskID,
-			Queue:        spec.Queue,
-			Action:       spec.Action,
+			Queue:        string(spec.Queue),
+			Action:       string(spec.Action),
 			Status:       string(model.JobStatusFailed),
 			Keyword:      spec.Keyword,
 			ErrorMessage: execution.ErrDispatchFailed.Error(),
@@ -167,8 +170,8 @@ func (uc *implUseCase) dispatchOneSpec(
 		Target:         dispatchCtx.Target,
 		ScheduledJobID: scheduledJobID,
 		TaskID:         taskID,
-		Queue:          spec.Queue,
-		Action:         spec.Action,
+		Queue:          string(spec.Queue),
+		Action:         string(spec.Action),
 		RequestPayload: requestPayload,
 		CreatedAt:      requestedAt,
 	})
@@ -176,8 +179,8 @@ func (uc *implUseCase) dispatchOneSpec(
 		uc.l.Errorf(ctx, "execution.usecase.dispatchOneSpec.CreateExternalTask: %v", err)
 		return execution.DispatchTaskOutput{
 			TaskID:       taskID,
-			Queue:        spec.Queue,
-			Action:       spec.Action,
+			Queue:        string(spec.Queue),
+			Action:       string(spec.Action),
 			Status:       string(model.JobStatusFailed),
 			Keyword:      spec.Keyword,
 			ErrorMessage: execution.ErrDispatchFailed.Error(),
@@ -188,7 +191,7 @@ func (uc *implUseCase) dispatchOneSpec(
 		Queue:     spec.Queue,
 		TaskID:    taskID,
 		Action:    spec.Action,
-		Params:    cloneParams(spec.Params),
+		Params:    uc.cloneParams(spec.Params),
 		CreatedAt: requestedAt,
 	}); err != nil {
 		uc.l.Errorf(ctx, "execution.usecase.dispatchOneSpec.publishDispatch: task_id=%s err=%v", taskID, err)
@@ -203,8 +206,8 @@ func (uc *implUseCase) dispatchOneSpec(
 		return execution.DispatchTaskOutput{
 			ExternalTaskID: externalTask.ID,
 			TaskID:         taskID,
-			Queue:          spec.Queue,
-			Action:         spec.Action,
+			Queue:          string(spec.Queue),
+			Action:         string(spec.Action),
 			Status:         string(model.JobStatusFailed),
 			Keyword:        spec.Keyword,
 			ErrorMessage:   err.Error(),
@@ -224,8 +227,8 @@ func (uc *implUseCase) dispatchOneSpec(
 		return execution.DispatchTaskOutput{
 			ExternalTaskID: externalTask.ID,
 			TaskID:         taskID,
-			Queue:          spec.Queue,
-			Action:         spec.Action,
+			Queue:          string(spec.Queue),
+			Action:         string(spec.Action),
 			Status:         string(model.JobStatusFailed),
 			Keyword:        spec.Keyword,
 			ErrorMessage:   err.Error(),
@@ -246,14 +249,14 @@ func (uc *implUseCase) dispatchOneSpec(
 	return execution.DispatchTaskOutput{
 		ExternalTaskID: externalTask.ID,
 		TaskID:         taskID,
-		Queue:          spec.Queue,
-		Action:         spec.Action,
+		Queue:          string(spec.Queue),
+		Action:         string(spec.Action),
 		Status:         string(model.JobStatusRunning),
 		Keyword:        spec.Keyword,
 	}, nil
 }
 
-func buildRequestPayload(taskID, action string, params map[string]interface{}, createdAt time.Time) (json.RawMessage, error) {
+func (uc *implUseCase) buildRequestPayload(taskID string, action execution.ActionName, params map[string]interface{}, createdAt time.Time) (json.RawMessage, error) {
 	payload := map[string]interface{}{
 		"task_id":    taskID,
 		"action":     action,
@@ -267,7 +270,7 @@ func buildRequestPayload(taskID, action string, params map[string]interface{}, c
 	return data, nil
 }
 
-func summarizeDispatchFailures(messages []string, taskCount int) string {
+func (uc *implUseCase) summarizeDispatchFailures(messages []string, taskCount int) string {
 	unique := make([]string, 0, len(messages))
 	seen := make(map[string]struct{}, len(messages))
 	for _, message := range messages {

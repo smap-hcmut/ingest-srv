@@ -3,7 +3,6 @@ package postgre
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 
 	"ingest-srv/internal/datasource/repository"
 	"ingest-srv/internal/model"
@@ -12,17 +11,8 @@ import (
 	"github.com/aarondl/null/v8"
 	"github.com/aarondl/sqlboiler/v4/boil"
 	"github.com/aarondl/sqlboiler/v4/queries/qm"
-	"github.com/aarondl/sqlboiler/v4/types"
 	"github.com/google/uuid"
 )
-
-func marshalTargetValues(values []string) types.JSON {
-	encoded, err := json.Marshal(values)
-	if err != nil {
-		return types.JSON([]byte("[]"))
-	}
-	return types.JSON(encoded)
-}
 
 // CreateTarget inserts a new crawl target linked to a data source.
 func (r *implRepository) CreateTarget(ctx context.Context, opt repository.CreateTargetOptions) (model.CrawlTarget, error) {
@@ -30,7 +20,7 @@ func (r *implRepository) CreateTarget(ctx context.Context, opt repository.Create
 		ID:           uuid.NewString(),
 		DataSourceID: opt.DataSourceID,
 		TargetType:   sqlboiler.TargetType(opt.TargetType),
-		Values:       marshalTargetValues(opt.Values),
+		Values:       opt.Values,
 		IsActive:     opt.IsActive,
 		Priority:     opt.Priority,
 	}
@@ -45,7 +35,23 @@ func (r *implRepository) CreateTarget(ctx context.Context, opt repository.Create
 		row.CrawlIntervalMinutes = opt.CrawlIntervalMinutes
 	}
 
-	if err := row.Insert(ctx, r.db, boil.Infer()); err != nil {
+	insertColumns := []string{
+		sqlboiler.CrawlTargetColumns.ID,
+		sqlboiler.CrawlTargetColumns.DataSourceID,
+		sqlboiler.CrawlTargetColumns.TargetType,
+		sqlboiler.CrawlTargetColumns.Values,
+		sqlboiler.CrawlTargetColumns.IsActive,
+		sqlboiler.CrawlTargetColumns.Priority,
+		sqlboiler.CrawlTargetColumns.CrawlIntervalMinutes,
+	}
+	if opt.Label != "" {
+		insertColumns = append(insertColumns, sqlboiler.CrawlTargetColumns.Label)
+	}
+	if len(opt.PlatformMeta) > 0 {
+		insertColumns = append(insertColumns, sqlboiler.CrawlTargetColumns.PlatformMeta)
+	}
+
+	if err := row.Insert(ctx, r.db, boil.Whitelist(insertColumns...)); err != nil {
 		r.l.Errorf(ctx, "datasource.repository.CreateTarget.Insert: %v", err)
 		return model.CrawlTarget{}, repository.ErrTargetFailedToInsert
 	}
@@ -113,7 +119,7 @@ func (r *implRepository) UpdateTarget(ctx context.Context, opt repository.Update
 	}
 
 	if opt.Values != nil {
-		row.Values = marshalTargetValues(opt.Values)
+		row.Values = opt.Values
 	}
 	if opt.Label != "" {
 		row.Label = null.StringFrom(opt.Label)

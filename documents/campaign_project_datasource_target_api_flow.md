@@ -176,6 +176,7 @@ Service: `ingest-srv`
 
 - `GET /api/v1/datasources/{dataSourceId}`
 - `PUT /api/v1/datasources/{dataSourceId}`
+- `POST /api/v1/datasources/{dataSourceId}/archive`
 - `DELETE /api/v1/datasources/{dataSourceId}`
 
 Khi nào dùng:
@@ -186,6 +187,8 @@ Khi nào dùng:
 - sửa `account_ref`
 - sửa `mapping_rules`
 - archive datasource đã tạo nhầm hoặc không còn dùng
+- delete datasource chỉ sau khi datasource đã `ARCHIVED`
+- datasource delete là soft delete nếu entity có `deleted_at`
 
 ## 3. Target Flow
 
@@ -325,10 +328,13 @@ Rule hiện tại:
 
 - `target_id` là bắt buộc cho crawl dry run
 - nếu muốn dry run nhiều grouped target thì gọi nhiều lần, mỗi lần 1 `target_id`
-- dry run hiện tại là **control-plane only**:
-  - không tạo `external_task`
-  - không publish RabbitMQ
-  - pass sẽ trả `WARNING`, không phải `SUCCESS`
+- dry run hiện tại là async remote runtime:
+  - tạo `dryrun_result` ở `RUNNING`
+  - publish task qua RabbitMQ cho `scapper-srv`
+  - không tạo `scheduled_job` hay `external_task`
+  - completion quay về `ingest_task_completions`
+  - pass sẽ finalize `WARNING`, không phải `SUCCESS`
+- nếu không truyền `sample_limit` thì mặc định lấy `10` data mẫu
 - nếu không muốn dry run thì **không cần call API này**
 
 ### Bước 12: Xem kết quả dry run gần nhất hoặc lịch sử
@@ -359,6 +365,7 @@ Nếu muốn lấy latest/history ở mức datasource chung:
    `POST /api/v1/datasources/{dataSourceId}/dryrun`
 7. Nếu cần xem lại:
    `GET /api/v1/datasources/{dataSourceId}/dryrun/latest?target_id={targetId}`
+8. Chỉ activate khi tất cả grouped target đã có latest dry run và không có target nào `FAILED`
 
 ### Flow B: Chuẩn, nhưng bỏ qua dry run
 
@@ -420,6 +427,7 @@ Body vẫn theo target cụ thể:
 
 ### Nếu cần xoá datasource
 
+- `POST /api/v1/datasources/{dataSourceId}/archive`
 - `DELETE /api/v1/datasources/{dataSourceId}`
 
 ### Nếu cần xoá project

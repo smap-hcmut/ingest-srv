@@ -22,13 +22,17 @@ import (
 // CreateDataSource inserts a new data source into the database.
 func (r *implRepository) CreateDataSource(ctx context.Context, opt repository.CreateDataSourceOptions) (model.DataSource, error) {
 	row := &sqlboiler.DataSource{
-		ID:               uuid.NewString(),
-		ProjectID:        opt.ProjectID,
-		Name:             opt.Name,
-		SourceType:       sqlboiler.SourceType(opt.SourceType),
-		SourceCategory:   sqlboiler.SourceCategory(opt.SourceCategory),
-		Status:           sqlboiler.SourceStatusPENDING,
-		Config:           types.JSON("{}"),
+		ID:             uuid.NewString(),
+		ProjectID:      opt.ProjectID,
+		Name:           opt.Name,
+		SourceType:     sqlboiler.SourceType(opt.SourceType),
+		SourceCategory: sqlboiler.SourceCategory(opt.SourceCategory),
+		Status:         sqlboiler.SourceStatusPENDING,
+		Config:         types.JSON("{}"),
+		// TODO(passive-onboarding): replace this default once FILE_UPLOAD/WEBHOOK
+		// onboarding flow is implemented. Passive sources should move through
+		// onboarding states (PENDING/SUGGESTED/CONFIRMED) instead of falling back
+		// to NOT_REQUIRED at create time.
 		OnboardingStatus: sqlboiler.OnboardingStatusNOT_REQUIRED,
 		DryrunStatus:     sqlboiler.DryrunStatusNOT_REQUIRED,
 	}
@@ -178,6 +182,23 @@ func (r *implRepository) ListDataSources(ctx context.Context, opt repository.Lis
 	return dataSources, nil
 }
 
+// GetLatestDryrunByTarget returns the latest dryrun result for one crawl target.
+func (r *implRepository) GetLatestDryrunByTarget(ctx context.Context, targetID string) (model.DryrunResult, error) {
+	row, err := sqlboiler.DryrunResults(
+		sqlboiler.DryrunResultWhere.TargetID.EQ(null.StringFrom(targetID)),
+		qm.OrderBy(sqlboiler.DryrunResultColumns.CreatedAt+" DESC"),
+	).One(ctx, r.db)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return model.DryrunResult{}, nil
+		}
+		r.l.Errorf(ctx, "datasource.repository.GetLatestDryrunByTarget.One: target_id=%s err=%v", targetID, err)
+		return model.DryrunResult{}, repository.ErrFailedToGet
+	}
+
+	return *model.NewDryrunResultFromDB(row), nil
+}
+
 // UpdateDataSource updates a data source by ID. Only non-zero fields are applied.
 func (r *implRepository) UpdateDataSource(ctx context.Context, opt repository.UpdateDataSourceOptions) (model.DataSource, error) {
 	row, err := sqlboiler.FindDataSource(ctx, r.db, opt.ID)
@@ -252,7 +273,7 @@ func (r *implRepository) UpdateDataSource(ctx context.Context, opt repository.Up
 	return *model.NewDataSourceFromDB(row), nil
 }
 
-// ArchiveDataSource soft-deletes a data source by setting deleted_at.
+// ArchiveDataSource moves a data source into ARCHIVED while keeping it queryable.
 func (r *implRepository) ArchiveDataSource(ctx context.Context, id string) error {
 	row, err := sqlboiler.FindDataSource(ctx, r.db, id)
 	if err != nil {
@@ -264,18 +285,42 @@ func (r *implRepository) ArchiveDataSource(ctx context.Context, id string) error
 	}
 
 	now := time.Now()
-	row.DeletedAt = null.TimeFrom(now)
 	row.ArchivedAt = null.TimeFrom(now)
 	row.Status = sqlboiler.SourceStatusARCHIVED
 
 	_, err = row.Update(ctx, r.db, boil.Whitelist(
-		sqlboiler.DataSourceColumns.DeletedAt,
 		sqlboiler.DataSourceColumns.ArchivedAt,
 		sqlboiler.DataSourceColumns.Status,
 		sqlboiler.DataSourceColumns.UpdatedAt,
 	))
 	if err != nil {
 		r.l.Errorf(ctx, "datasource.repository.ArchiveDataSource.Update: %v", err)
+		return repository.ErrFailedToDelete
+	}
+
+	return nil
+}
+
+// DeleteDataSource soft-deletes a data source by setting deleted_at.
+func (r *implRepository) DeleteDataSource(ctx context.Context, id string) error {
+	row, err := sqlboiler.FindDataSource(ctx, r.db, id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return repository.ErrFailedToGet
+		}
+		r.l.Errorf(ctx, "datasource.repository.DeleteDataSource.Find: %v", err)
+		return repository.ErrFailedToDelete
+	}
+
+	now := time.Now()
+	row.DeletedAt = null.TimeFrom(now)
+
+	_, err = row.Update(ctx, r.db, boil.Whitelist(
+		sqlboiler.DataSourceColumns.DeletedAt,
+		sqlboiler.DataSourceColumns.UpdatedAt,
+	))
+	if err != nil {
+		r.l.Errorf(ctx, "datasource.repository.DeleteDataSource.Update: %v", err)
 		return repository.ErrFailedToDelete
 	}
 
@@ -294,4 +339,32 @@ func (r *implRepository) CountActiveTargets(ctx context.Context, dataSourceID st
 	}
 
 	return total, nil
+}
+
+func (r *implRepository) UpdateProjectDataSourcesLifecycle(ctx context.Context, opt repository.ProjectLifecycleUpdateOptions) (int64, error) {
+	now := time.Now()
+	queryMods := r.buildProjectLifecycleUpdateQuery(opt)
+
+	updateCols := sqlboiler.M{
+		sqlboiler.DataSourceColumns.Status:    sqlboiler.SourceStatus(opt.ToStatus),
+		sqlboiler.DataSourceColumns.UpdatedAt: now,
+	}
+
+	if opt.SetActivatedAt {
+		updateCols[sqlboiler.DataSourceColumns.ActivatedAt] = null.TimeFrom(now)
+	}
+	if opt.SetPausedAt {
+		updateCols[sqlboiler.DataSourceColumns.PausedAt] = null.TimeFrom(now)
+	}
+	if opt.ClearPausedAt {
+		updateCols[sqlboiler.DataSourceColumns.PausedAt] = null.Time{}
+	}
+
+	affected, err := sqlboiler.DataSources(queryMods...).UpdateAll(ctx, r.db, updateCols)
+	if err != nil {
+		r.l.Errorf(ctx, "datasource.repository.UpdateProjectDataSourcesLifecycle.UpdateAll: project_id=%s err=%v", opt.ProjectID, err)
+		return 0, repository.ErrFailedToUpdate
+	}
+
+	return affected, nil
 }

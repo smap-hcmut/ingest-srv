@@ -135,14 +135,14 @@ func (h *handler) Update(c *gin.Context) {
 }
 
 // @Summary Archive a data source
-// @Description Soft-delete a data source by ID
+// @Description Transition a data source into ARCHIVED status
 // @Tags DataSource
 // @Produce json
 // @Param id path string true "Data Source ID"
 // @Success 200 {object} response.Resp
 // @Failure 400 {object} response.Resp
 // @Failure 500 {object} response.Resp
-// @Router /datasources/{id} [delete]
+// @Router /datasources/{id}/archive [post]
 func (h *handler) Archive(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -162,6 +162,34 @@ func (h *handler) Archive(c *gin.Context) {
 	response.OK(c, nil)
 }
 
+// @Summary Delete a data source
+// @Description Soft-delete a data source after it has been archived
+// @Tags DataSource
+// @Produce json
+// @Param id path string true "Data Source ID"
+// @Success 200 {object} response.Resp
+// @Failure 400 {object} response.Resp
+// @Failure 500 {object} response.Resp
+// @Router /datasources/{id} [delete]
+func (h *handler) Delete(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	req, err := h.processArchiveReq(c)
+	if err != nil {
+		h.l.Warnf(ctx, "datasource.delivery.Delete.processArchiveReq: %v", err)
+		response.Error(c, err, h.discord)
+		return
+	}
+
+	if err := h.uc.Delete(ctx, req.toInput()); err != nil {
+		h.l.Errorf(ctx, "datasource.delivery.Delete.uc.Delete: id=%s err=%v", req.ID, err)
+		response.Error(c, h.mapError(err), h.discord)
+		return
+	}
+
+	response.OK(c, nil)
+}
+
 // @Summary Update datasource crawl mode
 // @Description Internal API to update crawl mode for a datasource
 // @Tags DataSource
@@ -172,7 +200,7 @@ func (h *handler) Archive(c *gin.Context) {
 // @Success 200 {object} updateCrawlModeResp
 // @Failure 400 {object} response.Resp
 // @Failure 500 {object} response.Resp
-// @Router /ingest/datasources/{id}/crawl-mode [put]
+// @Router /internal/datasources/{id}/crawl-mode [put]
 func (h *handler) UpdateCrawlMode(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -191,6 +219,123 @@ func (h *handler) UpdateCrawlMode(c *gin.Context) {
 	}
 
 	response.OK(c, h.newUpdateCrawlModeResp(o))
+}
+
+// @Summary Get project activation readiness
+// @Description Internal API to evaluate project readiness from datasource/target dryrun state
+// @Tags DataSource
+// @Produce json
+// @Param project_id path string true "Project ID"
+// @Param command query string false "Lifecycle command to evaluate" Enums(activate,resume) default(activate)
+// @Success 200 {object} activationReadinessResp
+// @Failure 400 {object} response.Resp
+// @Failure 500 {object} response.Resp
+// @Router /internal/projects/{project_id}/activation-readiness [get]
+func (h *handler) GetActivationReadiness(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	req, err := h.processActivationReadinessReq(c)
+	if err != nil {
+		h.l.Warnf(ctx, "datasource.delivery.GetActivationReadiness.processActivationReadinessReq: %v", err)
+		response.Error(c, err, h.discord)
+		return
+	}
+
+	o, err := h.uc.GetActivationReadiness(ctx, req.toInput())
+	if err != nil {
+		h.l.Errorf(ctx, "datasource.delivery.GetActivationReadiness.uc.GetActivationReadiness: project_id=%s command=%s err=%v", req.ProjectID, req.Command, err)
+		response.Error(c, h.mapError(err), h.discord)
+		return
+	}
+
+	response.OK(c, h.newActivationReadinessResp(o))
+}
+
+// @Summary Activate all datasources in a project
+// @Description Internal API to activate project-level datasource runtime with fail-fast semantics
+// @Tags DataSource
+// @Produce json
+// @Param project_id path string true "Project ID"
+// @Success 200 {object} projectLifecycleResp
+// @Failure 400 {object} response.Resp
+// @Failure 500 {object} response.Resp
+// @Router /internal/projects/{project_id}/activate [post]
+func (h *handler) Activate(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	req, err := h.processProjectLifecycleReq(c)
+	if err != nil {
+		h.l.Warnf(ctx, "datasource.delivery.Activate.processProjectLifecycleReq: %v", err)
+		response.Error(c, err, h.discord)
+		return
+	}
+
+	o, err := h.uc.Activate(ctx, req.toProjectID())
+	if err != nil {
+		h.l.Errorf(ctx, "datasource.delivery.Activate.uc.Activate: project_id=%s err=%v", req.ProjectID, err)
+		response.Error(c, h.mapError(err), h.discord)
+		return
+	}
+
+	response.OK(c, h.newProjectLifecycleResp(o))
+}
+
+// @Summary Pause all active datasources in a project
+// @Description Internal API to pause project-level datasource runtime
+// @Tags DataSource
+// @Produce json
+// @Param project_id path string true "Project ID"
+// @Success 200 {object} projectLifecycleResp
+// @Failure 400 {object} response.Resp
+// @Failure 500 {object} response.Resp
+// @Router /internal/projects/{project_id}/pause [post]
+func (h *handler) Pause(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	req, err := h.processProjectLifecycleReq(c)
+	if err != nil {
+		h.l.Warnf(ctx, "datasource.delivery.Pause.processProjectLifecycleReq: %v", err)
+		response.Error(c, err, h.discord)
+		return
+	}
+
+	o, err := h.uc.Pause(ctx, req.toProjectID())
+	if err != nil {
+		h.l.Errorf(ctx, "datasource.delivery.Pause.uc.Pause: project_id=%s err=%v", req.ProjectID, err)
+		response.Error(c, h.mapError(err), h.discord)
+		return
+	}
+
+	response.OK(c, h.newProjectLifecycleResp(o))
+}
+
+// @Summary Resume all paused datasources in a project
+// @Description Internal API to resume project-level datasource runtime after readiness passes
+// @Tags DataSource
+// @Produce json
+// @Param project_id path string true "Project ID"
+// @Success 200 {object} projectLifecycleResp
+// @Failure 400 {object} response.Resp
+// @Failure 500 {object} response.Resp
+// @Router /internal/projects/{project_id}/resume [post]
+func (h *handler) Resume(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	req, err := h.processProjectLifecycleReq(c)
+	if err != nil {
+		h.l.Warnf(ctx, "datasource.delivery.Resume.processProjectLifecycleReq: %v", err)
+		response.Error(c, err, h.discord)
+		return
+	}
+
+	o, err := h.uc.Resume(ctx, req.toProjectID())
+	if err != nil {
+		h.l.Errorf(ctx, "datasource.delivery.Resume.uc.Resume: project_id=%s err=%v", req.ProjectID, err)
+		response.Error(c, h.mapError(err), h.discord)
+		return
+	}
+
+	response.OK(c, h.newProjectLifecycleResp(o))
 }
 
 // --- CrawlTarget Handlers ---
@@ -379,6 +524,66 @@ func (h *handler) UpdateTarget(c *gin.Context) {
 	}
 
 	response.OK(c, h.newUpdateTargetResp(o))
+}
+
+// @Summary Activate a crawl target
+// @Description Activate one crawl target after dry-run evidence is available
+// @Tags CrawlTarget
+// @Produce json
+// @Param id path string true "Data Source ID"
+// @Param target_id path string true "Target ID"
+// @Success 200 {object} updateTargetResp
+// @Failure 400 {object} response.Resp
+// @Failure 500 {object} response.Resp
+// @Router /datasources/{id}/targets/{target_id}/activate [post]
+func (h *handler) ActivateTarget(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	req, err := h.processDetailTargetReq(c)
+	if err != nil {
+		h.l.Warnf(ctx, "datasource.delivery.ActivateTarget.processDetailTargetReq: %v", err)
+		response.Error(c, err, h.discord)
+		return
+	}
+
+	o, err := h.uc.ActivateTarget(ctx, req.toActivateInput())
+	if err != nil {
+		h.l.Errorf(ctx, "datasource.delivery.ActivateTarget.uc.ActivateTarget: id=%s err=%v", req.ID, err)
+		response.Error(c, h.mapError(err), h.discord)
+		return
+	}
+
+	response.OK(c, updateTargetResp{Target: toCrawlTargetResp(o.Target)})
+}
+
+// @Summary Deactivate a crawl target
+// @Description Deactivate one crawl target manually
+// @Tags CrawlTarget
+// @Produce json
+// @Param id path string true "Data Source ID"
+// @Param target_id path string true "Target ID"
+// @Success 200 {object} updateTargetResp
+// @Failure 400 {object} response.Resp
+// @Failure 500 {object} response.Resp
+// @Router /datasources/{id}/targets/{target_id}/deactivate [post]
+func (h *handler) DeactivateTarget(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	req, err := h.processDetailTargetReq(c)
+	if err != nil {
+		h.l.Warnf(ctx, "datasource.delivery.DeactivateTarget.processDetailTargetReq: %v", err)
+		response.Error(c, err, h.discord)
+		return
+	}
+
+	o, err := h.uc.DeactivateTarget(ctx, req.toDeactivateInput())
+	if err != nil {
+		h.l.Errorf(ctx, "datasource.delivery.DeactivateTarget.uc.DeactivateTarget: id=%s err=%v", req.ID, err)
+		response.Error(c, h.mapError(err), h.discord)
+		return
+	}
+
+	response.OK(c, updateTargetResp{Target: toCrawlTargetResp(o.Target)})
 }
 
 // @Summary Delete a crawl target

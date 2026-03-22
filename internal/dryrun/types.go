@@ -1,12 +1,14 @@
 package dryrun
 
 import (
+	"time"
+
 	"ingest-srv/internal/model"
 
 	"github.com/smap-hcmut/shared-libs/go/paginator"
 )
 
-// TriggerInput triggers one validation-only dryrun. For crawl sources, TargetID refers to one grouped crawl target.
+// TriggerInput triggers one async dryrun. For crawl sources, TargetID refers to one grouped crawl target.
 type TriggerInput struct {
 	SourceID    string
 	TargetID    string
@@ -18,6 +20,71 @@ type TriggerInput struct {
 type TriggerOutput struct {
 	Result     model.DryrunResult
 	DataSource model.DataSource
+}
+
+type QueueName string
+
+const (
+	QueueNameTikTokTasks   QueueName = "tiktok_tasks"
+	QueueNameFacebookTasks QueueName = "facebook_tasks"
+)
+
+type ActionName string
+
+const (
+	ActionNamePostDetail ActionName = "post_detail"
+	ActionNameFullFlow   ActionName = "full_flow"
+)
+
+type RuntimeKind string
+
+const (
+	RuntimeKindDryrun RuntimeKind = "dryrun"
+)
+
+type WarningCode string
+
+const (
+	WarningCodeNoSampleData         WarningCode = "no_sample_data_extracted"
+	WarningCodeInvalidArtifact      WarningCode = "invalid_dryrun_artifact"
+	WarningCodeMultiValueKeyword    WarningCode = "multi_value_keyword_target"
+	WarningCodeObjectSampleFallback WarningCode = "object_sample_fallback"
+)
+
+const (
+	ParamKeyRuntimeKind          = "runtime_kind"
+	ParamKeyDryrunWarningCode    = "dryrun_warning_code"
+	ParamKeyDryrunWarningMessage = "dryrun_warning_message"
+)
+
+// DispatchSpec is the normalized runtime dispatch shape for one dryrun.
+type DispatchSpec struct {
+	Queue  QueueName
+	Action ActionName
+	Params map[string]interface{}
+}
+
+// PublishDispatchInput is the usecase-facing payload passed to the RabbitMQ producer.
+type PublishDispatchInput struct {
+	Queue     QueueName
+	TaskID    string
+	Action    ActionName
+	Params    map[string]interface{}
+	CreatedAt time.Time
+}
+
+// HandleCompletionInput is the usecase-facing completion payload consumed by ingest.
+type HandleCompletionInput struct {
+	TaskID        string
+	Status        string
+	CompletedAt   string
+	StorageBucket string
+	StoragePath   string
+	BatchID       string
+	Checksum      string
+	ItemCount     *int
+	Error         string
+	Metadata      map[string]interface{}
 }
 
 // GetLatestInput retrieves the latest dryrun result for a source or source-target(group) pair.

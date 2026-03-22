@@ -2,8 +2,10 @@ package producer
 
 import (
 	"context"
+	"strings"
 
 	"ingest-srv/internal/uap"
+	uapKafka "ingest-srv/internal/uap/delivery/kafka"
 )
 
 // Publish publishes a parsed UAP record to Kafka.
@@ -13,7 +15,13 @@ func (p *publisher) Publish(ctx context.Context, input uap.PublishUAPInput) erro
 		return nil
 	}
 
-	return p.producer.Publish(input.Key, input.Value)
+	body, err := uapKafka.MarshalUAPRecord(input.Record)
+	if err != nil {
+		return err
+	}
+
+	key := []byte(strings.TrimSpace(input.Record.Identity.UAPID))
+	return p.producer.Publish(key, body)
 }
 
 // Close closes the underlying Kafka producer if needed.

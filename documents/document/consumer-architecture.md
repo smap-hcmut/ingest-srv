@@ -28,8 +28,8 @@ Consumer Service được thiết kế theo mô hình **Multi-Domain Consumer** 
 │  Dispatcher Domain   │        │   Results Domain     │
 │  ─────────────────   │        │  ──────────────────  │
 │  Consumer:           │        │  Consumer:           │
-│  • Inbound tasks     │        │  • TikTok results    │
-│  • Project events    │        │  • YouTube results   │
+│  • Inbound tasks     │        │  • Execution results │
+│  • Project events    │        │  • Dry-run results   │
 │                      │        │                      │
 │  Producer:           │        │  (No producer)       │
 │  • TikTok tasks      │        │                      │
@@ -158,12 +158,12 @@ func (srv *Server) Run(ctx context.Context) error {
 
     // 4. Init Domain Consumers
     dispatchC := dispatcherConsumer.NewConsumer(srv.l, srv.conn, dispatcherUC)
-    resultsC := resultsConsumer.NewConsumer(srv.l, srv.conn, resultsUC)
+    resultsC := resultsConsumer.NewConsumer(srv.l, srv.conn, executionUC, dryrunUC)
 
     // 5. Start Consumers (non-blocking goroutines)
     dispatchC.Consume()                    // collector.inbound.tasks
     dispatchC.ConsumeProjectEvents()       // smap.events.project.created
-    resultsC.Consume()                     // results từ TikTok & YouTube
+    resultsC.Consume()                     // completion từ worker cho execution + dryrun
 
     // 6. Block until shutdown signal
     <-ctx.Done()

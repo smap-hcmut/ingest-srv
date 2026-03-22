@@ -81,15 +81,18 @@ Các quyết định dưới đây nên được coi là canonical cho Phase 2.
   - internal adapter / consumer từ `project-srv`
   - hoặc internal/admin handler nếu thật sự cần trong runtime, nhưng không public cho user-facing API
 
-### 4.2 Archive không làm lại dưới dạng endpoint mới
+### 4.2 Archive là action riêng, delete là bước sau archive
 
-Phase 1 đã có `DELETE /api/v1/datasources/:id` cho archive mềm.
+Phase 1 hiện đã tách:
+
+- `POST /api/v1/datasources/:id/archive` để chuyển datasource sang `ARCHIVED`
+- `DELETE /api/v1/datasources/:id` chỉ để soft delete sau khi datasource đã `ARCHIVED`
 
 Vì vậy trong Phase 2:
 
-- giữ nguyên archive route hiện có
-- chỉ chuẩn hóa state transition và side effect của archive
-- không tạo thêm một endpoint archive khác nếu không có lý do rõ ràng
+- giữ nguyên 2 route này
+- chỉ chuẩn hóa state transition và side effect của archive/delete
+- không nhập nhằng `DELETE` với `archive`
 
 ### 4.3 Dry run cho CRAWL đi theo target trước
 
@@ -132,7 +135,7 @@ Phase 2 không cho phép:
 | `PENDING` | `FAILED` | dry run thất bại nghiêm trọng |
 | `READY` | `FAILED` | dry run lại thất bại hoặc validation runtime fail |
 | `FAILED` | `READY` | dry run lại thành công |
-| `PENDING`,`READY`,`PAUSED`,`FAILED` | `ARCHIVED` | archive mềm |
+| `PENDING`,`READY`,`PAUSED`,`FAILED` | `ARCHIVED` | archive datasource |
 
 Không hỗ trợ trong Phase 2:
 

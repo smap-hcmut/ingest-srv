@@ -11,16 +11,16 @@ import (
 	"github.com/smap-hcmut/shared-libs/go/auth"
 )
 
-// Activate transitions a datasource from READY to ACTIVE when runtime prerequisites are met.
-func (uc *implUseCase) Activate(ctx context.Context, input datasource.ActivateInput) (datasource.ActivateOutput, error) {
-	if err := uc.validActivateInput(input); err != nil {
-		uc.l.Warnf(ctx, "datasource.usecase.Activate.validActivateInput: %v", err)
+// ActivateDataSource transitions a datasource from READY to ACTIVE when runtime prerequisites are met.
+func (uc *implUseCase) ActivateDataSource(ctx context.Context, id string) (datasource.ActivateOutput, error) {
+	if err := uc.validDataSourceID(id); err != nil {
+		uc.l.Warnf(ctx, "datasource.usecase.ActivateDataSource.validDataSourceID: %v", err)
 		return datasource.ActivateOutput{}, err
 	}
 
-	current, err := uc.repo.DetailDataSource(ctx, strings.TrimSpace(input.ID))
+	current, err := uc.repo.DetailDataSource(ctx, strings.TrimSpace(id))
 	if err != nil {
-		uc.l.Errorf(ctx, "datasource.usecase.Activate.repo.DetailDataSource: id=%s err=%v", input.ID, err)
+		uc.l.Errorf(ctx, "datasource.usecase.ActivateDataSource.repo.DetailDataSource: id=%s err=%v", id, err)
 		return datasource.ActivateOutput{}, datasource.ErrNotFound
 	}
 	if current.ID == "" {
@@ -30,31 +30,8 @@ func (uc *implUseCase) Activate(ctx context.Context, input datasource.ActivateIn
 		return datasource.ActivateOutput{}, datasource.ErrActivateNotAllowed
 	}
 
-	switch current.SourceCategory {
-	case model.SourceCategoryCrawl:
-		if current.CrawlMode == nil || current.CrawlIntervalMinutes == nil || *current.CrawlIntervalMinutes <= 0 {
-			return datasource.ActivateOutput{}, datasource.ErrActivateNotAllowed
-		}
-
-		activeTargets, err := uc.repo.CountActiveTargets(ctx, current.ID)
-		if err != nil {
-			uc.l.Errorf(ctx, "datasource.usecase.Activate.repo.CountActiveTargets: id=%s err=%v", input.ID, err)
-			return datasource.ActivateOutput{}, datasource.ErrActivateNotAllowed
-		}
-		if activeTargets <= 0 {
-			return datasource.ActivateOutput{}, datasource.ErrActivateNotAllowed
-		}
-	case model.SourceCategoryPassive:
-		switch current.SourceType {
-		case model.SourceTypeWebhook:
-			if current.WebhookID == "" || current.WebhookSecretEncrypted == "" {
-				return datasource.ActivateOutput{}, datasource.ErrActivateNotAllowed
-			}
-		default:
-			return datasource.ActivateOutput{}, datasource.ErrActivateNotAllowed
-		}
-	default:
-		return datasource.ActivateOutput{}, datasource.ErrActivateNotAllowed
+	if err := uc.ensureRuntimePrerequisites(ctx, current, datasource.ErrActivateNotAllowed); err != nil {
+		return datasource.ActivateOutput{}, err
 	}
 
 	updated, err := uc.repo.UpdateDataSource(ctx, repo.UpdateDataSourceOptions{
@@ -63,23 +40,23 @@ func (uc *implUseCase) Activate(ctx context.Context, input datasource.ActivateIn
 		ClearPausedAt: true,
 	})
 	if err != nil {
-		uc.l.Errorf(ctx, "datasource.usecase.Activate.repo.UpdateDataSource: id=%s err=%v", input.ID, err)
+		uc.l.Errorf(ctx, "datasource.usecase.ActivateDataSource.repo.UpdateDataSource: id=%s err=%v", id, err)
 		return datasource.ActivateOutput{}, datasource.ErrUpdateFailed
 	}
 
 	return datasource.ActivateOutput{DataSource: updated}, nil
 }
 
-// Pause transitions an ACTIVE datasource into PAUSED.
-func (uc *implUseCase) Pause(ctx context.Context, input datasource.PauseInput) (datasource.PauseOutput, error) {
-	if err := uc.validPauseInput(input); err != nil {
-		uc.l.Warnf(ctx, "datasource.usecase.Pause.validPauseInput: %v", err)
+// PauseDataSource transitions an ACTIVE datasource into PAUSED.
+func (uc *implUseCase) PauseDataSource(ctx context.Context, id string) (datasource.PauseOutput, error) {
+	if err := uc.validDataSourceID(id); err != nil {
+		uc.l.Warnf(ctx, "datasource.usecase.PauseDataSource.validDataSourceID: %v", err)
 		return datasource.PauseOutput{}, err
 	}
 
-	current, err := uc.repo.DetailDataSource(ctx, strings.TrimSpace(input.ID))
+	current, err := uc.repo.DetailDataSource(ctx, strings.TrimSpace(id))
 	if err != nil {
-		uc.l.Errorf(ctx, "datasource.usecase.Pause.repo.DetailDataSource: id=%s err=%v", input.ID, err)
+		uc.l.Errorf(ctx, "datasource.usecase.PauseDataSource.repo.DetailDataSource: id=%s err=%v", id, err)
 		return datasource.PauseOutput{}, datasource.ErrNotFound
 	}
 	if current.ID == "" {
@@ -94,32 +71,35 @@ func (uc *implUseCase) Pause(ctx context.Context, input datasource.PauseInput) (
 		Status: string(model.SourceStatusPaused),
 	})
 	if err != nil {
-		uc.l.Errorf(ctx, "datasource.usecase.Pause.repo.UpdateDataSource: id=%s err=%v", input.ID, err)
+		uc.l.Errorf(ctx, "datasource.usecase.PauseDataSource.repo.UpdateDataSource: id=%s err=%v", id, err)
 		return datasource.PauseOutput{}, datasource.ErrUpdateFailed
 	}
 
 	return datasource.PauseOutput{DataSource: updated}, nil
 }
 
-// Resume transitions a PAUSED datasource back to ACTIVE.
-func (uc *implUseCase) Resume(ctx context.Context, input datasource.ResumeInput) (datasource.ResumeOutput, error) {
-	if err := uc.validResumeInput(input); err != nil {
-		uc.l.Warnf(ctx, "datasource.usecase.Resume.validResumeInput: %v", err)
+// ResumeDataSource transitions a PAUSED datasource back to ACTIVE.
+func (uc *implUseCase) ResumeDataSource(ctx context.Context, id string) (datasource.ResumeOutput, error) {
+	if err := uc.validDataSourceID(id); err != nil {
+		uc.l.Warnf(ctx, "datasource.usecase.ResumeDataSource.validDataSourceID: %v", err)
 		return datasource.ResumeOutput{}, err
 	}
 
-	current, err := uc.repo.DetailDataSource(ctx, strings.TrimSpace(input.ID))
+	current, err := uc.repo.DetailDataSource(ctx, strings.TrimSpace(id))
 	if err != nil {
-		uc.l.Errorf(ctx, "datasource.usecase.Resume.repo.DetailDataSource: id=%s err=%v", input.ID, err)
+		uc.l.Errorf(ctx, "datasource.usecase.ResumeDataSource.repo.DetailDataSource: id=%s err=%v", id, err)
 		return datasource.ResumeOutput{}, datasource.ErrNotFound
 	}
 	if current.ID == "" {
-		uc.l.Warnf(ctx, "datasource.usecase.Resume.repo.DetailDataSource: id=%s not found", input.ID)
+		uc.l.Warnf(ctx, "datasource.usecase.ResumeDataSource.repo.DetailDataSource: id=%s not found", id)
 		return datasource.ResumeOutput{}, datasource.ErrNotFound
 	}
 	if current.Status != model.SourceStatusPaused {
-		uc.l.Warnf(ctx, "datasource.usecase.Resume: id=%s status=%s not paused", input.ID, current.Status)
+		uc.l.Warnf(ctx, "datasource.usecase.ResumeDataSource: id=%s status=%s not paused", id, current.Status)
 		return datasource.ResumeOutput{}, datasource.ErrResumeNotAllowed
+	}
+	if err := uc.ensureRuntimePrerequisites(ctx, current, datasource.ErrResumeNotAllowed); err != nil {
+		return datasource.ResumeOutput{}, err
 	}
 
 	updated, err := uc.repo.UpdateDataSource(ctx, repo.UpdateDataSourceOptions{
@@ -128,7 +108,7 @@ func (uc *implUseCase) Resume(ctx context.Context, input datasource.ResumeInput)
 		ClearPausedAt: true,
 	})
 	if err != nil {
-		uc.l.Errorf(ctx, "datasource.usecase.Resume.repo.UpdateDataSource: id=%s err=%v", input.ID, err)
+		uc.l.Errorf(ctx, "datasource.usecase.ResumeDataSource.repo.UpdateDataSource: id=%s err=%v", id, err)
 		return datasource.ResumeOutput{}, datasource.ErrUpdateFailed
 	}
 

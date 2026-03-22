@@ -6,92 +6,222 @@ import (
 )
 
 type ParseAndStoreRawBatchInput struct {
-	RawBatchID      string
-	ProjectID       string
-	SourceID        string
-	ExternalTaskID  string
-	TaskID          string
-	Platform        string
-	Action          string
-	StorageBucket   string
-	StoragePath     string
-	BatchID         string
-	RawMetadata     json.RawMessage
-	RequestPayload  json.RawMessage
-	CompletionTime  time.Time
+	RawBatchID     string
+	ProjectID      string
+	SourceID       string
+	ExternalTaskID string
+	TaskID         string
+	Platform       string
+	Action         string
+	StorageBucket  string
+	StoragePath    string
+	BatchID        string
+	RawMetadata    json.RawMessage
+	RequestPayload json.RawMessage
+	CompletionTime time.Time
+}
+
+type TikTokFullFlowInput struct {
+	Posts []TikTokPostBundleInput
+}
+
+type TikTokPostBundleInput struct {
+	Post     TikTokPostInput
+	Detail   TikTokDetailInput
+	Comments []TikTokCommentInput
+}
+
+type TikTokPostInput struct {
+	VideoID       string
+	URL           string
+	Description   string
+	Author        TikTokAuthorInput
+	LikesCount    int
+	CommentsCount int
+	SharesCount   int
+	ViewsCount    int
+	Hashtags      []string
+	PostedAt      string
+	IsShopVideo   bool
+}
+
+type TikTokDetailInput struct {
+	VideoID        string
+	URL            string
+	Description    string
+	Author         TikTokAuthorInput
+	LikesCount     int
+	CommentsCount  int
+	SharesCount    int
+	ViewsCount     int
+	BookmarksCount int
+	Hashtags       []string
+	MusicTitle     string
+	MusicURL       string
+	Duration       int
+	PostedAt       string
+	IsShopVideo    bool
+	Summary        TikTokSummaryInput
+	PlayURL        string
+	DownloadURL    string
+	CoverURL       string
+	OriginCoverURL string
+	SubtitleURL    string
+	Downloads      TikTokDetailAssetsInput
+}
+
+type TikTokSummaryInput struct {
+	Title    string
+	Keywords []string
+	Language string
+}
+
+type TikTokDetailAssetsInput struct {
+	Music    string
+	Cover    string
+	Subtitle string
+	Video    string
+}
+
+type TikTokCommentInput struct {
+	CommentID      string
+	Content        string
+	Author         TikTokAuthorInput
+	LikesCount     int
+	ReplyCount     int
+	SortExtraScore TikTokCommentScoreInput
+	ReplyComments  []TikTokReplyInput
+	CommentedAt    string
+}
+
+type TikTokCommentScoreInput struct {
+	ReplyScore    float64
+	ShowMoreScore float64
+}
+
+type TikTokReplyInput struct {
+	ReplyID    string
+	Content    string
+	Author     TikTokAuthorInput
+	LikesCount int
+	RepliedAt  string
+}
+
+type TikTokAuthorInput struct {
+	UID      string
+	Username string
+	Nickname string
+	Avatar   string
 }
 
 type PublishUAPInput struct {
-	Key   []byte
-	Value []byte
+	Record UAPRecord
+}
+
+type UAPType string
+
+const (
+	UAPTypePost    UAPType = "POST"
+	UAPTypeComment UAPType = "COMMENT"
+	UAPTypeReply   UAPType = "REPLY"
+)
+
+const (
+	PlatformTikTok   = "tiktok"
+	TaskTypeFullFlow = "full_flow"
+)
+
+const (
+	ChunkSize            = 20
+	ContentTypeNDJSON    = "application/x-ndjson"
+	ArtifactsMetadataKey = "uap_artifacts"
+	ArtifactsVersionV1   = "v1"
+	KafkaPublishKey      = "kafka_publish"
+)
+
+// ArtifactPart describes one UAP artifact chunk written to object storage.
+type ArtifactPart struct {
+	PartNo        int
+	StorageBucket string
+	StoragePath   string
+	RecordCount   int
+}
+
+// KafkaPublishStats aggregates one raw-batch publish attempt summary.
+type KafkaPublishStats struct {
+	Topic          string
+	AttemptedCount int
+	SuccessCount   int
+	FailedCount    int
+	LastError      string
 }
 
 type UAPRecord struct {
-	Identity   UAPIdentity   `json:"identity"`
-	Hierarchy  UAPHierarchy  `json:"hierarchy"`
-	Content    UAPContent    `json:"content"`
-	Author     UAPAuthor     `json:"author"`
-	Engagement UAPEngagement `json:"engagement"`
-	Media      []UAPMedia    `json:"media,omitempty"`
-	Temporal   UAPTemporal   `json:"temporal"`
+	Identity   UAPIdentity
+	Hierarchy  UAPHierarchy
+	Content    UAPContent
+	Author     UAPAuthor
+	Engagement UAPEngagement
+	Media      []UAPMedia
+	Temporal   UAPTemporal
 }
 
 type UAPIdentity struct {
-	UAPID    string `json:"uap_id"`
-	OriginID string `json:"origin_id"`
-	UAPType  string `json:"uap_type"`
-	Platform string `json:"platform"`
-	URL      string `json:"url,omitempty"`
-	TaskID   string `json:"task_id,omitempty"`
-	ProjectID string `json:"project_id,omitempty"`
+	UAPID     string
+	OriginID  string
+	UAPType   UAPType
+	Platform  string
+	URL       string
+	TaskID    string
+	ProjectID string
 }
 
 type UAPHierarchy struct {
-	ParentID *string `json:"parent_id"`
-	RootID   string  `json:"root_id"`
-	Depth    int     `json:"depth"`
+	ParentID *string
+	RootID   string
+	Depth    int
 }
 
 type UAPContent struct {
-	Text           string   `json:"text,omitempty"`
-	Hashtags       []string `json:"hashtags,omitempty"`
-	TikTokKeywords []string `json:"tiktok_keywords,omitempty"`
-	IsShopVideo    *bool    `json:"is_shop_video,omitempty"`
-	MusicTitle     string   `json:"music_title,omitempty"`
-	MusicURL       string   `json:"music_url,omitempty"`
-	SummaryTitle   string   `json:"summary_title,omitempty"`
-	SubtitleURL    string   `json:"subtitle_url,omitempty"`
-	Language       string   `json:"language,omitempty"`
-	ExternalLinks  []string `json:"external_links,omitempty"`
+	Text           string
+	Hashtags       []string
+	TikTokKeywords []string
+	IsShopVideo    *bool
+	MusicTitle     string
+	MusicURL       string
+	SummaryTitle   string
+	SubtitleURL    string
+	Language       string
+	ExternalLinks  []string
 }
 
 type UAPAuthor struct {
-	ID         string `json:"id,omitempty"`
-	Username   string `json:"username,omitempty"`
-	Nickname   string `json:"nickname,omitempty"`
-	Avatar     string `json:"avatar,omitempty"`
-	IsVerified *bool  `json:"is_verified,omitempty"`
+	ID         string
+	Username   string
+	Nickname   string
+	Avatar     string
+	IsVerified *bool
 }
 
 type UAPEngagement struct {
-	Likes         *int     `json:"likes,omitempty"`
-	CommentsCount *int     `json:"comments_count,omitempty"`
-	Shares        *int     `json:"shares,omitempty"`
-	Views         *int     `json:"views,omitempty"`
-	Bookmarks     *int     `json:"bookmarks,omitempty"`
-	ReplyCount    *int     `json:"reply_count,omitempty"`
-	SortScore     *float64 `json:"sort_score,omitempty"`
+	Likes         *int
+	CommentsCount *int
+	Shares        *int
+	Views         *int
+	Bookmarks     *int
+	ReplyCount    *int
+	SortScore     *float64
 }
 
 type UAPMedia struct {
-	Type        string `json:"type"`
-	URL         string `json:"url,omitempty"`
-	DownloadURL string `json:"download_url,omitempty"`
-	Duration    *int   `json:"duration,omitempty"`
-	Thumbnail   string `json:"thumbnail,omitempty"`
+	Type        string
+	URL         string
+	DownloadURL string
+	Duration    *int
+	Thumbnail   string
 }
 
 type UAPTemporal struct {
-	PostedAt   string `json:"posted_at,omitempty"`
-	IngestedAt string `json:"ingested_at,omitempty"`
+	PostedAt   string
+	IngestedAt string
 }

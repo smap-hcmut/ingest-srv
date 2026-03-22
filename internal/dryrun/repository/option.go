@@ -2,6 +2,7 @@ package repository
 
 import (
 	"encoding/json"
+	"time"
 
 	"github.com/smap-hcmut/shared-libs/go/paginator"
 )
@@ -11,6 +12,7 @@ type CreateResultOptions struct {
 	SourceID    string
 	ProjectID   string
 	TargetID    string
+	JobID       string
 	Status      string
 	RequestedBy string
 	SampleCount int
@@ -21,10 +23,24 @@ type UpdateResultOptions struct {
 	ID           string
 	Status       string
 	SampleCount  int
+	CompletedAt  *time.Time
 	TotalFound   *int
 	SampleData   json.RawMessage
 	Warnings     json.RawMessage
 	ErrorMessage string
+}
+
+// CompleteResultOptions atomically finalizes one dryrun result and syncs datasource/target snapshots.
+type CompleteResultOptions struct {
+	ID             string
+	Status         string
+	SampleCount    int
+	CompletedAt    *time.Time
+	TotalFound     *int
+	SampleData     json.RawMessage
+	Warnings       json.RawMessage
+	ErrorMessage   string
+	ActivateTarget bool
 }
 
 // GetLatestOptions contains filters for retrieving the latest dryrun result.

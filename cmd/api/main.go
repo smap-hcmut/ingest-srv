@@ -142,6 +142,12 @@ func main() {
 		CookieConfig: cfg.Cookie,
 		Encrypter:    enc,
 		Discord:      discordClient,
+		Microservice: httpserver.Microservice{
+			Project: httpserver.ProjectService{
+				BaseURL:   cfg.Microservice.Project.BaseURL,
+				TimeoutMS: cfg.Microservice.Project.TimeoutMS,
+			},
+		},
 	})
 	if err != nil {
 		logger.Error(ctx, "Failed to initialize HTTP server: ", err)
