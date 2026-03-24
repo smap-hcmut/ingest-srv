@@ -291,6 +291,7 @@ Vì sao:
 - map `title`, `subtitle`, `keywords`, `saves`
 - field TikTok-specific đi vào `platform_meta`
 - fetch subtitle lỗi không fail batch
+- xác nhận bằng fixture/live sample mới có `reply_body_count > 0`
 
 ### Subtitle helper
 
@@ -333,3 +334,4 @@ Vì sao:
 - Reply policy là strict:
   - có body thật mới emit `REPLY`
   - nếu chỉ có `reply_count` thì giữ ở engagement.
+- TikTok đã có bằng chứng live rằng `reply_comments` có thể xuất hiện, nhưng không coi đó là guarantee ổn định cho mọi keyword/run.

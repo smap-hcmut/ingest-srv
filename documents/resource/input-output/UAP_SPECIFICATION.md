@@ -1,19 +1,25 @@
-# SMAP Universal Analytics Profile (UAP) Specification - v11.0 (Comprehensive & Verified)
+# SMAP Universal Analytics Profile (UAP) Specification - Current Runtime
 
-**Nguyên tắc:** Ingest Service phẳng hóa dữ liệu thô sang chuẩn UAP. Tận dụng tối đa AI của TikTok và giữ lại các trường tài nguyên số (Downloads, Music, Subtitles).
+**Nguyên tắc:** Tài liệu này mô tả schema UAP đang được `ingest-srv` xuất ra ở runtime hiện tại. Đây chưa phải schema vNext cross-platform.
+
+**Runtime support hiện tại:**
+
+- parser hiện chỉ hỗ trợ `tiktok/full_flow`
+- `facebook/full_flow` và `youtube/full_flow` mới ở mức proposal, chưa được parse vào UAP
+- field names bên dưới là schema hiện hành, chưa phải schema đổi tên theo vNext như `subtitle`, `title`, `keywords`, `saves`
 
 ---
 
 ## 1. Hệ thống Danh mục (Enums)
 
 *   **`uap_type`**: `POST` (Gốc), `COMMENT` (Cấp 1), `REPLY` (Cấp 2+).
-*   **`platform`**: `tiktok`, `facebook`, `youtube`.
+*   **`platform`**: runtime hiện tại parse `tiktok`; `facebook`, `youtube` là target support trong proposal vNext.
 *   **`account_type`**: `personal`, `creator`, `business`, `bot` (wishlist).
 *   **`media_type`**: `video`, `image`, `carousel`.
 
 ---
 
-## 2. Đặc tả Object POST (Video/Bài viết gốc)
+## 2. Đặc tả Object POST Runtime
 
 ```json
 {
@@ -21,7 +27,7 @@
     "uap_id": "tt_p_760990...",           // Prefix (tt/fb/yt) + type (p/c/r) + origin_id
     "origin_id": "760990...",             // Map: post.video_id
     "uap_type": "POST",                   // Enum: POST
-    "platform": "tiktok",                 // Map: queue name (tiktok_tasks)
+    "platform": "tiktok",                 // Runtime hiện tại chỉ parse TikTok full_flow
     "url": "https://www.tiktok.com/...",   // Map: post.url
     "task_id": "f0e87d9e...",              // Map: completion.task_id (Dùng để backtrack raw data)
     "project_id": "f0e87d9e"                // Map: get from ingest service
@@ -43,7 +49,7 @@
     "music_title": "nhạc nền...",         // Map: detail.music_title (Để biết thương hiệu đang gắn với Trend âm thanh nào)
     "music_url": "https://v77.tiktok...", // Map: detail.downloads.music (File audio gốc để Marketer nghe lại)
     "summary_title": "Đánh giá VinFast",  // Map: detail.summary.title (Tiêu đề do TikTok AI tạo)
-    "subtitle_url": "https://v16...",     // Map: detail.downloads.subtitle (Dùng để làm Transcript/RAG)
+    "subtitle_url": "https://v16...",     // Map: detail.downloads.subtitle hoặc detail.subtitle_url (runtime hiện tại vẫn lưu URL, chưa normalize thành text)
     "language": "vi",                     // Map: detail.summary.language (Nếu có)
     
     // --- WISHLIST (Hiện thực sau) ---
@@ -97,7 +103,7 @@
 
 ---
 
-## 3. Đặc tả Object COMMENT & REPLY
+## 3. Đặc tả Object COMMENT & REPLY Runtime
 
 ```json
 {
@@ -140,7 +146,7 @@
 
 ---
 
-## 4. Giải thích ý nghĩa & Mapping (For BI & Marketers)
+## 4. Giải thích ý nghĩa & Mapping Runtime
 
 | Nhóm trường | Trường (Field) | Tại sao Marketer cần? | Mapping thực tế (Raw JSON) |
 | :--- | :--- | :--- | :--- |
@@ -158,3 +164,4 @@
 1.  **Flattening**: Tách bạch POST, COMMENT, REPLY thành các record độc lập.
 2.  **ID Consistency**: Đảm bảo `uap_id` là duy nhất và `root_id` luôn trỏ về Post gốc.
 3.  **No Data Loss**: Marketer cực kỳ cần các trường URL (download, music, subtitle) để khai thác nội dung sạch.
+4.  **Current runtime only**: nếu cần schema cross-platform hơn cho Facebook/YouTube, dùng proposal tại `UAP_VNEXT_PROPOSAL_2026-03-24.md` và implementation plan tại `UAP_VNEXT_IMPLEMENTATION_PLAN.md`.

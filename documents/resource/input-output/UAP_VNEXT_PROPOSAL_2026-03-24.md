@@ -86,6 +86,9 @@ Core UAP should prefer fields that map cleanly across TikTok, Facebook, and YouT
 - Only emit `uap_type=REPLY` when raw includes actual reply bodies.
 - If raw only exposes `reply_count`, keep it in `engagement.reply_count`.
 - Do not fabricate reply records from counts.
+- Current validation note:
+  - TikTok has at least one live rerun with real `reply_comments`
+  - YouTube and Facebook still look count-only or unavailable
 
 ## Suggested Content Shape
 
@@ -160,5 +163,5 @@ Core UAP should prefer fields that map cleanly across TikTok, Facebook, and YouT
 ## Non-Goals For This Round
 
 - Do not add Facebook transcript mapping until validated on real video raw.
-- Do not guarantee `REPLY` support until reply bodies are consistently available.
+- Do not guarantee `REPLY` support cross-platform until reply bodies are consistently available.
 - Do not remove raw storage of original URLs and platform-specific objects.

@@ -10,6 +10,7 @@ Validation was run before changing UAP with these live/raw artifacts:
 - Facebook video/photo caption check: `scapper-srv/output/validation_uap/facebook_video_caption_validation_20260323_225116.json`
 - TikTok live full flow threshold 0.3: `scapper-srv/output/validation_uap/tiktok_full_flow_threshold03_validation_20260323_225206.json`
 - TikTok direct reply probe on historical comments: `scapper-srv/output/validation_uap/tiktok_comment_replies_probe_20260323_225235.json`
+- TikTok rerun update with live comments and replies: `scapper-srv/output/validation_uap/tiktok_full_flow_threshold03_validation_20260324_072909.json`
 
 ## Direct Answers
 
@@ -19,8 +20,10 @@ Validation was run before changing UAP with these live/raw artifacts:
 - Facebook video post does not show `accessibility_caption` like the tested photo post.
   - Tested video attachment: `type=Video`, `accessibility_caption=null`
   - Tested photo attachment: `type=Photo`, `accessibility_caption` present and looks like alt/OCR text, not transcript.
-- Reply body extraction is not reliable in current raw.
-  - TikTok live `full_flow` at `threshold=0.3`: no comments returned in 3 tested keywords, therefore no reply bodies.
+- Reply body extraction is not reliable cross-platform yet.
+  - TikTok has mixed live results:
+    - earlier runs returned `0` comments for tested keywords
+    - latest rerun with `keyword=vinfast vf8`, `threshold=0.3` returned `157` comments and `85` reply bodies
   - TikTok direct `comment_replies` probe on 5 historical comments with `reply_count > 0`: all returned `replies=[]`.
   - YouTube current raw: `reply_count` exists, reply bodies are absent.
   - Facebook current raw: `replies=null` in tested comments, no reply bodies observed.
@@ -55,7 +58,7 @@ Coverage highlights:
   - stable in `15/15`: `post.description`, `post.hashtags`, `detail.bookmarks_count`, `detail.music_title`, `detail.music_url`, `detail.downloads.video`, `detail.video_resources`
   - subtitle-related fields present in `8/15`: `detail.subtitle_url`, `detail.downloads.subtitle`
   - comments present in `0/15` in this rerun
-  - reply support still unavailable in current live raw
+  - this rerun alone did not show reply support, but later targeted rerun did
 
 ## Docs vs Implement
 
@@ -70,9 +73,17 @@ Coverage highlights:
 
 ### TikTok
 
-- Live `full_flow` test with `threshold=0.3` on `vinfast vf8`, `iphone 16`, `bia tiger` returned `total_comments=0` for all 3 runs.
-- This means current live `full_flow` evidence does not support `COMMENT` or `REPLY` generation from those runs.
-- Historical raw sample still shows many comments and non-zero `reply_count`, but current direct `comment_replies` probe returned no bodies for 5 sampled comments.
+- Earlier live `full_flow` test with `threshold=0.3` on `vinfast vf8`, `iphone 16`, `bia tiger` returned `total_comments=0` for all 3 runs.
+- A later rerun changed that conclusion:
+  - artifact: `scapper-srv/output/validation_uap/tiktok_full_flow_threshold03_validation_20260324_072909.json`
+  - `keyword=vinfast vf8`
+  - `total_posts=3`
+  - `total_comments=157`
+  - `comments_with_reply_count=60`
+  - `reply_body_count=85`
+  - `reply_support=supported now`
+- This means TikTok `COMMENT` and `REPLY` generation is supported by at least one recent live raw batch, but availability is still unstable across keywords and runs.
+- Historical direct `comment_replies` probe still returned no bodies for 5 sampled comments, so upstream behavior is inconsistent.
 - TikTok subtitle capability is real.
   - `subtitle_url` can be downloaded as `WEBVTT`
   - `downloads.subtitle` currently returned `401` in earlier direct test
@@ -138,5 +149,6 @@ Coverage highlights:
   - TikTok subtitle text from downloaded `WEBVTT`
   - YouTube transcript text from `full_text` or merged `segments`
 - Facebook should not be mapped to transcript/subtitle yet.
-- Current reply-body support is not strong enough to promise `uap_type=REPLY` for any platform right now.
+- Current reply-body support is not strong enough to promise `uap_type=REPLY` cross-platform right now.
+- TikTok now has direct live evidence for `COMMENT` and `REPLY`, but YouTube and Facebook still do not.
 - UAP spec should be updated to reflect actual parser support, and core fields should be renamed toward cross-platform semantics before adding Facebook/YouTube parsing.
