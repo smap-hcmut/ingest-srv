@@ -1,5 +1,8 @@
 # SMAP Universal Analytics Profile (UAP) Specification - Current Runtime
 
+- Version: `runtime-v2.0`
+- Last updated: `2026-03-24 16:36:00 +07:00`
+
 **Nguyên tắc:** Tài liệu này mô tả schema UAP đang được `ingest-srv` xuất ra ở runtime hiện tại. Đây chưa phải schema vNext cross-platform.
 
 **Runtime support hiện tại:**
