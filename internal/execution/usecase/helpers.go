@@ -65,6 +65,47 @@ func (uc *implUseCase) buildDispatchSpecs(source model.DataSource, target model.
 			})
 		}
 		return specs, nil
+	case source.SourceType == model.SourceTypeFacebook && target.TargetType == model.TargetTypeKeyword:
+		keywords := uc.extractKeywords(target.Values)
+		if len(keywords) == 0 {
+			uc.l.Warnf(context.Background(), "execution.usecase.buildDispatchSpecs.facebookFullFlowInvalidKeywordTarget: target_id=%s keyword_count=%d", target.ID, len(target.Values))
+			return nil, execution.ErrDispatchNotAllowed
+		}
+		specs := make([]execution.DispatchSpec, 0, len(keywords))
+		for _, keyword := range keywords {
+			specs = append(specs, execution.DispatchSpec{
+				Queue:   execution.QueueName(executionRabbit.FacebookTasksQueueName),
+				Action:  execution.ActionNameFullFlow,
+				Keyword: keyword,
+				Params: map[string]interface{}{
+					"keyword":       keyword,
+					"limit":         execution.FacebookFullFlowLimit,
+					"comment_count": execution.FacebookFullFlowCommentCount,
+					"comment_sort":  execution.FacebookFullFlowCommentSort,
+				},
+			})
+		}
+		return specs, nil
+	case source.SourceType == model.SourceTypeYouTube && target.TargetType == model.TargetTypeKeyword:
+		keywords := uc.extractKeywords(target.Values)
+		if len(keywords) == 0 {
+			uc.l.Warnf(context.Background(), "execution.usecase.buildDispatchSpecs.youtubeFullFlowInvalidKeywordTarget: target_id=%s keyword_count=%d", target.ID, len(target.Values))
+			return nil, execution.ErrDispatchNotAllowed
+		}
+		specs := make([]execution.DispatchSpec, 0, len(keywords))
+		for _, keyword := range keywords {
+			specs = append(specs, execution.DispatchSpec{
+				Queue:   execution.QueueName(executionRabbit.YoutubeTasksQueueName),
+				Action:  execution.ActionNameFullFlow,
+				Keyword: keyword,
+				Params: map[string]interface{}{
+					"keyword":       keyword,
+					"limit":         execution.YouTubeFullFlowLimit,
+					"comment_count": execution.YouTubeFullFlowCommentCount,
+				},
+			})
+		}
+		return specs, nil
 	case source.SourceType == model.SourceTypeFacebook && target.TargetType == model.TargetTypePostURL:
 		parseIDs, err := uc.parseFacebookParseIDs(target.PlatformMeta)
 		if err != nil {
