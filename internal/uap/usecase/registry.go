@@ -22,7 +22,8 @@ func normalizeParseKey(platform, action string) parseKey {
 
 func (uc *implUseCase) buildParseRegistry() map[parseKey]parseFunc {
 	return map[parseKey]parseFunc{
-		normalizeParseKey(uap.PlatformTikTok, uap.TaskTypeFullFlow): uc.flattenTikTokFullFlow,
+		normalizeParseKey(uap.PlatformTikTok, uap.TaskTypeFullFlow):  uc.flattenTikTokFullFlow,
+		normalizeParseKey(uap.PlatformYouTube, uap.TaskTypeFullFlow): uc.flattenYouTubeFullFlow,
 	}
 }
 

@@ -191,6 +191,13 @@ func (uc *implUseCase) mapTikTokPost(bundle uap.TikTokPostBundleInput, input uap
 	isShopVideo := bundle.Detail.IsShopVideo || bundle.Post.IsShopVideo
 	postedAt := strings.TrimSpace(uc.firstNonEmpty(bundle.Detail.PostedAt, bundle.Post.PostedAt))
 	ingestedAt := input.CompletionTime.UTC().Format(time.RFC3339)
+	platformMeta := map[string]interface{}{
+		"tiktok": map[string]interface{}{
+			"music_title":   bundle.Detail.MusicTitle,
+			"music_url":     uc.firstNonEmpty(bundle.Detail.Downloads.Music, bundle.Detail.MusicURL),
+			"is_shop_video": isShopVideo,
+		},
+	}
 
 	return uap.UAPRecord{
 		Identity: uap.UAPIdentity{
@@ -208,21 +215,19 @@ func (uc *implUseCase) mapTikTokPost(bundle uap.TikTokPostBundleInput, input uap
 			Depth:    0,
 		},
 		Content: uap.UAPContent{
-			Text:           uc.firstNonEmpty(bundle.Detail.Description, bundle.Post.Description),
-			Hashtags:       uc.normalizeStringSlice(uc.firstNonEmptySlice(bundle.Detail.Hashtags, bundle.Post.Hashtags)),
-			TikTokKeywords: uc.normalizeStringSlice(bundle.Detail.Summary.Keywords),
-			IsShopVideo:    &isShopVideo,
-			MusicTitle:     bundle.Detail.MusicTitle,
-			MusicURL:       uc.firstNonEmpty(bundle.Detail.Downloads.Music, bundle.Detail.MusicURL),
-			SummaryTitle:   bundle.Detail.Summary.Title,
-			SubtitleURL:    uc.firstNonEmpty(bundle.Detail.Downloads.Subtitle, bundle.Detail.SubtitleURL),
-			Language:       strings.TrimSpace(bundle.Detail.Summary.Language),
+			Text:     uc.firstNonEmpty(bundle.Detail.Description, bundle.Post.Description),
+			Title:    strings.TrimSpace(bundle.Detail.Summary.Title),
+			Subtitle: uc.resolveTikTokSubtitleText(bundle.Detail),
+			Hashtags: uc.normalizeStringSlice(uc.firstNonEmptySlice(bundle.Detail.Hashtags, bundle.Post.Hashtags)),
+			Keywords: uc.normalizeStringSlice(bundle.Detail.Summary.Keywords),
+			Language: strings.TrimSpace(bundle.Detail.Summary.Language),
 		},
 		Author: uap.UAPAuthor{
 			ID:         uc.firstNonEmpty(bundle.Detail.Author.UID, bundle.Post.Author.UID),
 			Username:   uc.firstNonEmpty(bundle.Detail.Author.Username, bundle.Post.Author.Username),
 			Nickname:   uc.firstNonEmpty(bundle.Detail.Author.Nickname, bundle.Post.Author.Nickname),
 			Avatar:     uc.firstNonEmpty(bundle.Detail.Author.Avatar, bundle.Post.Author.Avatar),
+			ProfileURL: "",
 			IsVerified: &isVerified,
 		},
 		Engagement: uap.UAPEngagement{
@@ -230,7 +235,7 @@ func (uc *implUseCase) mapTikTokPost(bundle uap.TikTokPostBundleInput, input uap
 			CommentsCount: uc.intPtr(uc.firstNonZero(bundle.Detail.CommentsCount, bundle.Post.CommentsCount)),
 			Shares:        uc.intPtr(uc.firstNonZero(bundle.Detail.SharesCount, bundle.Post.SharesCount)),
 			Views:         uc.intPtr(uc.firstNonZero(bundle.Detail.ViewsCount, bundle.Post.ViewsCount)),
-			Bookmarks:     uc.intPtr(bundle.Detail.BookmarksCount),
+			Saves:         uc.intPtr(bundle.Detail.BookmarksCount),
 		},
 		Media: []uap.UAPMedia{
 			{
@@ -245,6 +250,7 @@ func (uc *implUseCase) mapTikTokPost(bundle uap.TikTokPostBundleInput, input uap
 			PostedAt:   postedAt,
 			IngestedAt: ingestedAt,
 		},
+		PlatformMeta: platformMeta,
 	}, rootID
 }
 
@@ -258,6 +264,11 @@ func (uc *implUseCase) mapTikTokComment(comment uap.TikTokCommentInput, input ua
 	sortScore := comment.SortExtraScore.ShowMoreScore
 	if sortScore == 0 {
 		sortScore = comment.SortExtraScore.ReplyScore
+	}
+	platformMeta := map[string]interface{}{
+		"tiktok": map[string]interface{}{
+			"sort_score": sortScore,
+		},
 	}
 
 	return uap.UAPRecord{
@@ -278,19 +289,20 @@ func (uc *implUseCase) mapTikTokComment(comment uap.TikTokCommentInput, input ua
 			Text: strings.TrimSpace(comment.Content),
 		},
 		Author: uap.UAPAuthor{
-			ID:       comment.Author.UID,
-			Username: comment.Author.Username,
-			Nickname: comment.Author.Nickname,
-			Avatar:   comment.Author.Avatar,
+			ID:         comment.Author.UID,
+			Username:   comment.Author.Username,
+			Nickname:   comment.Author.Nickname,
+			Avatar:     comment.Author.Avatar,
+			ProfileURL: "",
 		},
 		Engagement: uap.UAPEngagement{
 			Likes:      uc.intPtr(comment.LikesCount),
 			ReplyCount: uc.intPtr(comment.ReplyCount),
-			SortScore:  uc.float64Ptr(sortScore),
 		},
 		Temporal: uap.UAPTemporal{
 			PostedAt: strings.TrimSpace(comment.CommentedAt),
 		},
+		PlatformMeta: platformMeta,
 	}, commentID
 }
 
@@ -320,10 +332,11 @@ func (uc *implUseCase) mapTikTokReply(reply uap.TikTokReplyInput, input uap.Pars
 			Text: strings.TrimSpace(reply.Content),
 		},
 		Author: uap.UAPAuthor{
-			ID:       reply.Author.UID,
-			Username: reply.Author.Username,
-			Nickname: reply.Author.Nickname,
-			Avatar:   reply.Author.Avatar,
+			ID:         reply.Author.UID,
+			Username:   reply.Author.Username,
+			Nickname:   reply.Author.Nickname,
+			Avatar:     reply.Author.Avatar,
+			ProfileURL: "",
 		},
 		Engagement: uap.UAPEngagement{
 			Likes: uc.intPtr(reply.LikesCount),
@@ -331,5 +344,13 @@ func (uc *implUseCase) mapTikTokReply(reply uap.TikTokReplyInput, input uap.Pars
 		Temporal: uap.UAPTemporal{
 			PostedAt: strings.TrimSpace(reply.RepliedAt),
 		},
+		PlatformMeta: map[string]interface{}{},
 	}
+}
+
+func (uc *implUseCase) resolveTikTokSubtitleText(detail uap.TikTokDetailInput) string {
+	return uc.resolveSubtitleText(
+		detail.SubtitleURL,
+		detail.Downloads.Subtitle,
+	)
 }

@@ -4,15 +4,29 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"ingest-srv/internal/uap"
 	repo "ingest-srv/internal/uap/repository"
 	"io"
+	"net/http"
 	"path"
+	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/smap-hcmut/shared-libs/go/minio"
+)
+
+const maxSubtitleBodyBytes = 1 << 20
+
+var (
+	webvttTimestampPattern      = regexp.MustCompile(`^\s*\d{2}:\d{2}:\d{2}\.\d{3}\s+-->\s+\d{2}:\d{2}:\d{2}\.\d{3}`)
+	webvttTimestampShortPattern = regexp.MustCompile(`^\s*\d{2}:\d{2}\.\d{3}\s+-->\s+\d{2}:\d{2}\.\d{3}`)
+	webvttCueIndexPattern       = regexp.MustCompile(`^\s*\d+\s*$`)
+	linkPattern                 = regexp.MustCompile(`https?://[^\s<>"']+`)
+	youtubeHandlePattern        = regexp.MustCompile(`youtube\.com/(@[A-Za-z0-9._-]+)`)
 )
 
 func (uc *implUseCase) validateParseAndStoreRawBatchInputCommon(input uap.ParseAndStoreRawBatchInput) error {
@@ -197,7 +211,14 @@ func (uc *implUseCase) marshalUAPRecord(record uap.UAPRecord) ([]byte, error) {
 			"download_url": item.DownloadURL,
 			"duration":     item.Duration,
 			"thumbnail":    item.Thumbnail,
+			"width":        item.Width,
+			"height":       item.Height,
 		})
+	}
+
+	platformMeta := record.PlatformMeta
+	if platformMeta == nil {
+		platformMeta = map[string]interface{}{}
 	}
 
 	payload := map[string]interface{}{
@@ -216,22 +237,20 @@ func (uc *implUseCase) marshalUAPRecord(record uap.UAPRecord) ([]byte, error) {
 			"depth":     record.Hierarchy.Depth,
 		},
 		"content": map[string]interface{}{
-			"text":            record.Content.Text,
-			"hashtags":        record.Content.Hashtags,
-			"tiktok_keywords": record.Content.TikTokKeywords,
-			"is_shop_video":   record.Content.IsShopVideo,
-			"music_title":     record.Content.MusicTitle,
-			"music_url":       record.Content.MusicURL,
-			"summary_title":   record.Content.SummaryTitle,
-			"subtitle_url":    record.Content.SubtitleURL,
-			"language":        record.Content.Language,
-			"external_links":  record.Content.ExternalLinks,
+			"text":     record.Content.Text,
+			"title":    record.Content.Title,
+			"subtitle": record.Content.Subtitle,
+			"hashtags": record.Content.Hashtags,
+			"keywords": record.Content.Keywords,
+			"language": record.Content.Language,
+			"links":    record.Content.Links,
 		},
 		"author": map[string]interface{}{
 			"id":          record.Author.ID,
 			"username":    record.Author.Username,
 			"nickname":    record.Author.Nickname,
 			"avatar":      record.Author.Avatar,
+			"profile_url": record.Author.ProfileURL,
 			"is_verified": record.Author.IsVerified,
 		},
 		"engagement": map[string]interface{}{
@@ -239,15 +258,16 @@ func (uc *implUseCase) marshalUAPRecord(record uap.UAPRecord) ([]byte, error) {
 			"comments_count": record.Engagement.CommentsCount,
 			"shares":         record.Engagement.Shares,
 			"views":          record.Engagement.Views,
-			"bookmarks":      record.Engagement.Bookmarks,
+			"saves":          record.Engagement.Saves,
 			"reply_count":    record.Engagement.ReplyCount,
-			"sort_score":     record.Engagement.SortScore,
 		},
 		"media": media,
 		"temporal": map[string]interface{}{
 			"posted_at":   record.Temporal.PostedAt,
+			"updated_at":  record.Temporal.UpdatedAt,
 			"ingested_at": record.Temporal.IngestedAt,
 		},
+		"platform_meta": platformMeta,
 	}
 
 	return json.Marshal(payload)
@@ -302,6 +322,185 @@ func (uc *implUseCase) firstNonZero(values ...int) int {
 
 func (uc *implUseCase) buildUAPID(prefix, originID string) string {
 	return prefix + strings.TrimSpace(originID)
+}
+
+func (uc *implUseCase) resolveSubtitleText(urls ...string) string {
+	seen := make(map[string]struct{}, len(urls))
+	for _, rawURL := range urls {
+		url := strings.TrimSpace(rawURL)
+		if url == "" {
+			continue
+		}
+		if _, ok := seen[url]; ok {
+			continue
+		}
+		seen[url] = struct{}{}
+
+		text, err := uc.downloadSubtitleText(url)
+		if err != nil {
+			if uc.l != nil {
+				uc.l.Warnf(context.Background(), "uap.usecase.resolveSubtitleText.download_failed: url=%s err=%v", url, err)
+			}
+			continue
+		}
+		if strings.TrimSpace(text) != "" {
+			return text
+		}
+	}
+
+	return ""
+}
+
+func (uc *implUseCase) downloadSubtitleText(url string) (string, error) {
+	url = strings.TrimSpace(url)
+	if url == "" {
+		return "", errors.New("empty subtitle url")
+	}
+
+	client := uc.subtitleHTTPClient
+	if client == nil {
+		client = &http.Client{Timeout: 10 * time.Second}
+	}
+
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return "", err
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", errors.New(resp.Status)
+	}
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxSubtitleBodyBytes+1))
+	if err != nil {
+		return "", err
+	}
+	if len(body) > maxSubtitleBodyBytes {
+		return "", errors.New("subtitle body exceeds max size")
+	}
+
+	if strings.Contains(strings.ToUpper(string(body)), "WEBVTT") || strings.Contains(string(body), "-->") {
+		return uc.normalizeWEBVTT(body), nil
+	}
+
+	return uc.normalizeTranscriptText(string(body)), nil
+}
+
+func (uc *implUseCase) normalizeWEBVTT(body []byte) string {
+	text := strings.ReplaceAll(string(body), "\r\n", "\n")
+	text = strings.TrimPrefix(text, "\uFEFF")
+
+	lines := strings.Split(text, "\n")
+	parts := make([]string, 0, len(lines))
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		if strings.EqualFold(trimmed, "WEBVTT") {
+			continue
+		}
+		if webvttCueIndexPattern.MatchString(trimmed) {
+			continue
+		}
+		if webvttTimestampPattern.MatchString(trimmed) || webvttTimestampShortPattern.MatchString(trimmed) {
+			continue
+		}
+		parts = append(parts, trimmed)
+	}
+
+	return uc.normalizeTranscriptText(strings.Join(parts, " "))
+}
+
+func (uc *implUseCase) normalizeTranscriptText(s string) string {
+	return strings.Join(strings.Fields(strings.TrimSpace(s)), " ")
+}
+
+func (uc *implUseCase) extractLinks(texts ...string) []string {
+	seen := make(map[string]struct{})
+	links := make([]string, 0)
+	for _, text := range texts {
+		for _, match := range linkPattern.FindAllString(text, -1) {
+			link := strings.TrimSpace(strings.TrimRight(match, ".,);!?:]}'\""))
+			if link == "" {
+				continue
+			}
+			if _, ok := seen[link]; ok {
+				continue
+			}
+			seen[link] = struct{}{}
+			links = append(links, link)
+		}
+	}
+	if len(links) == 0 {
+		return nil
+	}
+	return links
+}
+
+func (uc *implUseCase) extractYouTubeHandle(rawURL string) string {
+	matches := youtubeHandlePattern.FindStringSubmatch(strings.TrimSpace(rawURL))
+	if len(matches) < 2 {
+		return ""
+	}
+	return strings.TrimSpace(matches[1])
+}
+
+func (uc *implUseCase) buildYouTubeChannelURL(channelID string) string {
+	channelID = strings.TrimSpace(channelID)
+	if channelID == "" {
+		return ""
+	}
+	return "https://www.youtube.com/channel/" + channelID
+}
+
+func (uc *implUseCase) joinTranscriptSegments(segments []uap.YouTubeTranscriptSegmentInput) string {
+	if len(segments) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(segments))
+	for _, segment := range segments {
+		text := strings.TrimSpace(segment.Text)
+		if text == "" {
+			continue
+		}
+		parts = append(parts, text)
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return uc.normalizeTranscriptText(strings.Join(parts, " "))
+}
+
+func (uc *implUseCase) parseDurationText(raw string) *int {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+
+	parts := strings.Split(raw, ":")
+	if len(parts) != 2 && len(parts) != 3 {
+		return nil
+	}
+
+	total := 0
+	multiplier := 1
+	for i := len(parts) - 1; i >= 0; i-- {
+		value, err := strconv.Atoi(strings.TrimSpace(parts[i]))
+		if err != nil || value < 0 {
+			return nil
+		}
+		total += value * multiplier
+		multiplier *= 60
+	}
+
+	return uc.intPtr(total)
 }
 
 func (uc *implUseCase) mergeRawMetadata(existing json.RawMessage, parts []uap.ArtifactPart, totalRecords int, publishStats *uap.KafkaPublishStats) (json.RawMessage, error) {
