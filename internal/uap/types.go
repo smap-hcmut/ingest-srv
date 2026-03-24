@@ -297,6 +297,7 @@ type UAPRecord struct {
 	Engagement   UAPEngagement
 	Media        []UAPMedia
 	Temporal     UAPTemporal
+	CrawlKeyword string
 	PlatformMeta map[string]interface{}
 }
 

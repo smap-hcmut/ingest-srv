@@ -267,6 +267,7 @@ func (uc *implUseCase) marshalUAPRecord(record uap.UAPRecord) ([]byte, error) {
 			"updated_at":  record.Temporal.UpdatedAt,
 			"ingested_at": record.Temporal.IngestedAt,
 		},
+		"crawl_keyword": strings.TrimSpace(record.CrawlKeyword),
 		"platform_meta": platformMeta,
 	}
 
@@ -322,6 +323,20 @@ func (uc *implUseCase) firstNonZero(values ...int) int {
 
 func (uc *implUseCase) buildUAPID(prefix, originID string) string {
 	return prefix + strings.TrimSpace(originID)
+}
+
+func (uc *implUseCase) extractCrawlKeyword(requestPayload json.RawMessage) string {
+	if len(requestPayload) == 0 {
+		return ""
+	}
+
+	var root map[string]interface{}
+	if err := json.Unmarshal(requestPayload, &root); err != nil {
+		return ""
+	}
+
+	params := uc.toMap(root["params"])
+	return strings.TrimSpace(uc.stringAt(params, "keyword"))
 }
 
 func (uc *implUseCase) resolveSubtitleText(urls ...string) string {

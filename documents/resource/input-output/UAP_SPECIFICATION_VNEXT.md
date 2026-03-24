@@ -32,6 +32,8 @@ Nguyên tắc:
 
 ```json
 {
+  "crawl_keyword": "bia heineken",
+
   "identity": {
     "uap_id": "tt_p_760990...",          // ID duy nhất toàn hệ thống; dùng để join, dedupe, trace lineage
     "origin_id": "760990...",            // ID gốc từ nền tảng; dùng để backtrack raw và debug mapping
@@ -109,6 +111,8 @@ Nguyên tắc:
 
 ```json
 {
+  "crawl_keyword": "bia heineken",
+  
   "identity": {
     "uap_id": "tt_c_761173...",          // ID UAP duy nhất; dùng để join, dedupe, trace
     "origin_id": "761173...",            // ID gốc từ nền tảng; dùng để backtrack raw comment/reply

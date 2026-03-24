@@ -32,6 +32,8 @@ Nguyên tắc:
 
 ```json
 {
+  "crawl_keyword": "bia heineken",
+
   "identity": {
     "uap_id": "tt_p_760990...",
     "origin_id": "760990...",
@@ -108,6 +110,8 @@ Nguyên tắc:
 
 ```json
 {
+  "crawl_keyword": "bia heineken",
+
   "identity": {
     "uap_id": "tt_c_761173...",
     "origin_id": "761173...",
@@ -173,6 +177,7 @@ Nguyên tắc:
 | Nhóm phân tích | Field chính | Có thể phân tích gì |
 | :--- | :--- | :--- |
 | Topic mining | `content.text`, `content.title`, `content.keywords`, `hashtags` | Chủ đề nổi bật, clustering nội dung, keyword heatmap |
+| Crawl provenance | `crawl_keyword` | Biết UAP này được sinh ra từ keyword crawl nào, giúp group theo chiến dịch seed, đối chiếu recall, và giữ ngữ nghĩa truy hồi cho COMMENT/REPLY |
 | Transcript intelligence | `content.subtitle` | Tóm tắt video, semantic search, quote extraction, RAG không cần ASR |
 | Conversation analysis | `uap_type`, `hierarchy.root_id`, `hierarchy.parent_id`, `hierarchy.depth`, `engagement.reply_count` | Cây hội thoại, độ sâu tranh luận, thread reconstruction |
 | Sentiment & issue detection | `content.text`, `content.subtitle` | Sentiment, complaint mining, crisis signal detection |
@@ -184,6 +189,9 @@ Nguyên tắc:
 | Platform-specific insight | `platform_meta.*` | TikTok trend audio, TikTok comment ranking, raw debug enrichment |
 
 ## 4. Runtime mapping notes
+
+- `crawl_keyword` là keyword dispatch gốc lấy từ `external_task.request_payload.params.keyword`
+- field này là provenance/context keyword, khác với `content.keywords` là semantic keywords trích từ chính nội dung
 
 ### TikTok
 

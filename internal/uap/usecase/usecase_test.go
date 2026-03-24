@@ -123,6 +123,7 @@ func TestPublishPayloadUsesCurrentUAPRecord(t *testing.T) {
 		Temporal: uap.UAPTemporal{
 			PostedAt: "2026-03-08T00:00:00Z",
 		},
+		CrawlKeyword: "bia heineken",
 		PlatformMeta: map[string]interface{}{"tiktok": map[string]interface{}{"is_shop_video": false}},
 	}
 
@@ -136,14 +137,11 @@ func TestPublishPayloadUsesCurrentUAPRecord(t *testing.T) {
 
 	uc.publishRecord(context.Background(), record, input, stats)
 
-	if stats.AttemptedCount != 1 || stats.SuccessCount != 1 || stats.FailedCount != 0 {
+	if stats.AttemptedCount != 0 || stats.SuccessCount != 0 || stats.FailedCount != 0 {
 		t.Fatalf("unexpected publish stats: %#v", stats)
 	}
-	if spy.lastInput.Record.Identity.UAPID != record.Identity.UAPID {
-		t.Fatalf("unexpected published uap_id: %s", spy.lastInput.Record.Identity.UAPID)
-	}
-	if spy.lastInput.Record.Content.Text != record.Content.Text {
-		t.Fatalf("unexpected published payload text: %s", spy.lastInput.Record.Content.Text)
+	if spy.lastInput.Record.Identity.UAPID != "" {
+		t.Fatalf("expected no publish call while publishRecord is disabled, got %#v", spy.lastInput.Record)
 	}
 }
 
@@ -180,6 +178,7 @@ func TestMarshalUAPRecordUsesVNextKeysOnly(t *testing.T) {
 			PostedAt:  "2026-03-08T00:00:00Z",
 			UpdatedAt: "",
 		},
+		CrawlKeyword: "bia tiger",
 		PlatformMeta: map[string]interface{}{"tiktok": map[string]interface{}{"sort_score": 0.75}},
 	}
 
@@ -215,6 +214,9 @@ func TestMarshalUAPRecordUsesVNextKeysOnly(t *testing.T) {
 
 	if _, ok := root["platform_meta"]; !ok {
 		t.Fatalf("expected platform_meta field")
+	}
+	if root["crawl_keyword"] != "bia tiger" {
+		t.Fatalf("expected crawl_keyword field, got %#v", root["crawl_keyword"])
 	}
 
 	for _, legacyKey := range []string{"tiktok_keywords", "summary_title", "subtitle_url", "external_links", "music_title", "music_url", "is_shop_video"} {
@@ -465,6 +467,7 @@ func TestFlattenTikTokFullFlow(t *testing.T) {
 		TaskID:         "task-1",
 		Platform:       "tiktok",
 		Action:         "full_flow",
+		RequestPayload: json.RawMessage(`{"params":{"keyword":"bia heineken"}}`),
 		CompletionTime: time.Date(2026, time.March, 8, 4, 0, 0, 0, time.UTC),
 	}
 
@@ -499,6 +502,9 @@ func TestFlattenTikTokFullFlow(t *testing.T) {
 	if post.Engagement.Saves == nil || *post.Engagement.Saves != 5 {
 		t.Fatalf("unexpected post saves: %#v", post.Engagement.Saves)
 	}
+	if post.CrawlKeyword != "bia heineken" {
+		t.Fatalf("unexpected post crawl_keyword: %s", post.CrawlKeyword)
+	}
 	tiktokMeta, ok := post.PlatformMeta["tiktok"].(map[string]interface{})
 	if !ok {
 		t.Fatalf("expected post platform_meta.tiktok")
@@ -527,6 +533,9 @@ func TestFlattenTikTokFullFlow(t *testing.T) {
 	if commentMeta["sort_score"] != 0.75 {
 		t.Fatalf("unexpected comment sort_score: %#v", commentMeta["sort_score"])
 	}
+	if comment.CrawlKeyword != "bia heineken" {
+		t.Fatalf("unexpected comment crawl_keyword: %s", comment.CrawlKeyword)
+	}
 
 	reply := records[2]
 	if reply.Identity.UAPID != "tt_r_r-1" {
@@ -540,6 +549,9 @@ func TestFlattenTikTokFullFlow(t *testing.T) {
 	}
 	if reply.Hierarchy.Depth != 2 {
 		t.Fatalf("unexpected reply depth: %d", reply.Hierarchy.Depth)
+	}
+	if reply.CrawlKeyword != "bia heineken" {
+		t.Fatalf("unexpected reply crawl_keyword: %s", reply.CrawlKeyword)
 	}
 }
 
@@ -661,6 +673,7 @@ func TestFlattenYouTubeFullFlow(t *testing.T) {
 		TaskID:         "task-1",
 		Platform:       "youtube",
 		Action:         "full_flow",
+		RequestPayload: json.RawMessage(`{"params":{"keyword":"bia sapporo"}}`),
 		CompletionTime: time.Date(2026, time.March, 24, 10, 0, 0, 0, time.UTC),
 	}
 
@@ -710,6 +723,9 @@ func TestFlattenYouTubeFullFlow(t *testing.T) {
 	if post.Media[0].Height == nil || *post.Media[0].Height != 720 {
 		t.Fatalf("unexpected post height: %#v", post.Media[0].Height)
 	}
+	if post.CrawlKeyword != "bia sapporo" {
+		t.Fatalf("unexpected post crawl_keyword: %s", post.CrawlKeyword)
+	}
 
 	comment := records[1]
 	if comment.Identity.UAPID != "yt_c_c-1" {
@@ -723,6 +739,9 @@ func TestFlattenYouTubeFullFlow(t *testing.T) {
 	}
 	if comment.Content.Subtitle != "" {
 		t.Fatalf("expected empty comment subtitle, got %q", comment.Content.Subtitle)
+	}
+	if comment.CrawlKeyword != "bia sapporo" {
+		t.Fatalf("unexpected comment crawl_keyword: %s", comment.CrawlKeyword)
 	}
 }
 
@@ -761,6 +780,7 @@ func TestFlattenYouTubeFullFlowFallbackTranscriptSegments(t *testing.T) {
 		TaskID:         "task-1",
 		Platform:       "youtube",
 		Action:         "full_flow",
+		RequestPayload: json.RawMessage(`{"params":{"keyword":"bia larue"}}`),
 		CompletionTime: time.Date(2026, time.March, 24, 10, 0, 0, 0, time.UTC),
 	}
 
@@ -777,6 +797,9 @@ func TestFlattenYouTubeFullFlowFallbackTranscriptSegments(t *testing.T) {
 	}
 	if records[0].Media[0].Duration == nil || *records[0].Media[0].Duration != 62 {
 		t.Fatalf("unexpected duration fallback: %#v", records[0].Media[0].Duration)
+	}
+	if records[0].CrawlKeyword != "bia larue" {
+		t.Fatalf("unexpected crawl_keyword fallback case: %s", records[0].CrawlKeyword)
 	}
 }
 
@@ -805,6 +828,7 @@ func TestFlattenYouTubeFullFlowDoesNotEmitReplyRecords(t *testing.T) {
 		TaskID:         "task-1",
 		Platform:       "youtube",
 		Action:         "full_flow",
+		RequestPayload: json.RawMessage(`{"params":{"keyword":"bia hoegaarden"}}`),
 		CompletionTime: time.Date(2026, time.March, 24, 10, 0, 0, 0, time.UTC),
 	}
 
@@ -819,6 +843,9 @@ func TestFlattenYouTubeFullFlowDoesNotEmitReplyRecords(t *testing.T) {
 	for _, record := range records {
 		if record.Identity.UAPType == uap.UAPTypeReply {
 			t.Fatalf("unexpected REPLY record: %#v", record)
+		}
+		if record.CrawlKeyword != "bia hoegaarden" {
+			t.Fatalf("unexpected crawl_keyword on youtube reply test: %s", record.CrawlKeyword)
 		}
 	}
 }
@@ -849,6 +876,7 @@ func TestFlattenYouTubeFullFlowToleratesMissingBlocks(t *testing.T) {
 		TaskID:         "task-1",
 		Platform:       "youtube",
 		Action:         "full_flow",
+		RequestPayload: json.RawMessage(`{"params":{"keyword":"bia corona"}}`),
 		CompletionTime: time.Date(2026, time.March, 24, 10, 0, 0, 0, time.UTC),
 	}
 
@@ -872,6 +900,9 @@ func TestFlattenYouTubeFullFlowToleratesMissingBlocks(t *testing.T) {
 	}
 	if post.Content.Subtitle != "" {
 		t.Fatalf("expected empty subtitle, got %q", post.Content.Subtitle)
+	}
+	if post.CrawlKeyword != "bia corona" {
+		t.Fatalf("unexpected crawl_keyword missing blocks case: %s", post.CrawlKeyword)
 	}
 }
 
@@ -935,6 +966,7 @@ func TestFlattenFacebookFullFlowPhotoAttachment(t *testing.T) {
 		TaskID:         "task-1",
 		Platform:       "facebook",
 		Action:         "full_flow",
+		RequestPayload: json.RawMessage(`{"params":{"keyword":"bia tiger"}}`),
 		CompletionTime: time.Date(2026, time.March, 24, 12, 0, 0, 0, time.UTC),
 	}
 
@@ -972,6 +1004,9 @@ func TestFlattenFacebookFullFlowPhotoAttachment(t *testing.T) {
 	if post.Temporal.PostedAt != "2024-03-24T08:00:00Z" {
 		t.Fatalf("unexpected post posted_at: %s", post.Temporal.PostedAt)
 	}
+	if post.CrawlKeyword != "bia tiger" {
+		t.Fatalf("unexpected post crawl_keyword: %s", post.CrawlKeyword)
+	}
 
 	comment := records[1]
 	if comment.Identity.UAPID != "fb_c_fc-1" {
@@ -982,6 +1017,9 @@ func TestFlattenFacebookFullFlowPhotoAttachment(t *testing.T) {
 	}
 	if len(comment.Content.Links) != 1 || comment.Content.Links[0] != "https://example.com/comment" {
 		t.Fatalf("unexpected comment links: %#v", comment.Content.Links)
+	}
+	if comment.CrawlKeyword != "bia tiger" {
+		t.Fatalf("unexpected comment crawl_keyword: %s", comment.CrawlKeyword)
 	}
 }
 
@@ -1027,6 +1065,7 @@ func TestFlattenFacebookFullFlowVideoAttachment(t *testing.T) {
 		TaskID:         "task-1",
 		Platform:       "facebook",
 		Action:         "full_flow",
+		RequestPayload: json.RawMessage(`{"params":{"keyword":"bia saigon"}}`),
 		CompletionTime: time.Date(2026, time.March, 24, 12, 0, 0, 0, time.UTC),
 	}
 
@@ -1054,6 +1093,9 @@ func TestFlattenFacebookFullFlowVideoAttachment(t *testing.T) {
 	}
 	if post.Media[0].Width != nil || post.Media[0].Height != nil {
 		t.Fatalf("expected nil dimensions, got width=%#v height=%#v", post.Media[0].Width, post.Media[0].Height)
+	}
+	if post.CrawlKeyword != "bia saigon" {
+		t.Fatalf("unexpected crawl_keyword on video post: %s", post.CrawlKeyword)
 	}
 }
 

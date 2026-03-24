@@ -14,6 +14,7 @@ type uapRecordPayload struct {
 	Engagement   uapEngagementPayload   `json:"engagement"`
 	Media        []uapMediaPayload      `json:"media,omitempty"`
 	Temporal     uapTemporalPayload     `json:"temporal"`
+	CrawlKeyword string                 `json:"crawl_keyword,omitempty"`
 	PlatformMeta map[string]interface{} `json:"platform_meta,omitempty"`
 }
 
@@ -149,6 +150,7 @@ func toPayload(input uap.UAPRecord) uapRecordPayload {
 			UpdatedAt:  input.Temporal.UpdatedAt,
 			IngestedAt: input.Temporal.IngestedAt,
 		},
+		CrawlKeyword: input.CrawlKeyword,
 		PlatformMeta: input.PlatformMeta,
 	}
 }
@@ -213,6 +215,7 @@ func fromPayload(input uapRecordPayload) uap.UAPRecord {
 			UpdatedAt:  input.Temporal.UpdatedAt,
 			IngestedAt: input.Temporal.IngestedAt,
 		},
+		CrawlKeyword: input.CrawlKeyword,
 		PlatformMeta: input.PlatformMeta,
 	}
 }

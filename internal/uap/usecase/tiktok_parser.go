@@ -14,12 +14,14 @@ func (uc *implUseCase) flattenTikTokFullFlow(rawBytes []byte, input uap.ParseAnd
 		return nil, err
 	}
 
+	crawlKeyword := uc.extractCrawlKeyword(input.RequestPayload)
 	records := make([]uap.UAPRecord, 0)
 	for _, bundle := range flattenInput.Posts {
 		postRecord, rootID := uc.mapTikTokPost(bundle, input)
 		if rootID == "" {
 			continue
 		}
+		postRecord.CrawlKeyword = crawlKeyword
 		records = append(records, postRecord)
 		if onRecord != nil {
 			onRecord(postRecord)
@@ -30,6 +32,7 @@ func (uc *implUseCase) flattenTikTokFullFlow(rawBytes []byte, input uap.ParseAnd
 			if commentID == "" {
 				continue
 			}
+			commentRecord.CrawlKeyword = crawlKeyword
 			records = append(records, commentRecord)
 			if onRecord != nil {
 				onRecord(commentRecord)
@@ -40,6 +43,7 @@ func (uc *implUseCase) flattenTikTokFullFlow(rawBytes []byte, input uap.ParseAnd
 				if replyRecord.Identity.OriginID == "" {
 					continue
 				}
+				replyRecord.CrawlKeyword = crawlKeyword
 				records = append(records, replyRecord)
 				if onRecord != nil {
 					onRecord(replyRecord)

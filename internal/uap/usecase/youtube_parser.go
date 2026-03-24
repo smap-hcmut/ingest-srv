@@ -14,12 +14,14 @@ func (uc *implUseCase) flattenYouTubeFullFlow(rawBytes []byte, input uap.ParseAn
 		return nil, err
 	}
 
+	crawlKeyword := uc.extractCrawlKeyword(input.RequestPayload)
 	records := make([]uap.UAPRecord, 0)
 	for _, bundle := range flattenInput.Videos {
 		postRecord, rootID := uc.mapYouTubePost(bundle, input)
 		if rootID == "" {
 			continue
 		}
+		postRecord.CrawlKeyword = crawlKeyword
 		records = append(records, postRecord)
 		if onRecord != nil {
 			onRecord(postRecord)
@@ -30,6 +32,7 @@ func (uc *implUseCase) flattenYouTubeFullFlow(rawBytes []byte, input uap.ParseAn
 			if strings.TrimSpace(commentRecord.Identity.OriginID) == "" {
 				continue
 			}
+			commentRecord.CrawlKeyword = crawlKeyword
 			records = append(records, commentRecord)
 			if onRecord != nil {
 				onRecord(commentRecord)
