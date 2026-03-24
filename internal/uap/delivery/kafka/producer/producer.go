@@ -24,6 +24,10 @@ func (p *publisher) Publish(ctx context.Context, input uap.PublishUAPInput) erro
 	return p.producer.Publish(key, body)
 }
 
+func (p *publisher) Topic() string {
+	return uapKafka.UAPTopicName
+}
+
 // Close closes the underlying Kafka producer if needed.
 func (p *publisher) Close() error {
 	if p.producer == nil {

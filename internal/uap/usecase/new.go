@@ -16,7 +16,8 @@ type implUseCase struct {
 	minio        minio.MinIO
 	outputBucket string
 	publisher    uap.Publisher
-	uapTopic     string
+	publishTopic string
+	parsers      map[parseKey]parseFunc
 	now          func() time.Time
 }
 
@@ -28,15 +29,18 @@ func New(
 	minioClient minio.MinIO,
 	outputBucket string,
 	publisher uap.Publisher,
-	uapTopic string,
 ) uap.UseCase {
-	return &implUseCase{
+	uc := &implUseCase{
 		l:            l,
 		repo:         repository,
 		minio:        minioClient,
 		outputBucket: outputBucket,
 		publisher:    publisher,
-		uapTopic:     uapTopic,
 		now:          func() time.Time { return time.Now().UTC() },
 	}
+	if publisher != nil {
+		uc.publishTopic = publisher.Topic()
+	}
+	uc.parsers = uc.buildParseRegistry()
+	return uc
 }

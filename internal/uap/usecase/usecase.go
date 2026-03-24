@@ -11,8 +11,17 @@ import (
 )
 
 func (uc *implUseCase) ParseAndStoreRawBatch(ctx context.Context, input uap.ParseAndStoreRawBatchInput) error {
-	if err := uc.validateParseAndStoreRawBatchInput(input); err != nil {
+	if err := uc.validateParseAndStoreRawBatchInputCommon(input); err != nil {
 		return err
+	}
+
+	parser, ok := uc.resolveParser(input.Platform, input.Action)
+	if !ok {
+		return uap.ErrInvalidRawBatchInput
+	}
+
+	if parser == nil {
+		return uap.ErrInvalidRawBatchInput
 	}
 
 	claimed, err := uc.repo.ClaimRawBatchForParsing(ctx, input.RawBatchID)
@@ -50,17 +59,17 @@ func (uc *implUseCase) ParseAndStoreRawBatch(ctx context.Context, input uap.Pars
 	}
 
 	publishStats := &uap.KafkaPublishStats{
-		Topic: strings.TrimSpace(uc.uapTopic),
+		Topic: strings.TrimSpace(uc.publishTopic),
 	}
 	if uc.publisher == nil {
 		uc.l.Warnf(ctx, "uap.usecase.ParseAndStoreRawBatch: kafka publisher is disabled for raw_batch_id=%s", input.RawBatchID)
 	}
 
-	records, err := uc.flattenTikTokFullFlow(rawBytes, input, func(record uap.UAPRecord) {
+	records, err := parser(rawBytes, input, func(record uap.UAPRecord) {
 		uc.publishRecord(ctx, record, input, publishStats)
 	})
 	if err != nil {
-		errMessage := fmt.Sprintf("parse tiktok full_flow raw batch: %v", err)
+		errMessage := fmt.Sprintf("parse raw batch: %v", err)
 		_ = uc.failRawBatch(ctx, input, errMessage, "", nil, 0, publishStats)
 		return err
 	}

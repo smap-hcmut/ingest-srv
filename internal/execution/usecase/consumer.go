@@ -140,6 +140,5 @@ func (uc *implUseCase) shouldParseUAP(task model.ExternalTask) bool {
 		return false
 	}
 
-	return strings.EqualFold(strings.TrimSpace(task.Platform), uap.PlatformTikTok) &&
-		strings.EqualFold(strings.TrimSpace(task.TaskType), uap.TaskTypeFullFlow)
+	return uc.parser.SupportsParse(task.Platform, task.TaskType)
 }

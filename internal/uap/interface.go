@@ -5,10 +5,12 @@ import "context"
 // UseCase defines UAP parsing operations.
 type UseCase interface {
 	ParseAndStoreRawBatch(ctx context.Context, input ParseAndStoreRawBatchInput) error
+	SupportsParse(platform, action string) bool
 }
 
 // Publisher publishes parsed UAP messages downstream.
 type Publisher interface {
 	Publish(ctx context.Context, input PublishUAPInput) error
+	Topic() string
 	Close() error
 }
