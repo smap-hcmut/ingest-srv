@@ -555,8 +555,8 @@ func TestSupportsParse(t *testing.T) {
 	if !uc.SupportsParse("youtube", "full_flow") {
 		t.Fatalf("expected youtube/full_flow to be supported")
 	}
-	if uc.SupportsParse("facebook", "full_flow") {
-		t.Fatalf("expected facebook/full_flow to be unsupported")
+	if !uc.SupportsParse("facebook", "full_flow") {
+		t.Fatalf("expected facebook/full_flow to be supported")
 	}
 	if uc.SupportsParse("tiktok", "comments") {
 		t.Fatalf("expected tiktok/comments to be unsupported")
@@ -583,11 +583,11 @@ func TestResolveParser(t *testing.T) {
 	}
 
 	parser, ok = uc.resolveParser("facebook", "full_flow")
-	if ok {
-		t.Fatalf("expected parser lookup to fail for facebook/full_flow")
+	if !ok {
+		t.Fatalf("expected parser lookup to succeed for facebook/full_flow")
 	}
-	if parser != nil {
-		t.Fatalf("expected nil parser for unsupported target")
+	if parser == nil {
+		t.Fatalf("expected non-nil parser for facebook/full_flow")
 	}
 }
 
@@ -872,5 +872,313 @@ func TestFlattenYouTubeFullFlowToleratesMissingBlocks(t *testing.T) {
 	}
 	if post.Content.Subtitle != "" {
 		t.Fatalf("expected empty subtitle, got %q", post.Content.Subtitle)
+	}
+}
+
+func TestFlattenFacebookFullFlowPhotoAttachment(t *testing.T) {
+	raw := []byte(`{
+		"result": {
+			"posts": [
+				{
+					"post": {
+						"post_id": "fb-1",
+						"message": "Photo post https://example.com/post",
+						"url": "https://www.facebook.com/posts/fb-1",
+						"author": {
+							"id": "author-1",
+							"name": "Facebook Page",
+							"url": "https://www.facebook.com/page",
+							"avatar_url": "https://example.com/avatar.jpg"
+						},
+						"created_time": 1711267200,
+						"reaction_count": 10,
+						"comment_count": 1,
+						"share_count": 2,
+						"attachments": [
+							{
+								"type": "Photo",
+								"url": "https://www.facebook.com/photo/fb-1",
+								"media_url": "https://example.com/photo.jpg",
+								"width": 1200,
+								"height": 630,
+								"accessibility_caption": "ignored"
+							}
+						]
+					},
+					"comments": {
+						"post_id": "fb-1",
+						"total_count": 1,
+						"comments": [
+							{
+								"id": "fc-1",
+								"message": "Comment body https://example.com/comment",
+								"author": {
+									"id": "commenter-1",
+									"name": "Commenter",
+									"profile_url": "https://www.facebook.com/commenter",
+									"avatar_url": "https://example.com/commenter.jpg"
+								},
+								"created_time": 1711267800,
+								"reaction_count": 3,
+								"reply_count": 0,
+								"replies": null
+							}
+						]
+					}
+				}
+			]
+		}
+	}`)
+
+	input := uap.ParseAndStoreRawBatchInput{
+		ProjectID:      "project-1",
+		TaskID:         "task-1",
+		Platform:       "facebook",
+		Action:         "full_flow",
+		CompletionTime: time.Date(2026, time.March, 24, 12, 0, 0, 0, time.UTC),
+	}
+
+	uc := &implUseCase{}
+	records, err := uc.flattenFacebookFullFlow(raw, input, nil)
+	if err != nil {
+		t.Fatalf("flattenFacebookFullFlow() error = %v", err)
+	}
+	if len(records) != 2 {
+		t.Fatalf("expected 2 records, got %d", len(records))
+	}
+
+	post := records[0]
+	if post.Identity.UAPID != "fb_p_fb-1" {
+		t.Fatalf("unexpected post uap_id: %s", post.Identity.UAPID)
+	}
+	if post.Author.ProfileURL != "https://www.facebook.com/page" {
+		t.Fatalf("unexpected post profile_url: %s", post.Author.ProfileURL)
+	}
+	if post.Content.Subtitle != "" {
+		t.Fatalf("expected empty post subtitle, got %q", post.Content.Subtitle)
+	}
+	if len(post.Media) != 1 {
+		t.Fatalf("expected 1 media item, got %d", len(post.Media))
+	}
+	if post.Media[0].Type != "image" {
+		t.Fatalf("unexpected media type: %s", post.Media[0].Type)
+	}
+	if post.Media[0].DownloadURL != "https://example.com/photo.jpg" {
+		t.Fatalf("unexpected media download_url: %s", post.Media[0].DownloadURL)
+	}
+	if post.Media[0].Width == nil || *post.Media[0].Width != 1200 {
+		t.Fatalf("unexpected media width: %#v", post.Media[0].Width)
+	}
+	if post.Temporal.PostedAt != "2024-03-24T08:00:00Z" {
+		t.Fatalf("unexpected post posted_at: %s", post.Temporal.PostedAt)
+	}
+
+	comment := records[1]
+	if comment.Identity.UAPID != "fb_c_fc-1" {
+		t.Fatalf("unexpected comment uap_id: %s", comment.Identity.UAPID)
+	}
+	if comment.Author.ProfileURL != "https://www.facebook.com/commenter" {
+		t.Fatalf("unexpected comment profile_url: %s", comment.Author.ProfileURL)
+	}
+	if len(comment.Content.Links) != 1 || comment.Content.Links[0] != "https://example.com/comment" {
+		t.Fatalf("unexpected comment links: %#v", comment.Content.Links)
+	}
+}
+
+func TestFlattenFacebookFullFlowVideoAttachment(t *testing.T) {
+	raw := []byte(`{
+		"posts": [
+			{
+				"post": {
+					"post_id": "fb-2",
+					"message": "Video post",
+					"url": "https://www.facebook.com/posts/fb-2",
+					"author": {
+						"id": "author-2",
+						"name": "Video Page",
+						"url": "https://www.facebook.com/video-page",
+						"avatar_url": "https://example.com/avatar2.jpg"
+					},
+					"created_time": 1711267201,
+					"reaction_count": 20,
+					"comment_count": 0,
+					"share_count": 4,
+					"attachments": [
+						{
+							"type": "Video",
+							"url": "https://www.facebook.com/watch?v=fb-2",
+							"media_url": null,
+							"width": null,
+							"height": null
+						}
+					]
+				},
+				"comments": {
+					"post_id": "fb-2",
+					"total_count": 0,
+					"comments": []
+				}
+			}
+		]
+	}`)
+
+	input := uap.ParseAndStoreRawBatchInput{
+		ProjectID:      "project-1",
+		TaskID:         "task-1",
+		Platform:       "facebook",
+		Action:         "full_flow",
+		CompletionTime: time.Date(2026, time.March, 24, 12, 0, 0, 0, time.UTC),
+	}
+
+	uc := &implUseCase{}
+	records, err := uc.flattenFacebookFullFlow(raw, input, nil)
+	if err != nil {
+		t.Fatalf("flattenFacebookFullFlow() error = %v", err)
+	}
+	if len(records) != 1 {
+		t.Fatalf("expected 1 record, got %d", len(records))
+	}
+
+	post := records[0]
+	if post.Content.Subtitle != "" {
+		t.Fatalf("expected empty subtitle, got %q", post.Content.Subtitle)
+	}
+	if len(post.Media) != 1 {
+		t.Fatalf("expected 1 media item, got %d", len(post.Media))
+	}
+	if post.Media[0].Type != "video" {
+		t.Fatalf("unexpected media type: %s", post.Media[0].Type)
+	}
+	if post.Media[0].DownloadURL != "" {
+		t.Fatalf("unexpected video download_url: %q", post.Media[0].DownloadURL)
+	}
+	if post.Media[0].Width != nil || post.Media[0].Height != nil {
+		t.Fatalf("expected nil dimensions, got width=%#v height=%#v", post.Media[0].Width, post.Media[0].Height)
+	}
+}
+
+func TestFlattenFacebookFullFlowDoesNotEmitReplyRecords(t *testing.T) {
+	raw := []byte(`{
+		"posts": [
+			{
+				"post": {
+					"post_id": "fb-3",
+					"message": "Threaded post",
+					"url": "https://www.facebook.com/posts/fb-3",
+					"author": {
+						"id": "author-3",
+						"name": "Author 3",
+						"url": "https://www.facebook.com/author3",
+						"avatar_url": "https://example.com/a3.jpg"
+					},
+					"created_time": 1711267202,
+					"reaction_count": 1,
+					"comment_count": 2,
+					"share_count": 0,
+					"attachments": null
+				},
+				"comments": {
+					"comments": [
+						{
+							"id": "fc-2",
+							"message": "Comment one",
+							"author": {
+								"id": "commenter-2",
+								"name": "Commenter 2",
+								"profile_url": "https://www.facebook.com/commenter2",
+								"avatar_url": "https://example.com/c2.jpg"
+							},
+							"created_time": 1711267802,
+							"reaction_count": 0,
+							"reply_count": 5,
+							"replies": null
+						}
+					]
+				}
+			}
+		]
+	}`)
+
+	input := uap.ParseAndStoreRawBatchInput{
+		ProjectID:      "project-1",
+		TaskID:         "task-1",
+		Platform:       "facebook",
+		Action:         "full_flow",
+		CompletionTime: time.Date(2026, time.March, 24, 12, 0, 0, 0, time.UTC),
+	}
+
+	uc := &implUseCase{}
+	records, err := uc.flattenFacebookFullFlow(raw, input, nil)
+	if err != nil {
+		t.Fatalf("flattenFacebookFullFlow() error = %v", err)
+	}
+	if len(records) != 2 {
+		t.Fatalf("expected 2 records, got %d", len(records))
+	}
+	for _, record := range records {
+		if record.Identity.UAPType == uap.UAPTypeReply {
+			t.Fatalf("unexpected REPLY record: %#v", record)
+		}
+	}
+	comment := records[1]
+	if comment.Engagement.ReplyCount == nil || *comment.Engagement.ReplyCount != 5 {
+		t.Fatalf("unexpected reply_count: %#v", comment.Engagement.ReplyCount)
+	}
+	facebookMeta, ok := comment.PlatformMeta["facebook"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected comment platform_meta.facebook")
+	}
+	if facebookMeta["replies_present"] != false {
+		t.Fatalf("unexpected replies_present: %#v", facebookMeta["replies_present"])
+	}
+}
+
+func TestFlattenFacebookFullFlowToleratesMissingComments(t *testing.T) {
+	raw := []byte(`{
+		"result": {
+			"posts": [
+				{
+					"post": {
+						"post_id": "fb-4",
+						"message": "No comments block",
+						"url": "https://www.facebook.com/posts/fb-4",
+						"author": {
+							"id": "author-4",
+							"name": "Author 4",
+							"url": "https://www.facebook.com/author4",
+							"avatar_url": "https://example.com/a4.jpg"
+						},
+						"created_time": 1711267203,
+						"reaction_count": 11,
+						"comment_count": 0,
+						"share_count": 1,
+						"attachments": null
+					},
+					"comments": {
+						"error": "boom"
+					}
+				}
+			]
+		}
+	}`)
+
+	input := uap.ParseAndStoreRawBatchInput{
+		ProjectID:      "project-1",
+		TaskID:         "task-1",
+		Platform:       "facebook",
+		Action:         "full_flow",
+		CompletionTime: time.Date(2026, time.March, 24, 12, 0, 0, 0, time.UTC),
+	}
+
+	uc := &implUseCase{}
+	records, err := uc.flattenFacebookFullFlow(raw, input, nil)
+	if err != nil {
+		t.Fatalf("flattenFacebookFullFlow() error = %v", err)
+	}
+	if len(records) != 1 {
+		t.Fatalf("expected 1 record, got %d", len(records))
+	}
+	if records[0].Identity.UAPID != "fb_p_fb-4" {
+		t.Fatalf("unexpected post uap_id: %s", records[0].Identity.UAPID)
 	}
 }

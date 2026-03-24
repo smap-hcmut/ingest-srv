@@ -184,6 +184,67 @@ type YouTubeTranscriptSegmentInput struct {
 	StartTimeText string
 }
 
+type FacebookFullFlowInput struct {
+	Posts []FacebookPostBundleInput
+}
+
+type FacebookPostBundleInput struct {
+	Post     FacebookPostInput
+	Comments FacebookCommentsInput
+}
+
+type FacebookPostInput struct {
+	PostID        string
+	Message       string
+	URL           string
+	Author        FacebookPostAuthorInput
+	CreatedTime   int64
+	ReactionCount int
+	CommentCount  int
+	ShareCount    int
+	Attachments   []FacebookAttachmentInput
+}
+
+type FacebookPostAuthorInput struct {
+	ID        string
+	Name      string
+	URL       string
+	AvatarURL string
+}
+
+type FacebookAttachmentInput struct {
+	Type        string
+	URL         string
+	MediaURL    string
+	Width       int
+	Height      int
+	Title       string
+	Description string
+}
+
+type FacebookCommentsInput struct {
+	PostID   string
+	Total    int
+	Comments []FacebookCommentInput
+}
+
+type FacebookCommentInput struct {
+	ID            string
+	Message       string
+	Author        FacebookCommentAuthorInput
+	CreatedTime   int64
+	ReactionCount int
+	ReplyCount    int
+	Replies       []FacebookCommentInput
+}
+
+type FacebookCommentAuthorInput struct {
+	ID         string
+	Name       string
+	ProfileURL string
+	AvatarURL  string
+}
+
 type PublishUAPInput struct {
 	Record UAPRecord
 }
@@ -199,6 +260,7 @@ const (
 const (
 	PlatformTikTok   = "tiktok"
 	PlatformYouTube  = "youtube"
+	PlatformFacebook = "facebook"
 	TaskTypeFullFlow = "full_flow"
 )
 

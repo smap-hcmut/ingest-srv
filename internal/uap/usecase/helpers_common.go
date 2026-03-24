@@ -569,6 +569,13 @@ func (uc *implUseCase) intPtr(v int) *int {
 	return &v
 }
 
+func (uc *implUseCase) intPtrIfPositive(v int) *int {
+	if v <= 0 {
+		return nil
+	}
+	return &v
+}
+
 func (uc *implUseCase) float64Ptr(v float64) *float64 {
 	return &v
 }

@@ -1,12 +1,12 @@
 # SMAP Universal Analytics Profile (UAP) Specification - Runtime vNext
 
-- Version: `runtime-vnext-v2.0`
-- Last updated: `2026-03-24 18:35:00 +07:00`
+- Version: `runtime-vnext-v3.0`
+- Last updated: `2026-03-24 20:10:00 +07:00`
 - Status: `runtime-canonical`
 
 ## Mục tiêu
 
-Tài liệu này mô tả schema UAP đang được `ingest-srv` xuất ra ở runtime sau Phase 3.
+Tài liệu này mô tả schema UAP đang được `ingest-srv` xuất ra ở runtime sau Phase 5.
 
 Nguyên tắc:
 
@@ -17,8 +17,7 @@ Nguyên tắc:
 
 ## Runtime support hiện tại
 
-- parser runtime hiện hỗ trợ `tiktok/full_flow` và `youtube/full_flow`
-- `facebook/full_flow` vẫn chưa parse ở runtime
+- parser runtime hiện hỗ trợ `tiktok/full_flow`, `youtube/full_flow`, và `facebook/full_flow`
 - schema runtime hiện tại đã dùng field names vNext
 
 ## 1. Enums
@@ -195,8 +194,6 @@ Nguyên tắc:
 - `music_*`, `is_shop_video`, `sort_score` đi vào `platform_meta.tiktok`
 - chỉ emit `REPLY` khi raw có `reply_comments`
 
-### Facebook / YouTube
-
 ### YouTube
 
 - `title = detail.title || video.title`
@@ -214,5 +211,16 @@ Nguyên tắc:
 
 ### Facebook
 
-- chưa parse ở runtime hiện tại
-- sẽ được bổ sung ở phase tiếp theo
+- `title = ""`
+- `subtitle = ""`
+- `text = post.message` với POST, `comment.message` với COMMENT
+- `links = extract từ post.message hoặc comment.message`
+- `author.profile_url` lấy trực tiếp từ raw `post.author.url` hoặc `comment.author.profile_url`
+- `posted_at = convert Unix created_time sang RFC3339`
+- `updated_at = ""` vì `full_flow` hiện tại chưa enrich `post_detail`
+- `attachments` map sang `media[]`
+  - `Photo -> image`
+  - `Video -> video`
+  - `download_url = media_url` nếu raw có
+- không map `accessibility_caption` vào `content.subtitle`
+- không emit `REPLY` dù `reply_count > 0` nếu raw không có reply bodies
