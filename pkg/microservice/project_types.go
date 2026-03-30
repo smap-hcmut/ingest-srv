@@ -3,7 +3,7 @@ package microservice
 type ProjectStatus string
 
 const (
-	ProjectStatusDraft    ProjectStatus = "DRAFT"
+	ProjectStatusPending  ProjectStatus = "PENDING"
 	ProjectStatusActive   ProjectStatus = "ACTIVE"
 	ProjectStatusPaused   ProjectStatus = "PAUSED"
 	ProjectStatusArchived ProjectStatus = "ARCHIVED"
