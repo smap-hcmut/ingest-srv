@@ -175,6 +175,7 @@ func (uc *implUseCase) mapFacebookPost(bundle uap.FacebookPostBundleInput, input
 			UpdatedAt:  "",
 			IngestedAt: input.CompletionTime.UTC().Format(time.RFC3339),
 		},
+		DomainTypeCode: input.DomainTypeCode,
 		PlatformMeta: map[string]interface{}{
 			"facebook": map[string]interface{}{
 				"attachment_count": len(bundle.Post.Attachments),
@@ -228,6 +229,7 @@ func (uc *implUseCase) mapFacebookComment(comment uap.FacebookCommentInput, inpu
 			UpdatedAt:  "",
 			IngestedAt: input.CompletionTime.UTC().Format(time.RFC3339),
 		},
+		DomainTypeCode: input.DomainTypeCode,
 		PlatformMeta: map[string]interface{}{
 			"facebook": map[string]interface{}{
 				"replies_present": repliesPresent,

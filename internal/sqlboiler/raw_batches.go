@@ -27,6 +27,7 @@ type RawBatch struct {
 	ID                 string        `boil:"id" json:"id" toml:"id" yaml:"id"`
 	SourceID           string        `boil:"source_id" json:"source_id" toml:"source_id" yaml:"source_id"`
 	ProjectID          string        `boil:"project_id" json:"project_id" toml:"project_id" yaml:"project_id"`
+	DomainTypeCode     string        `boil:"domain_type_code" json:"domain_type_code" toml:"domain_type_code" yaml:"domain_type_code"`
 	ExternalTaskID     null.String   `boil:"external_task_id" json:"external_task_id,omitempty" toml:"external_task_id" yaml:"external_task_id,omitempty"`
 	BatchID            string        `boil:"batch_id" json:"batch_id" toml:"batch_id" yaml:"batch_id"`
 	Status             BatchStatus   `boil:"status" json:"status" toml:"status" yaml:"status"`
@@ -56,6 +57,7 @@ var RawBatchColumns = struct {
 	ID                 string
 	SourceID           string
 	ProjectID          string
+	DomainTypeCode     string
 	ExternalTaskID     string
 	BatchID            string
 	Status             string
@@ -80,6 +82,7 @@ var RawBatchColumns = struct {
 	ID:                 "id",
 	SourceID:           "source_id",
 	ProjectID:          "project_id",
+	DomainTypeCode:     "domain_type_code",
 	ExternalTaskID:     "external_task_id",
 	BatchID:            "batch_id",
 	Status:             "status",
@@ -106,6 +109,7 @@ var RawBatchTableColumns = struct {
 	ID                 string
 	SourceID           string
 	ProjectID          string
+	DomainTypeCode     string
 	ExternalTaskID     string
 	BatchID            string
 	Status             string
@@ -130,6 +134,7 @@ var RawBatchTableColumns = struct {
 	ID:                 "raw_batches.id",
 	SourceID:           "raw_batches.source_id",
 	ProjectID:          "raw_batches.project_id",
+	DomainTypeCode:     "raw_batches.domain_type_code",
 	ExternalTaskID:     "raw_batches.external_task_id",
 	BatchID:            "raw_batches.batch_id",
 	Status:             "raw_batches.status",

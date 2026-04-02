@@ -12,6 +12,7 @@ import (
 	executionRabbit "ingest-srv/internal/execution/delivery/rabbitmq"
 	repo "ingest-srv/internal/execution/repository"
 	"ingest-srv/internal/model"
+	"ingest-srv/pkg/microservice"
 
 	"github.com/smap-hcmut/shared-libs/go/minio"
 )
@@ -166,6 +167,25 @@ func (uc *implUseCase) mapRepositoryError(err error) error {
 	default:
 		return execution.ErrDispatchFailed
 	}
+}
+
+func (uc *implUseCase) resolveProjectDomainTypeCode(ctx context.Context, projectID string) (string, error) {
+	if uc.project == nil {
+		return "", fmt.Errorf("project client is not initialized")
+	}
+
+	projectDetail, err := uc.project.Detail(ctx, strings.TrimSpace(projectID))
+	if err != nil {
+		return "", fmt.Errorf("get project detail: %w", err)
+	}
+	if projectDetail.Status == microservice.ProjectStatusArchived {
+		return "", execution.ErrDispatchNotAllowed
+	}
+	if strings.TrimSpace(projectDetail.DomainTypeCode) == "" {
+		return "generic", nil
+	}
+
+	return strings.TrimSpace(projectDetail.DomainTypeCode), nil
 }
 
 func (uc *implUseCase) validateCompletionInput(input execution.HandleCompletionInput) error {

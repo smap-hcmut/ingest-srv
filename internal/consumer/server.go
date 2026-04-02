@@ -27,7 +27,7 @@ func (s Server) Run(ctx context.Context) error {
 	uapPublisher := uapKafka.New(s.l, s.kafka)
 	uapParserRepo := uapRepo.New(s.l, s.db)
 	uapParserUC := uapUC.New(s.l, uapParserRepo, s.minio, s.uapBucket, uapPublisher)
-	execUC := executionUC.New(s.l, execRepo, s.minio, nil, uapParserUC)
+	execUC := executionUC.New(s.l, execRepo, s.minio, nil, uapParserUC, projectSrv)
 	dataUC := datasourceUC.New(s.l, dataSRepo, projectSrv, execUC)
 
 	dryrunResultRepo := dryrunRepo.New(s.l, s.db)

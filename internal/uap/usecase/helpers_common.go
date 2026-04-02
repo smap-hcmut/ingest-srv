@@ -267,8 +267,9 @@ func (uc *implUseCase) marshalUAPRecord(record uap.UAPRecord) ([]byte, error) {
 			"updated_at":  record.Temporal.UpdatedAt,
 			"ingested_at": record.Temporal.IngestedAt,
 		},
-		"crawl_keyword": strings.TrimSpace(record.CrawlKeyword),
-		"platform_meta": platformMeta,
+		"domain_type_code": strings.TrimSpace(record.DomainTypeCode),
+		"crawl_keyword":    strings.TrimSpace(record.CrawlKeyword),
+		"platform_meta":    platformMeta,
 	}
 
 	return json.Marshal(payload)

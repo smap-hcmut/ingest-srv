@@ -54,10 +54,12 @@ func main() {
 	}
 
 	schedulerSrv, err := scheduler.New(logger, scheduler.Config{
-		DB:        postgresDB,
-		AMQPConn:  rabbitConn,
-		Scheduler: cfg.Scheduler,
-		Discord:   discordClient,
+		DB:           postgresDB,
+		AMQPConn:     rabbitConn,
+		Scheduler:    cfg.Scheduler,
+		Microservice: cfg.Microservice,
+		InternalKey:  cfg.InternalConfig.InternalKey,
+		Discord:      discordClient,
 	})
 	if err != nil {
 		logger.Fatalf(ctx, "Failed to create scheduler: %v", err)

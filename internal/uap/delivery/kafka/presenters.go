@@ -7,15 +7,16 @@ import (
 )
 
 type uapRecordPayload struct {
-	Identity     uapIdentityPayload     `json:"identity"`
-	Hierarchy    uapHierarchyPayload    `json:"hierarchy"`
-	Content      uapContentPayload      `json:"content"`
-	Author       uapAuthorPayload       `json:"author"`
-	Engagement   uapEngagementPayload   `json:"engagement"`
-	Media        []uapMediaPayload      `json:"media,omitempty"`
-	Temporal     uapTemporalPayload     `json:"temporal"`
-	CrawlKeyword string                 `json:"crawl_keyword,omitempty"`
-	PlatformMeta map[string]interface{} `json:"platform_meta,omitempty"`
+	Identity       uapIdentityPayload     `json:"identity"`
+	Hierarchy      uapHierarchyPayload    `json:"hierarchy"`
+	Content        uapContentPayload      `json:"content"`
+	Author         uapAuthorPayload       `json:"author"`
+	Engagement     uapEngagementPayload   `json:"engagement"`
+	Media          []uapMediaPayload      `json:"media,omitempty"`
+	Temporal       uapTemporalPayload     `json:"temporal"`
+	DomainTypeCode string                 `json:"domain_type_code,omitempty"`
+	CrawlKeyword   string                 `json:"crawl_keyword,omitempty"`
+	PlatformMeta   map[string]interface{} `json:"platform_meta,omitempty"`
 }
 
 type uapIdentityPayload struct {
@@ -150,8 +151,9 @@ func toPayload(input uap.UAPRecord) uapRecordPayload {
 			UpdatedAt:  input.Temporal.UpdatedAt,
 			IngestedAt: input.Temporal.IngestedAt,
 		},
-		CrawlKeyword: input.CrawlKeyword,
-		PlatformMeta: input.PlatformMeta,
+		DomainTypeCode: input.DomainTypeCode,
+		CrawlKeyword:   input.CrawlKeyword,
+		PlatformMeta:   input.PlatformMeta,
 	}
 }
 
@@ -215,7 +217,8 @@ func fromPayload(input uapRecordPayload) uap.UAPRecord {
 			UpdatedAt:  input.Temporal.UpdatedAt,
 			IngestedAt: input.Temporal.IngestedAt,
 		},
-		CrawlKeyword: input.CrawlKeyword,
-		PlatformMeta: input.PlatformMeta,
+		DomainTypeCode: input.DomainTypeCode,
+		CrawlKeyword:   input.CrawlKeyword,
+		PlatformMeta:   input.PlatformMeta,
 	}
 }

@@ -10,6 +10,7 @@ const (
 )
 
 type ProjectDetail struct {
-	ID     string
-	Status ProjectStatus
+	ID             string
+	Status         ProjectStatus
+	DomainTypeCode string
 }

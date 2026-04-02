@@ -254,7 +254,8 @@ func (uc *implUseCase) mapTikTokPost(bundle uap.TikTokPostBundleInput, input uap
 			PostedAt:   postedAt,
 			IngestedAt: ingestedAt,
 		},
-		PlatformMeta: platformMeta,
+		DomainTypeCode: input.DomainTypeCode,
+		PlatformMeta:   platformMeta,
 	}, rootID
 }
 
@@ -306,7 +307,8 @@ func (uc *implUseCase) mapTikTokComment(comment uap.TikTokCommentInput, input ua
 		Temporal: uap.UAPTemporal{
 			PostedAt: strings.TrimSpace(comment.CommentedAt),
 		},
-		PlatformMeta: platformMeta,
+		DomainTypeCode: input.DomainTypeCode,
+		PlatformMeta:   platformMeta,
 	}, commentID
 }
 
@@ -348,7 +350,8 @@ func (uc *implUseCase) mapTikTokReply(reply uap.TikTokReplyInput, input uap.Pars
 		Temporal: uap.UAPTemporal{
 			PostedAt: strings.TrimSpace(reply.RepliedAt),
 		},
-		PlatformMeta: map[string]interface{}{},
+		DomainTypeCode: input.DomainTypeCode,
+		PlatformMeta:   map[string]interface{}{},
 	}
 }
 

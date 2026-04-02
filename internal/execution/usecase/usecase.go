@@ -164,6 +164,18 @@ func (uc *implUseCase) dispatchOneSpec(
 			ErrorMessage: execution.ErrDispatchFailed.Error(),
 		}, execution.ErrDispatchFailed
 	}
+	domainTypeCode, err := uc.resolveProjectDomainTypeCode(ctx, dispatchCtx.Source.ProjectID)
+	if err != nil {
+		uc.l.Errorf(ctx, "execution.usecase.dispatchOneSpec.resolveProjectDomainTypeCode: project_id=%s err=%v", dispatchCtx.Source.ProjectID, err)
+		return execution.DispatchTaskOutput{
+			TaskID:       taskID,
+			Queue:        string(spec.Queue),
+			Action:       string(spec.Action),
+			Status:       string(model.JobStatusFailed),
+			Keyword:      spec.Keyword,
+			ErrorMessage: execution.ErrDispatchFailed.Error(),
+		}, execution.ErrDispatchFailed
+	}
 
 	externalTask, err := uc.repo.CreateExternalTask(ctx, repo.CreateExternalTaskOptions{
 		Source:         dispatchCtx.Source,
@@ -172,6 +184,7 @@ func (uc *implUseCase) dispatchOneSpec(
 		TaskID:         taskID,
 		Queue:          string(spec.Queue),
 		Action:         string(spec.Action),
+		DomainTypeCode: domainTypeCode,
 		RequestPayload: requestPayload,
 		CreatedAt:      requestedAt,
 	})

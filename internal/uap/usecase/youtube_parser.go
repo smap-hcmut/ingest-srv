@@ -209,7 +209,8 @@ func (uc *implUseCase) mapYouTubePost(bundle uap.YouTubeVideoBundleInput, input 
 			UpdatedAt:  "",
 			IngestedAt: ingestedAt,
 		},
-		PlatformMeta: platformMeta,
+		DomainTypeCode: input.DomainTypeCode,
+		PlatformMeta:   platformMeta,
 	}, rootID
 }
 
@@ -257,6 +258,7 @@ func (uc *implUseCase) mapYouTubeComment(comment uap.YouTubeCommentInput, input 
 			UpdatedAt:  "",
 			IngestedAt: input.CompletionTime.UTC().Format(time.RFC3339),
 		},
+		DomainTypeCode: input.DomainTypeCode,
 		PlatformMeta: map[string]interface{}{
 			"youtube": map[string]interface{}{
 				"published_time_text": comment.PublishedTimeText,

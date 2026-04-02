@@ -8,6 +8,7 @@ import (
 type ParseAndStoreRawBatchInput struct {
 	RawBatchID     string
 	ProjectID      string
+	DomainTypeCode string
 	SourceID       string
 	ExternalTaskID string
 	TaskID         string
@@ -290,15 +291,16 @@ type KafkaPublishStats struct {
 }
 
 type UAPRecord struct {
-	Identity     UAPIdentity
-	Hierarchy    UAPHierarchy
-	Content      UAPContent
-	Author       UAPAuthor
-	Engagement   UAPEngagement
-	Media        []UAPMedia
-	Temporal     UAPTemporal
-	CrawlKeyword string
-	PlatformMeta map[string]interface{}
+	Identity       UAPIdentity
+	Hierarchy      UAPHierarchy
+	Content        UAPContent
+	Author         UAPAuthor
+	Engagement     UAPEngagement
+	Media          []UAPMedia
+	Temporal       UAPTemporal
+	DomainTypeCode string
+	CrawlKeyword   string
+	PlatformMeta   map[string]interface{}
 }
 
 type UAPIdentity struct {

@@ -32,6 +32,7 @@ Nguyên tắc:
 
 ```json
 {
+  "domain_type_code": "crypto",         // Snapshot domain của project; dùng để route prompt/rule/model downstream
   "crawl_keyword": "bia heineken",
 
   "identity": {
@@ -111,6 +112,7 @@ Nguyên tắc:
 
 ```json
 {
+  "domain_type_code": "crypto",         // Snapshot domain của project tại thời điểm crawl
   "crawl_keyword": "bia heineken",
   
   "identity": {
@@ -177,6 +179,7 @@ Nguyên tắc:
 
 | Runtime cũ | vNext | Mục đích đổi |
 | :--- | :--- | :--- |
+| `n/a` | `domain_type_code` | Snapshot domain để analysis chọn đúng ngữ cảnh mà không cần resolve project ngược |
 | `content.summary_title` | `content.title` | Trung tính hơn giữa TikTok, YouTube, Facebook |
 | `content.subtitle_url` | `content.subtitle` | Dùng text normalized thay vì URL để NLP/RAG trực tiếp |
 | `content.tiktok_keywords` | `content.keywords` | Bỏ bias TikTok-only |

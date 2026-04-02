@@ -60,6 +60,7 @@ func (r *implRepository) CompleteTaskSuccess(ctx context.Context, opt repository
 		ID:             uuid.NewString(),
 		SourceID:       opt.CompletionContext.ExternalTask.SourceID,
 		ProjectID:      opt.CompletionContext.ExternalTask.ProjectID,
+		DomainTypeCode: opt.DomainTypeCode,
 		BatchID:        opt.BatchID,
 		Status:         sqlboiler.BatchStatus(model.BatchStatusReceived),
 		StorageBucket:  opt.StorageBucket,
