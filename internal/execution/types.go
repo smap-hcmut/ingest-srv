@@ -77,15 +77,23 @@ const (
 )
 
 const (
-	MinioVerifyRetryAttempts   = 3
-	DefaultMinIntervalMinute   = 1
-	DefaultMaxIntervalMinute   = 1440
-	NormalModeMultiplier       = 1.0
-	CrisisModeMultiplier       = 0.2
-	SleepModeMultiplier        = 5.0
+	MinioVerifyRetryAttempts = 3
+	DefaultMinIntervalMinute = 1
+	DefaultMaxIntervalMinute = 1440
+	NormalModeMultiplier     = 1.0
+	CrisisModeMultiplier     = 0.2
+	SleepModeMultiplier      = 5.0
+
 	TikTokFullFlowLimit        = 50
 	TikTokFullFlowThreshold    = 0.3
-	TikTokFullFlowCommentCount = 500
+	TikTokFullFlowCommentCount = 100
+
+	FacebookFullFlowLimit        = 50
+	FacebookFullFlowCommentCount = 100
+	FacebookFullFlowCommentSort  = "hot"
+
+	YouTubeFullFlowLimit        = 50
+	YouTubeFullFlowCommentCount = 100
 )
 
 // DispatchSpec is the normalized runtime dispatch shape built by the usecase.

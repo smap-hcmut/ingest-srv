@@ -12,6 +12,7 @@ import (
 	executionRabbit "ingest-srv/internal/execution/delivery/rabbitmq"
 	repo "ingest-srv/internal/execution/repository"
 	"ingest-srv/internal/model"
+	"ingest-srv/pkg/microservice"
 
 	"github.com/smap-hcmut/shared-libs/go/minio"
 )
@@ -61,6 +62,47 @@ func (uc *implUseCase) buildDispatchSpecs(source model.DataSource, target model.
 					"limit":         execution.TikTokFullFlowLimit,
 					"threshold":     execution.TikTokFullFlowThreshold,
 					"comment_count": execution.TikTokFullFlowCommentCount,
+				},
+			})
+		}
+		return specs, nil
+	case source.SourceType == model.SourceTypeFacebook && target.TargetType == model.TargetTypeKeyword:
+		keywords := uc.extractKeywords(target.Values)
+		if len(keywords) == 0 {
+			uc.l.Warnf(context.Background(), "execution.usecase.buildDispatchSpecs.facebookFullFlowInvalidKeywordTarget: target_id=%s keyword_count=%d", target.ID, len(target.Values))
+			return nil, execution.ErrDispatchNotAllowed
+		}
+		specs := make([]execution.DispatchSpec, 0, len(keywords))
+		for _, keyword := range keywords {
+			specs = append(specs, execution.DispatchSpec{
+				Queue:   execution.QueueName(executionRabbit.FacebookTasksQueueName),
+				Action:  execution.ActionNameFullFlow,
+				Keyword: keyword,
+				Params: map[string]interface{}{
+					"keyword":       keyword,
+					"limit":         execution.FacebookFullFlowLimit,
+					"comment_count": execution.FacebookFullFlowCommentCount,
+					"comment_sort":  execution.FacebookFullFlowCommentSort,
+				},
+			})
+		}
+		return specs, nil
+	case source.SourceType == model.SourceTypeYouTube && target.TargetType == model.TargetTypeKeyword:
+		keywords := uc.extractKeywords(target.Values)
+		if len(keywords) == 0 {
+			uc.l.Warnf(context.Background(), "execution.usecase.buildDispatchSpecs.youtubeFullFlowInvalidKeywordTarget: target_id=%s keyword_count=%d", target.ID, len(target.Values))
+			return nil, execution.ErrDispatchNotAllowed
+		}
+		specs := make([]execution.DispatchSpec, 0, len(keywords))
+		for _, keyword := range keywords {
+			specs = append(specs, execution.DispatchSpec{
+				Queue:   execution.QueueName(executionRabbit.YoutubeTasksQueueName),
+				Action:  execution.ActionNameFullFlow,
+				Keyword: keyword,
+				Params: map[string]interface{}{
+					"keyword":       keyword,
+					"limit":         execution.YouTubeFullFlowLimit,
+					"comment_count": execution.YouTubeFullFlowCommentCount,
 				},
 			})
 		}
@@ -125,6 +167,25 @@ func (uc *implUseCase) mapRepositoryError(err error) error {
 	default:
 		return execution.ErrDispatchFailed
 	}
+}
+
+func (uc *implUseCase) resolveProjectDomainTypeCode(ctx context.Context, projectID string) (string, error) {
+	if uc.project == nil {
+		return "", fmt.Errorf("project client is not initialized")
+	}
+
+	projectDetail, err := uc.project.Detail(ctx, strings.TrimSpace(projectID))
+	if err != nil {
+		return "", fmt.Errorf("get project detail: %w", err)
+	}
+	if projectDetail.Status == microservice.ProjectStatusArchived {
+		return "", execution.ErrDispatchNotAllowed
+	}
+	if strings.TrimSpace(projectDetail.DomainTypeCode) == "" {
+		return "generic", nil
+	}
+
+	return strings.TrimSpace(projectDetail.DomainTypeCode), nil
 }
 
 func (uc *implUseCase) validateCompletionInput(input execution.HandleCompletionInput) error {

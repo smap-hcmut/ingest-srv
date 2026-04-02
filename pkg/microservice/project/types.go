@@ -28,6 +28,7 @@ type projectRespDTO struct {
 }
 
 type projectDetailDTO struct {
-	ID     string `json:"id"`
-	Status string `json:"status"`
+	ID             string `json:"id"`
+	Status         string `json:"status"`
+	DomainTypeCode string `json:"domain_type_code"`
 }

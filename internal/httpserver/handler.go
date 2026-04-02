@@ -44,7 +44,7 @@ func (srv HTTPServer) mapHandlers() error {
 	if err := execProducer.Run(); err != nil {
 		return err
 	}
-	execUseCase := executionUC.New(srv.l, execRepo, srv.minio, execProducer, nil)
+	execUseCase := executionUC.New(srv.l, execRepo, srv.minio, execProducer, nil, projectSrv)
 	execHTTP := executionHandler.New(srv.l, execUseCase, srv.discord)
 	dataUC := datasourceUC.New(srv.l, dataSRepo, projectSrv, execUseCase)
 	datasourceHTTP := datasourceHandler.New(srv.l, dataUC, srv.discord)

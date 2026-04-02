@@ -140,6 +140,7 @@ func (r *implRepository) CreateExternalTask(ctx context.Context, opt repository.
 		ID:             uuid.NewString(),
 		SourceID:       opt.Source.ID,
 		ProjectID:      opt.Source.ProjectID,
+		DomainTypeCode: opt.DomainTypeCode,
 		TaskID:         opt.TaskID,
 		Platform:       strings.ToLower(string(opt.Source.SourceType)),
 		TaskType:       opt.Action,

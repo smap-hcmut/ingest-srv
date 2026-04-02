@@ -50,6 +50,7 @@ type CreateExternalTaskOptions struct {
 	TaskID         string
 	Queue          string
 	Action         string
+	DomainTypeCode string
 	RequestPayload json.RawMessage
 	CreatedAt      time.Time
 }
@@ -88,6 +89,7 @@ type CompleteTaskSuccessOptions struct {
 	Checksum          string
 	ItemCount         *int
 	SizeBytes         *int64
+	DomainTypeCode    string
 	RawMetadata       json.RawMessage
 	CompletedAt       time.Time
 }

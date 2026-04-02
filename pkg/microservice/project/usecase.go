@@ -34,8 +34,9 @@ func (uc *implUseCase) Detail(ctx context.Context, projectID string) (microservi
 	}
 
 	return microservice.ProjectDetail{
-		ID:     dto.Project.ID,
-		Status: microservice.ProjectStatus(strings.TrimSpace(dto.Project.Status)),
+		ID:             dto.Project.ID,
+		Status:         microservice.ProjectStatus(strings.TrimSpace(dto.Project.Status)),
+		DomainTypeCode: strings.TrimSpace(dto.Project.DomainTypeCode),
 	}, nil
 }
 

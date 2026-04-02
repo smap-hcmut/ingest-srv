@@ -203,6 +203,7 @@ CREATE TABLE schema_ingest.external_tasks (
     id UUID PRIMARY KEY,
     source_id UUID NOT NULL REFERENCES schema_ingest.data_sources(id),
     project_id UUID NOT NULL,
+    domain_type_code VARCHAR(50) NOT NULL DEFAULT 'generic',
     target_id UUID,                                  -- nullable: NULL cho FILE_UPLOAD hoặc batch task
     scheduled_job_id UUID REFERENCES schema_ingest.scheduled_jobs(id),
     task_id UUID NOT NULL UNIQUE,
@@ -222,6 +223,7 @@ CREATE TABLE schema_ingest.raw_batches (
     id UUID PRIMARY KEY,
     source_id UUID NOT NULL REFERENCES schema_ingest.data_sources(id),
     project_id UUID NOT NULL,
+    domain_type_code VARCHAR(50) NOT NULL DEFAULT 'generic',
     external_task_id UUID REFERENCES schema_ingest.external_tasks(id),
     batch_id VARCHAR(255) NOT NULL,
     status schema_ingest.batch_status NOT NULL DEFAULT 'RECEIVED',
@@ -366,6 +368,9 @@ CREATE INDEX idx_external_tasks_source_created_desc
 CREATE INDEX idx_external_tasks_project_created_desc
     ON schema_ingest.external_tasks (project_id, created_at DESC);
 
+CREATE INDEX idx_external_tasks_domain_type_created_desc
+    ON schema_ingest.external_tasks (domain_type_code, created_at DESC);
+
 CREATE INDEX idx_external_tasks_scheduled_job_id
     ON schema_ingest.external_tasks (scheduled_job_id);
 
@@ -377,6 +382,9 @@ CREATE INDEX idx_raw_batches_source_received_desc
 
 CREATE INDEX idx_raw_batches_project_received_desc
     ON schema_ingest.raw_batches (project_id, received_at DESC);
+
+CREATE INDEX idx_raw_batches_domain_type_received_desc
+    ON schema_ingest.raw_batches (domain_type_code, received_at DESC);
 
 CREATE INDEX idx_raw_batches_external_task_id
     ON schema_ingest.raw_batches (external_task_id);

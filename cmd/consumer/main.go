@@ -79,7 +79,6 @@ func main() {
 		MinIO:        minioClient,
 		UAPBucket:    cfg.MinIO.Bucket,
 		Kafka:        kafkaProducer,
-		UAPTopic:     cfg.Kafka.UAPTopic,
 		Microservice: cfg.Microservice,
 		InternalKey:  cfg.InternalConfig.InternalKey,
 	})

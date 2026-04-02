@@ -18,7 +18,6 @@ type Server struct {
 	minio        minio.MinIO
 	uapBucket    string
 	kafka        kafka.IProducer
-	uapTopic     string
 	microservice config.MicroserviceConfig
 	internalKey  string
 }
@@ -29,7 +28,6 @@ type ServerConfig struct {
 	MinIO        minio.MinIO
 	UAPBucket    string
 	Kafka        kafka.IProducer
-	UAPTopic     string
 	Microservice config.MicroserviceConfig
 	InternalKey  string
 }
@@ -43,7 +41,6 @@ func NewServer(l log.Logger, config ServerConfig) Server {
 		minio:        config.MinIO,
 		uapBucket:    config.UAPBucket,
 		kafka:        config.Kafka,
-		uapTopic:     config.UAPTopic,
 		microservice: config.Microservice,
 		internalKey:  config.InternalKey,
 	}

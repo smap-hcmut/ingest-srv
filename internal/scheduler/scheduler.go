@@ -7,6 +7,7 @@ import (
 	executionProducer "ingest-srv/internal/execution/delivery/rabbitmq/producer"
 	executionRepo "ingest-srv/internal/execution/repository/postgre"
 	executionUC "ingest-srv/internal/execution/usecase"
+	projectsrv "ingest-srv/pkg/microservice/project"
 	"os"
 	"os/signal"
 	"runtime/debug"
@@ -42,11 +43,12 @@ func (s Scheduler) Start() error {
 func (s Scheduler) registerJobs() error {
 	execRepo := executionRepo.New(s.l, s.db)
 	execProducer := executionProducer.New(s.l, s.conn)
+	projectSrv := projectsrv.New(s.l, s.microservice.Project.BaseURL, s.microservice.Project.TimeoutMS, s.internalKey)
 	if err := execProducer.Run(); err != nil {
 		return err
 	}
 
-	execUC := executionUC.New(s.l, execRepo, nil, execProducer, nil)
+	execUC := executionUC.New(s.l, execRepo, nil, execProducer, nil, projectSrv)
 	jobHandler := executionJob.New(s.l, s.cfg, s.cron, execUC)
 
 	// Register jobs using shared-libs cron
