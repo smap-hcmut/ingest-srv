@@ -28,6 +28,7 @@ type ExternalTask struct {
 	ID                 string      `boil:"id" json:"id" toml:"id" yaml:"id"`
 	SourceID           string      `boil:"source_id" json:"source_id" toml:"source_id" yaml:"source_id"`
 	ProjectID          string      `boil:"project_id" json:"project_id" toml:"project_id" yaml:"project_id"`
+	DomainTypeCode     string      `boil:"domain_type_code" json:"domain_type_code" toml:"domain_type_code" yaml:"domain_type_code"`
 	TargetID           null.String `boil:"target_id" json:"target_id,omitempty" toml:"target_id" yaml:"target_id,omitempty"`
 	ScheduledJobID     null.String `boil:"scheduled_job_id" json:"scheduled_job_id,omitempty" toml:"scheduled_job_id" yaml:"scheduled_job_id,omitempty"`
 	TaskID             string      `boil:"task_id" json:"task_id" toml:"task_id" yaml:"task_id"`
@@ -50,6 +51,7 @@ var ExternalTaskColumns = struct {
 	ID                 string
 	SourceID           string
 	ProjectID          string
+	DomainTypeCode     string
 	TargetID           string
 	ScheduledJobID     string
 	TaskID             string
@@ -67,6 +69,7 @@ var ExternalTaskColumns = struct {
 	ID:                 "id",
 	SourceID:           "source_id",
 	ProjectID:          "project_id",
+	DomainTypeCode:     "domain_type_code",
 	TargetID:           "target_id",
 	ScheduledJobID:     "scheduled_job_id",
 	TaskID:             "task_id",
@@ -86,6 +89,7 @@ var ExternalTaskTableColumns = struct {
 	ID                 string
 	SourceID           string
 	ProjectID          string
+	DomainTypeCode     string
 	TargetID           string
 	ScheduledJobID     string
 	TaskID             string
@@ -103,6 +107,7 @@ var ExternalTaskTableColumns = struct {
 	ID:                 "external_tasks.id",
 	SourceID:           "external_tasks.source_id",
 	ProjectID:          "external_tasks.project_id",
+	DomainTypeCode:     "external_tasks.domain_type_code",
 	TargetID:           "external_tasks.target_id",
 	ScheduledJobID:     "external_tasks.scheduled_job_id",
 	TaskID:             "external_tasks.task_id",

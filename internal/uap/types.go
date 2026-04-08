@@ -8,6 +8,7 @@ import (
 type ParseAndStoreRawBatchInput struct {
 	RawBatchID     string
 	ProjectID      string
+	DomainTypeCode string
 	SourceID       string
 	ExternalTaskID string
 	TaskID         string
@@ -114,6 +115,137 @@ type TikTokAuthorInput struct {
 	Avatar   string
 }
 
+type YouTubeFullFlowInput struct {
+	Videos []YouTubeVideoBundleInput
+}
+
+type YouTubeVideoBundleInput struct {
+	Video      YouTubeVideoInput
+	Detail     YouTubeDetailInput
+	Comments   YouTubeCommentsInput
+	Transcript YouTubeTranscriptInput
+}
+
+type YouTubeVideoInput struct {
+	VideoID            string
+	Title              string
+	ChannelName        string
+	ChannelID          string
+	ViewsCount         int
+	ViewsText          string
+	DurationText       string
+	PublishedTimeText  string
+	ThumbnailURL       string
+	DescriptionSnippet string
+	URL                string
+}
+
+type YouTubeDetailInput struct {
+	VideoID       string
+	Title         string
+	Description   string
+	Keywords      []string
+	Width         int
+	Height        int
+	AuthorName    string
+	AuthorURL     string
+	LikesCount    int
+	ViewsCount    int
+	DatePublished string
+	UploadDate    string
+}
+
+type YouTubeCommentsInput struct {
+	VideoID  string
+	Comments []YouTubeCommentInput
+	Total    int
+}
+
+type YouTubeCommentInput struct {
+	CommentID          string
+	VideoID            string
+	AuthorName         string
+	AuthorChannelID    string
+	AuthorThumbnailURL string
+	Content            string
+	LikesCount         int
+	ReplyCount         int
+	PublishedTimeText  string
+}
+
+type YouTubeTranscriptInput struct {
+	FullText string
+	Segments []YouTubeTranscriptSegmentInput
+}
+
+type YouTubeTranscriptSegmentInput struct {
+	StartMS       int
+	EndMS         int
+	Text          string
+	StartTimeText string
+}
+
+type FacebookFullFlowInput struct {
+	Posts []FacebookPostBundleInput
+}
+
+type FacebookPostBundleInput struct {
+	Post     FacebookPostInput
+	Comments FacebookCommentsInput
+}
+
+type FacebookPostInput struct {
+	PostID        string
+	Message       string
+	URL           string
+	Author        FacebookPostAuthorInput
+	CreatedTime   int64
+	ReactionCount int
+	CommentCount  int
+	ShareCount    int
+	Attachments   []FacebookAttachmentInput
+}
+
+type FacebookPostAuthorInput struct {
+	ID        string
+	Name      string
+	URL       string
+	AvatarURL string
+}
+
+type FacebookAttachmentInput struct {
+	Type        string
+	URL         string
+	MediaURL    string
+	Width       int
+	Height      int
+	Title       string
+	Description string
+}
+
+type FacebookCommentsInput struct {
+	PostID   string
+	Total    int
+	Comments []FacebookCommentInput
+}
+
+type FacebookCommentInput struct {
+	ID            string
+	Message       string
+	Author        FacebookCommentAuthorInput
+	CreatedTime   int64
+	ReactionCount int
+	ReplyCount    int
+	Replies       []FacebookCommentInput
+}
+
+type FacebookCommentAuthorInput struct {
+	ID         string
+	Name       string
+	ProfileURL string
+	AvatarURL  string
+}
+
 type PublishUAPInput struct {
 	Record UAPRecord
 }
@@ -128,6 +260,8 @@ const (
 
 const (
 	PlatformTikTok   = "tiktok"
+	PlatformYouTube  = "youtube"
+	PlatformFacebook = "facebook"
 	TaskTypeFullFlow = "full_flow"
 )
 
@@ -157,13 +291,16 @@ type KafkaPublishStats struct {
 }
 
 type UAPRecord struct {
-	Identity   UAPIdentity
-	Hierarchy  UAPHierarchy
-	Content    UAPContent
-	Author     UAPAuthor
-	Engagement UAPEngagement
-	Media      []UAPMedia
-	Temporal   UAPTemporal
+	Identity       UAPIdentity
+	Hierarchy      UAPHierarchy
+	Content        UAPContent
+	Author         UAPAuthor
+	Engagement     UAPEngagement
+	Media          []UAPMedia
+	Temporal       UAPTemporal
+	DomainTypeCode string
+	CrawlKeyword   string
+	PlatformMeta   map[string]interface{}
 }
 
 type UAPIdentity struct {
@@ -183,16 +320,13 @@ type UAPHierarchy struct {
 }
 
 type UAPContent struct {
-	Text           string
-	Hashtags       []string
-	TikTokKeywords []string
-	IsShopVideo    *bool
-	MusicTitle     string
-	MusicURL       string
-	SummaryTitle   string
-	SubtitleURL    string
-	Language       string
-	ExternalLinks  []string
+	Text     string
+	Title    string
+	Subtitle string
+	Hashtags []string
+	Keywords []string
+	Language string
+	Links    []string
 }
 
 type UAPAuthor struct {
@@ -200,6 +334,7 @@ type UAPAuthor struct {
 	Username   string
 	Nickname   string
 	Avatar     string
+	ProfileURL string
 	IsVerified *bool
 }
 
@@ -208,9 +343,8 @@ type UAPEngagement struct {
 	CommentsCount *int
 	Shares        *int
 	Views         *int
-	Bookmarks     *int
+	Saves         *int
 	ReplyCount    *int
-	SortScore     *float64
 }
 
 type UAPMedia struct {
@@ -219,9 +353,12 @@ type UAPMedia struct {
 	DownloadURL string
 	Duration    *int
 	Thumbnail   string
+	Width       *int
+	Height      *int
 }
 
 type UAPTemporal struct {
 	PostedAt   string
+	UpdatedAt  string
 	IngestedAt string
 }

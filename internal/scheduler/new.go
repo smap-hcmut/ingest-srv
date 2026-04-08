@@ -13,19 +13,23 @@ import (
 )
 
 type Scheduler struct {
-	cron       cron.Cron
-	l          log.Logger
-	db         *sql.DB
-	conn       rabbitmq.IRabbitMQ
-	cfg        config.SchedulerConfig
-	discordApp discord.IDiscord
+	cron         cron.Cron
+	l            log.Logger
+	db           *sql.DB
+	conn         rabbitmq.IRabbitMQ
+	cfg          config.SchedulerConfig
+	microservice config.MicroserviceConfig
+	internalKey  string
+	discordApp   discord.IDiscord
 }
 
 type Config struct {
-	DB        *sql.DB
-	AMQPConn  rabbitmq.IRabbitMQ
-	Scheduler config.SchedulerConfig
-	Discord   discord.IDiscord
+	DB           *sql.DB
+	AMQPConn     rabbitmq.IRabbitMQ
+	Scheduler    config.SchedulerConfig
+	Microservice config.MicroserviceConfig
+	InternalKey  string
+	Discord      discord.IDiscord
 }
 
 // New creates scheduler runtime.
@@ -33,12 +37,14 @@ func New(l log.Logger, cfg Config) (Scheduler, error) {
 	cronScheduler := cron.New()
 
 	s := Scheduler{
-		cron:       cronScheduler,
-		l:          l,
-		db:         cfg.DB,
-		conn:       cfg.AMQPConn,
-		cfg:        cfg.Scheduler,
-		discordApp: cfg.Discord,
+		cron:         cronScheduler,
+		l:            l,
+		db:           cfg.DB,
+		conn:         cfg.AMQPConn,
+		cfg:          cfg.Scheduler,
+		microservice: cfg.Microservice,
+		internalKey:  cfg.InternalKey,
+		discordApp:   cfg.Discord,
 	}
 	if err := s.validate(); err != nil {
 		return Scheduler{}, err
@@ -57,6 +63,8 @@ func (s Scheduler) validate() error {
 		{s.cfg.HeartbeatCron != "", "scheduler heartbeat cron is required"},
 		{s.cfg.Timezone != "", "scheduler timezone is required"},
 		{s.cfg.HeartbeatLimit > 0, "scheduler heartbeat limit must be greater than 0"},
+		{s.microservice.Project.BaseURL != "", "microservice.project.base_url is required"},
+		{s.microservice.Project.TimeoutMS > 0, "microservice.project.timeout_ms must be greater than 0"},
 	}
 
 	for _, dep := range requiredDeps {

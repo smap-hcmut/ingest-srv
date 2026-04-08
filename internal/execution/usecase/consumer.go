@@ -96,6 +96,7 @@ func (uc *implUseCase) HandleCompletion(ctx context.Context, input execution.Han
 			Checksum:          input.Checksum,
 			ItemCount:         input.ItemCount,
 			SizeBytes:         sizeBytes,
+			DomainTypeCode:    completionCtx.ExternalTask.DomainTypeCode,
 			RawMetadata:       rawMetadata,
 			CompletedAt:       completedAt,
 		})
@@ -111,6 +112,7 @@ func (uc *implUseCase) HandleCompletion(ctx context.Context, input execution.Han
 			parseErr := uc.parser.ParseAndStoreRawBatch(ctx, uap.ParseAndStoreRawBatchInput{
 				RawBatchID:     rawBatch.ID,
 				ProjectID:      rawBatch.ProjectID,
+				DomainTypeCode: rawBatch.DomainTypeCode,
 				SourceID:       rawBatch.SourceID,
 				ExternalTaskID: completionCtx.ExternalTask.ID,
 				TaskID:         completionCtx.ExternalTask.TaskID,
@@ -140,6 +142,5 @@ func (uc *implUseCase) shouldParseUAP(task model.ExternalTask) bool {
 		return false
 	}
 
-	return strings.EqualFold(strings.TrimSpace(task.Platform), uap.PlatformTikTok) &&
-		strings.EqualFold(strings.TrimSpace(task.TaskType), uap.TaskTypeFullFlow)
+	return uc.parser.SupportsParse(task.Platform, task.TaskType)
 }
