@@ -241,6 +241,19 @@ func (uc *implUseCase) ActivateTarget(ctx context.Context, input datasource.Acti
 		return datasource.ActivateTargetOutput{}, datasource.ErrTargetUpdateFailed
 	}
 
+	// When dryrun is not required and datasource is still PENDING, promote it to
+	// READY so the project activation readiness check can pass.
+	if !dryrunNeeded && source.Status == model.SourceStatusPending {
+		if _, readyErr := uc.repo.UpdateDataSource(ctx, repo.UpdateDataSourceOptions{
+			ID:           source.ID,
+			Status:       string(model.SourceStatusReady),
+			DryrunStatus: string(model.DryrunStatusNotRequired),
+		}); readyErr != nil {
+			uc.l.Errorf(ctx, "datasource.usecase.ActivateTarget.repo.UpdateDataSource(READY): source_id=%s err=%v", source.ID, readyErr)
+			// Non-fatal: target activation already succeeded, just log the error.
+		}
+	}
+
 	return datasource.ActivateTargetOutput{Target: updated}, nil
 }
 
