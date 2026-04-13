@@ -197,22 +197,34 @@ func (uc *implUseCase) ActivateTarget(ctx context.Context, input datasource.Acti
 		}
 		return datasource.ActivateTargetOutput{}, datasource.ErrTargetUpdateFailed
 	}
-	if err := uc.ensureTargetDryrunNotRunning(ctx, current.ID); err != nil {
-		uc.l.Warnf(ctx, "datasource.usecase.ActivateTarget.ensureTargetDryrunNotRunning: target_id=%s err=%v", current.ID, err)
-		return datasource.ActivateTargetOutput{}, err
+	// Resolve source_type so we know whether dryrun is required for this combo.
+	source, sourceErr := uc.repo.DetailDataSource(ctx, strings.TrimSpace(input.DataSourceID))
+	if sourceErr != nil {
+		uc.l.Errorf(ctx, "datasource.usecase.ActivateTarget.repo.DetailDataSource: id=%s err=%v", input.DataSourceID, sourceErr)
+		return datasource.ActivateTargetOutput{}, datasource.ErrTargetUpdateFailed
+	}
+	dryrunNeeded := model.IsDryrunRequired(source.SourceType, current.TargetType)
+
+	if dryrunNeeded {
+		if err := uc.ensureTargetDryrunNotRunning(ctx, current.ID); err != nil {
+			uc.l.Warnf(ctx, "datasource.usecase.ActivateTarget.ensureTargetDryrunNotRunning: target_id=%s err=%v", current.ID, err)
+			return datasource.ActivateTargetOutput{}, err
+		}
 	}
 
 	if current.IsActive {
 		return datasource.ActivateTargetOutput{Target: current}, nil
 	}
 
-	latest, err := uc.repo.GetLatestDryrunByTarget(ctx, current.ID)
-	if err != nil {
-		uc.l.Errorf(ctx, "datasource.usecase.ActivateTarget.repo.GetLatestDryrunByTarget: target_id=%s err=%v", current.ID, err)
-		return datasource.ActivateTargetOutput{}, datasource.ErrTargetUpdateFailed
-	}
-	if latest.ID == "" || !model.IsUsableDryrunStatus(latest.Status) {
-		return datasource.ActivateTargetOutput{}, datasource.ErrTargetActivateNotAllowed
+	if dryrunNeeded {
+		latest, latestErr := uc.repo.GetLatestDryrunByTarget(ctx, current.ID)
+		if latestErr != nil {
+			uc.l.Errorf(ctx, "datasource.usecase.ActivateTarget.repo.GetLatestDryrunByTarget: target_id=%s err=%v", current.ID, latestErr)
+			return datasource.ActivateTargetOutput{}, datasource.ErrTargetUpdateFailed
+		}
+		if latest.ID == "" || !model.IsUsableDryrunStatus(latest.Status) {
+			return datasource.ActivateTargetOutput{}, datasource.ErrTargetActivateNotAllowed
+		}
 	}
 
 	enabled := true

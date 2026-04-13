@@ -117,6 +117,21 @@ func IsUsableDryrunStatus(status DryrunStatus) bool {
 	}
 }
 
+// IsDryrunRequired returns true only for source/target combinations that
+// have a working dryrun mapping (i.e. a crawler worker is available).
+// Combinations that return false are allowed to skip dryrun validation
+// during target activation and project lifecycle checks.
+func IsDryrunRequired(sourceType SourceType, targetType TargetType) bool {
+	switch {
+	case sourceType == SourceTypeTikTok && targetType == TargetTypeKeyword:
+		return true
+	case sourceType == SourceTypeFacebook && targetType == TargetTypePostURL:
+		return true
+	default:
+		return false
+	}
+}
+
 func IsTerminalDryrunStatus(status DryrunStatus) bool {
 	switch status {
 	case DryrunStatusFailed, DryrunStatusWarning, DryrunStatusSuccess:

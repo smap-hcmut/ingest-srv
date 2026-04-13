@@ -11,7 +11,7 @@ import (
 
 // Delivery-layer HTTP errors — sequential codes per domain.
 var (
-	errNotFound                  = &pkgErrors.HTTPError{Code: 1, Message: "Data source not found", StatusCode: http.StatusBadRequest}
+	errNotFound                  = &pkgErrors.HTTPError{Code: 1, Message: "Data source not found", StatusCode: http.StatusNotFound}
 	errNameRequired              = &pkgErrors.HTTPError{Code: 2, Message: "Data source name is required", StatusCode: http.StatusBadRequest}
 	errProjectIDRequired         = &pkgErrors.HTTPError{Code: 3, Message: "Project ID is required", StatusCode: http.StatusBadRequest}
 	errSourceTypeRequired        = &pkgErrors.HTTPError{Code: 4, Message: "Source type is required", StatusCode: http.StatusBadRequest}
@@ -24,7 +24,7 @@ var (
 	errDeleteFailed              = &pkgErrors.HTTPError{Code: 11, Message: "Failed to delete data source", StatusCode: http.StatusInternalServerError}
 	errDeleteRequiresArchived    = &pkgErrors.HTTPError{Code: 23, Message: "Data source must be archived before delete", StatusCode: http.StatusBadRequest}
 	errSourceArchived            = &pkgErrors.HTTPError{Code: 24, Message: "Data source is archived", StatusCode: http.StatusBadRequest}
-	errProjectNotFound           = &pkgErrors.HTTPError{Code: 25, Message: "Project not found", StatusCode: http.StatusBadRequest}
+	errProjectNotFound           = &pkgErrors.HTTPError{Code: 25, Message: "Project not found", StatusCode: http.StatusNotFound}
 	errProjectArchived           = &pkgErrors.HTTPError{Code: 26, Message: "Project is archived", StatusCode: http.StatusBadRequest}
 	errSourceDryrunRunning       = &pkgErrors.HTTPError{Code: 27, Message: "Datasource has a running dryrun task", StatusCode: http.StatusBadRequest}
 	errListFailed                = &pkgErrors.HTTPError{Code: 12, Message: "Failed to list data sources", StatusCode: http.StatusInternalServerError}
@@ -41,7 +41,7 @@ var (
 	errInternal                  = &pkgErrors.HTTPError{Code: 99, Message: "Internal server error", StatusCode: http.StatusInternalServerError}
 
 	// CrawlTarget errors — 101+ range.
-	errTargetNotFound             = &pkgErrors.HTTPError{Code: 101, Message: "Crawl target not found", StatusCode: http.StatusBadRequest}
+	errTargetNotFound             = &pkgErrors.HTTPError{Code: 101, Message: "Crawl target not found", StatusCode: http.StatusNotFound}
 	errTargetValuesRequired       = &pkgErrors.HTTPError{Code: 102, Message: "Crawl target values are required", StatusCode: http.StatusBadRequest}
 	errInvalidTargetType          = &pkgErrors.HTTPError{Code: 103, Message: "Invalid target_type; must be KEYWORD, PROFILE, or POST_URL", StatusCode: http.StatusBadRequest}
 	errSourceNotCrawl             = &pkgErrors.HTTPError{Code: 104, Message: "Crawl targets can only be added to CRAWL sources", StatusCode: http.StatusBadRequest}

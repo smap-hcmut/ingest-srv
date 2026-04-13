@@ -494,6 +494,11 @@ func (uc *implUseCase) ensureRuntimePrerequisites(ctx context.Context, source mo
 				activeTargetCount++
 			}
 
+			// Skip dryrun validation for source/target combos that have no dryrun worker.
+			if !model.IsDryrunRequired(source.SourceType, target.TargetType) {
+				continue
+			}
+
 			latest, latestErr := uc.repo.GetLatestDryrunByTarget(ctx, target.ID)
 			if latestErr != nil {
 				uc.l.Errorf(ctx, "datasource.usecase.ensureRuntimePrerequisites.repo.GetLatestDryrunByTarget: source_id=%s target_id=%s err=%v", source.ID, target.ID, latestErr)
