@@ -1,5 +1,5 @@
 export
-BINARY=engine
+BINARY=ingest-srv
 
 LOCAL_CONFIG_FILE=./config/ingest-config.local.yaml
 
@@ -21,36 +21,17 @@ models-local:
 
 swagger:
 	@echo "Generating swagger"
-	@swag init -g cmd/api/main.go --parseVendor
+	@swag init -g cmd/server/main.go --parseVendor
 	@echo "Fixing swagger docs (removing deprecated LeftDelim/RightDelim)..."
 	@$(FIX_SWAGGER)
 
-run-api:
-	@echo "Generating swagger"
-	@swag init -g cmd/api/main.go --parseVendor
-	@$(FIX_SWAGGER)
+run: swagger
 	@echo "Running the application"
-	@go run cmd/api/main.go
+	@go run cmd/server/main.go
 
-run-api-local:
-	@echo "Running API with local docker-compose infrastructure config"
-	@$(RUN_WITH_LOCAL_CONFIG) go run cmd/api/main.go
-
-run-consumer:
-	@echo "Running the consumer"
-	@go run cmd/consumer/main.go
-
-run-consumer-local:
-	@echo "Running consumer with local docker-compose infrastructure config"
-	@$(RUN_WITH_LOCAL_CONFIG) go run cmd/consumer/main.go
-
-run-sched:
-	@echo "Running the scheduler"
-	@go run cmd/scheduler/main.go
-
-run-scheduler-local:
-	@echo "Running scheduler with local docker-compose infrastructure config"
-	@$(RUN_WITH_LOCAL_CONFIG) go run cmd/scheduler/main.go
+run-local:
+	@echo "Running with local docker-compose infrastructure config"
+	@$(RUN_WITH_LOCAL_CONFIG) go run cmd/server/main.go
 
 build-docker-compose:
 	@echo "make models first"
@@ -83,31 +64,6 @@ docker-push:
 	@echo "Building and pushing to registry (requires REGISTRY)"
 	@./scripts/build-api.sh push
 
-# Consumer Docker build targets (using optimized Dockerfile)
-consumer-build:
-	@echo "Building Consumer Docker image for local platform"
-	@./scripts/build-consumer.sh local
-
-consumer-build-amd64:
-	@echo "Building Consumer Docker image for AMD64"
-	@./scripts/build-consumer.sh amd64
-
-consumer-build-multi:
-	@echo "Building multi-platform Consumer Docker image (requires REGISTRY)"
-	@./scripts/build-consumer.sh multi
-
-consumer-run:
-	@echo "Building and running Consumer Docker container"
-	@./scripts/build-consumer.sh run
-
-consumer-clean:
-	@echo "Cleaning Consumer Docker images"
-	@./scripts/build-consumer.sh clean
-
-consumer-push:
-	@echo "Building and pushing Consumer to registry (requires REGISTRY)"
-	@./scripts/build-consumer.sh push
-
 # Show all available targets
 help:
 	@echo "Available targets:"
@@ -115,11 +71,11 @@ help:
 	@echo "Development:"
 	@echo "  models              - Generate SQLBoiler models"
 	@echo "  swagger             - Generate Swagger documentation"
-	@echo "  run-api             - Run API server locally"
-	@echo "  run-consumer        - Run consumer locally"
+	@echo "  run                 - Run server locally (API + Consumer + Scheduler)"
+	@echo "  run-local           - Run with local docker-compose config"
 	@echo "  build-docker-compose - Build with docker-compose"
 	@echo ""
-	@echo "Docker - API Server:"
+	@echo "Docker:"
 	@echo "  docker-build        - Build for local platform"
 	@echo "  docker-build-amd64  - Build for AMD64 servers"
 	@echo "  docker-build-multi  - Build multi-platform (requires REGISTRY env)"
@@ -127,24 +83,11 @@ help:
 	@echo "  docker-clean        - Remove all Docker images"
 	@echo "  docker-push         - Build and push to registry"
 	@echo ""
-	@echo "Docker - Consumer Service:"
-	@echo "  consumer-build      - Build consumer for local platform"
-	@echo "  consumer-build-amd64 - Build consumer for AMD64 servers"
-	@echo "  consumer-build-multi - Build multi-platform (requires REGISTRY env)"
-	@echo "  consumer-run        - Build and run consumer container locally"
-	@echo "  consumer-clean      - Remove all consumer Docker images"
-	@echo "  consumer-push       - Build and push consumer to registry"
-	@echo ""
 	@echo "Examples:"
 	@echo "  make docker-build"
 	@echo "  make docker-run"
-	@echo "  make consumer-build"
-	@echo "  make consumer-run"
 	@echo "  REGISTRY=docker.io/username make docker-push"
-	@echo "  REGISTRY=docker.io/username make consumer-push"
 
-.PHONY: models swagger run-api run-consumer build-docker-compose \
+.PHONY: models swagger run run-local build-docker-compose \
         docker-build docker-build-amd64 docker-build-multi \
-        docker-run docker-clean docker-push \
-        consumer-build consumer-build-amd64 consumer-build-multi \
-        consumer-run consumer-clean consumer-push \
+        docker-run docker-clean docker-push

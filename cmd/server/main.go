@@ -13,7 +13,9 @@ import (
 	configPostgre "ingest-srv/config/postgre"
 	configRabbit "ingest-srv/config/rabbitmq"
 	_ "ingest-srv/docs" // Swagger docs - blank import to trigger init()
+	"ingest-srv/internal/consumer"
 	"ingest-srv/internal/httpserver"
+	"ingest-srv/internal/scheduler"
 
 	"github.com/smap-hcmut/shared-libs/go/discord"
 	"github.com/smap-hcmut/shared-libs/go/encrypter"
@@ -60,7 +62,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	logger.Info(ctx, "Starting Ingest API Service...")
+	logger.Info(ctx, "Starting Ingest Service...")
 
 	enc := encrypter.New(cfg.Encrypter.Key)
 
@@ -107,13 +109,17 @@ func main() {
 		logger.Info(ctx, "MinIO client initialized")
 	}
 
-	kafkaProducer, err := configKafka.ConnectProducer(cfg.Kafka)
+	// Use UAPTopic for the Kafka producer: the consumer publishes to UAPTopic,
+	// while the API only uses the producer for health checks (topic irrelevant).
+	kafkaCfg := cfg.Kafka
+	kafkaCfg.Topic = cfg.Kafka.UAPTopic
+	kafkaProducer, err := configKafka.ConnectProducer(kafkaCfg)
 	if err != nil {
 		logger.Errorf(ctx, "Kafka producer connect failed, service continues in degraded mode: %v", err)
 		kafkaProducer = nil
 	} else {
 		defer configKafka.DisconnectProducer()
-		logger.Info(ctx, "Kafka producer initialized")
+		logger.Info(ctx, "Kafka producer initialized (topic: %s)", cfg.Kafka.UAPTopic)
 	}
 
 	rabbitConn, err := configRabbit.Connect(cfg.RabbitMQ)
@@ -125,6 +131,52 @@ func main() {
 		logger.Info(ctx, "RabbitMQ connection initialized")
 	}
 
+	// ── Consumer goroutine ──────────────────────────────────────────────────
+	go func() {
+		if postgresDB == nil || minioClient == nil || rabbitConn == nil {
+			logger.Errorf(ctx, "Consumer requires postgres, minio, and rabbitmq — skipping")
+			return
+		}
+		logger.Info(ctx, "Starting consumer...")
+		consumerSrv := consumer.NewServer(logger, consumer.ServerConfig{
+			Conn:         rabbitConn,
+			DB:           postgresDB,
+			MinIO:        minioClient,
+			UAPBucket:    cfg.MinIO.Bucket,
+			Kafka:        kafkaProducer,
+			Microservice: cfg.Microservice,
+			InternalKey:  cfg.InternalConfig.InternalKey,
+		})
+		if err := consumerSrv.Run(ctx); err != nil {
+			logger.Errorf(ctx, "Consumer error: %v", err)
+		}
+	}()
+
+	// ── Scheduler goroutine ─────────────────────────────────────────────────
+	go func() {
+		if postgresDB == nil || rabbitConn == nil {
+			logger.Errorf(ctx, "Scheduler requires postgres and rabbitmq — skipping")
+			return
+		}
+		schedulerSrv, err := scheduler.New(logger, scheduler.Config{
+			DB:           postgresDB,
+			AMQPConn:     rabbitConn,
+			Scheduler:    cfg.Scheduler,
+			Microservice: cfg.Microservice,
+			InternalKey:  cfg.InternalConfig.InternalKey,
+			Discord:      discordClient,
+		})
+		if err != nil {
+			logger.Errorf(ctx, "Failed to create scheduler: %v", err)
+			return
+		}
+		logger.Info(ctx, "Starting scheduler...")
+		if err := schedulerSrv.Start(); err != nil {
+			logger.Errorf(ctx, "Scheduler error: %v", err)
+		}
+	}()
+
+	// ── HTTP server (blocks until shutdown) ──────────────────────────────────
 	httpSrv, err := httpserver.New(logger, httpserver.Config{
 		Logger:      logger,
 		Host:        cfg.HTTPServer.Host,
@@ -159,5 +211,5 @@ func main() {
 		return
 	}
 
-	logger.Info(ctx, "Ingest API service stopped gracefully")
+	logger.Info(ctx, "Ingest service stopped gracefully")
 }

@@ -1,18 +1,18 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: ingest-api
+  name: ingest-srv
   namespace: smap
   labels:
-    app: ingest-api
+    app: ingest-srv
     app.kubernetes.io/part-of: smap
-    app.kubernetes.io/component: api
+    app.kubernetes.io/component: server
 spec:
   replicas: 1
   revisionHistoryLimit: 5
   selector:
     matchLabels:
-      app: ingest-api
+      app: ingest-srv
   strategy:
     rollingUpdate:
       maxSurge: 1
@@ -21,14 +21,14 @@ spec:
   template:
     metadata:
       labels:
-        app: ingest-api
+        app: ingest-srv
         app.kubernetes.io/part-of: smap
     spec:
       imagePullSecrets:
         - name: harbor-registry
       containers:
-        - name: ingest-api
-          image: registry.tantai.dev/smap/ingest-api:260316-235044
+        - name: ingest-srv
+          image: registry.tantai.dev/smap/ingest-srv:260316-235044
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
@@ -48,7 +48,7 @@ spec:
                 name: ingest-secrets
           env:
             - name: CONTAINER_NAME
-              value: "ingest-api"
+              value: "ingest-srv"
             - name: KUBERNETES_NAMESPACE
               valueFrom:
                 fieldRef:
@@ -97,14 +97,14 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: ingest-api
+  name: ingest-srv
   namespace: smap
   labels:
-    app: ingest-api
+    app: ingest-srv
     app.kubernetes.io/part-of: smap
 spec:
   selector:
-    app: ingest-api
+    app: ingest-srv
   ports:
     - port: 80
       targetPort: 8080
