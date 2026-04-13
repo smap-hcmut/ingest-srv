@@ -9,11 +9,11 @@ import (
 	"time"
 
 	"ingest-srv/internal/execution"
-	executionRabbit "ingest-srv/internal/execution/delivery/rabbitmq"
 	repo "ingest-srv/internal/execution/repository"
 	"ingest-srv/internal/model"
 	"ingest-srv/pkg/microservice"
 
+	"github.com/smap-hcmut/shared-libs/go/constants"
 	"github.com/smap-hcmut/shared-libs/go/minio"
 )
 
@@ -54,7 +54,7 @@ func (uc *implUseCase) buildDispatchSpecs(source model.DataSource, target model.
 		specs := make([]execution.DispatchSpec, 0, len(keywords))
 		for _, keyword := range keywords {
 			specs = append(specs, execution.DispatchSpec{
-				Queue:   execution.QueueName(executionRabbit.TikTokTasksQueueName),
+				Queue:   execution.QueueName(constants.QueueTikTokTasks),
 				Action:  execution.ActionNameFullFlow,
 				Keyword: keyword,
 				Params: map[string]interface{}{
@@ -75,7 +75,7 @@ func (uc *implUseCase) buildDispatchSpecs(source model.DataSource, target model.
 		specs := make([]execution.DispatchSpec, 0, len(keywords))
 		for _, keyword := range keywords {
 			specs = append(specs, execution.DispatchSpec{
-				Queue:   execution.QueueName(executionRabbit.FacebookTasksQueueName),
+				Queue:   execution.QueueName(constants.QueueFacebookTasks),
 				Action:  execution.ActionNameFullFlow,
 				Keyword: keyword,
 				Params: map[string]interface{}{
@@ -96,7 +96,7 @@ func (uc *implUseCase) buildDispatchSpecs(source model.DataSource, target model.
 		specs := make([]execution.DispatchSpec, 0, len(keywords))
 		for _, keyword := range keywords {
 			specs = append(specs, execution.DispatchSpec{
-				Queue:   execution.QueueName(executionRabbit.YoutubeTasksQueueName),
+				Queue:   execution.QueueName(constants.QueueYouTubeTasks),
 				Action:  execution.ActionNameFullFlow,
 				Keyword: keyword,
 				Params: map[string]interface{}{
@@ -113,7 +113,7 @@ func (uc *implUseCase) buildDispatchSpecs(source model.DataSource, target model.
 			return nil, err
 		}
 		return []execution.DispatchSpec{{
-			Queue:  execution.QueueName(executionRabbit.FacebookTasksQueueName),
+			Queue:  execution.QueueName(constants.QueueFacebookTasks),
 			Action: execution.ActionNamePostDetail,
 			Params: map[string]interface{}{
 				"parse_ids": parseIDs,

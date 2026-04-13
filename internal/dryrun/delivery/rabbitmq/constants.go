@@ -1,26 +1,21 @@
 package rabbitmq
 
-import rmq "github.com/smap-hcmut/shared-libs/go/rabbitmq"
+import (
+	"github.com/smap-hcmut/shared-libs/go/constants"
+	rmq "github.com/smap-hcmut/shared-libs/go/rabbitmq"
+)
 
 const (
-	TikTokTasksQueueName                = "tiktok_tasks"
-	FacebookTasksQueueName              = "facebook_tasks"
-	YoutubeTasksQueueName               = "youtube_tasks"
-	IngestDryrunCompletionsQueueName    = "ingest_dryrun_completions"
 	IngestDryrunCompletionsConsumerName = "ingest-dryrun-completion-consumer"
 
-	TikTokTasksExchangeName   = "ingest_tiktok_tasks_exc"
-	FacebookTasksExchangeName = "ingest_facebook_tasks_exc"
-	YoutubeTasksExchangeName  = "ingest_youtube_tasks_exc"
-
-	TikTokTasksRoutingKey   = TikTokTasksQueueName
-	FacebookTasksRoutingKey = FacebookTasksQueueName
-	YoutubeTasksRoutingKey  = YoutubeTasksQueueName
+	TikTokTasksRoutingKey   = constants.QueueTikTokTasks
+	FacebookTasksRoutingKey = constants.QueueFacebookTasks
+	YoutubeTasksRoutingKey  = constants.QueueYouTubeTasks
 )
 
 var (
 	TikTokTasksExchange = rmq.ExchangeArgs{
-		Name:       TikTokTasksExchangeName,
+		Name:       constants.ExchangeTikTokTasks,
 		Type:       rmq.ExchangeTypeDirect,
 		Durable:    true,
 		AutoDelete: false,
@@ -28,7 +23,7 @@ var (
 		NoWait:     false,
 	}
 	FacebookTasksExchange = rmq.ExchangeArgs{
-		Name:       FacebookTasksExchangeName,
+		Name:       constants.ExchangeFacebookTasks,
 		Type:       rmq.ExchangeTypeDirect,
 		Durable:    true,
 		AutoDelete: false,
@@ -36,7 +31,7 @@ var (
 		NoWait:     false,
 	}
 	YoutubeTasksExchange = rmq.ExchangeArgs{
-		Name:       YoutubeTasksExchangeName,
+		Name:       constants.ExchangeYouTubeTasks,
 		Type:       rmq.ExchangeTypeDirect,
 		Durable:    true,
 		AutoDelete: false,
@@ -44,19 +39,19 @@ var (
 		NoWait:     false,
 	}
 	TikTokTasksQueue = rmq.QueueArgs{
-		Name:    TikTokTasksQueueName,
+		Name:    constants.QueueTikTokTasks,
 		Durable: true,
 	}
 	FacebookTasksQueue = rmq.QueueArgs{
-		Name:    FacebookTasksQueueName,
+		Name:    constants.QueueFacebookTasks,
 		Durable: true,
 	}
 	YoutubeTasksQueue = rmq.QueueArgs{
-		Name:    YoutubeTasksQueueName,
+		Name:    constants.QueueYouTubeTasks,
 		Durable: true,
 	}
 	IngestDryrunCompletionsQueue = rmq.QueueArgs{
-		Name:    IngestDryrunCompletionsQueueName,
+		Name:    constants.QueueIngestDryrunCompletions,
 		Durable: true,
 	}
 )

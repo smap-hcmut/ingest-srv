@@ -370,7 +370,7 @@ func (h *handler) newActivationReadinessResp(o datasource.ActivationReadinessOut
 	errors := make([]activationReadinessErrorResp, 0, len(o.Errors))
 	for _, e := range o.Errors {
 		errors = append(errors, activationReadinessErrorResp{
-			Code:         e.Code,
+			Code:         string(e.Code),
 			Message:      e.Message,
 			DataSourceID: e.DataSourceID,
 			TargetID:     e.TargetID,

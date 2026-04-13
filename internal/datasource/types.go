@@ -5,6 +5,7 @@ import (
 
 	"ingest-srv/internal/model"
 
+	"github.com/smap-hcmut/shared-libs/go/contracts"
 	"github.com/smap-hcmut/shared-libs/go/paginator"
 )
 
@@ -85,43 +86,37 @@ type ApplyDryrunResultOutput struct {
 	DataSource model.DataSource
 }
 
-// ActivationReadinessError describes one readiness blocker.
-type ActivationReadinessError struct {
-	Code         string
-	Message      string
-	DataSourceID string
-	TargetID     string
-}
+// ActivationReadinessError is an alias for the shared contract type.
+type ActivationReadinessError = contracts.ActivationReadinessError
 
-type ActivationReadinessCommand string
+// ActivationReadinessCommand is an alias for the shared contract type.
+type ActivationReadinessCommand = contracts.ActivationReadinessCommand
 
 const (
-	ActivationReadinessCommandActivate ActivationReadinessCommand = "activate"
-	ActivationReadinessCommandResume   ActivationReadinessCommand = "resume"
+	ActivationReadinessCommandActivate = contracts.ActivationReadinessCommandActivate
+	ActivationReadinessCommandResume   = contracts.ActivationReadinessCommandResume
 )
 
 const (
-	ActivationReadinessCodeDatasourceRequired   = "DATASOURCE_REQUIRED"
-	ActivationReadinessCodePassiveUnconfirmed   = "PASSIVE_UNCONFIRMED"
-	ActivationReadinessCodeTargetDryrunMiss     = "TARGET_DRYRUN_MISSING"
-	ActivationReadinessCodeTargetDryrunFailed   = "TARGET_DRYRUN_FAILED"
-	ActivationReadinessCodeActiveTargetRequired = "ACTIVE_TARGET_REQUIRED"
-	ActivationReadinessCodeDatasourceStatus     = "DATASOURCE_STATUS_INVALID"
+	ActivationReadinessCodeDatasourceRequired   = contracts.ReadinessCodeDatasourceRequired
+	ActivationReadinessCodePassiveUnconfirmed   = contracts.ReadinessCodePassiveUnconfirmed
+	ActivationReadinessCodeTargetDryrunMiss     = contracts.ReadinessCodeTargetDryrunMissing
+	ActivationReadinessCodeTargetDryrunFailed   = contracts.ReadinessCodeTargetDryrunFailed
+	ActivationReadinessCodeActiveTargetRequired = contracts.ReadinessCodeActiveTargetRequired
+	ActivationReadinessCodeDatasourceStatus     = contracts.ReadinessCodeDatasourceStatus
 )
 
 const (
-	ActivationReadinessMessageDatasourceRequired   = "project must have at least one datasource"
-	ActivationReadinessMessagePassiveUnconfirmed   = "passive datasource is not confirmed"
-	ActivationReadinessMessageTargetDryrunMissing  = "crawl target has never been dry-run"
-	ActivationReadinessMessageTargetDryrunFailed   = "crawl target latest dry-run is FAILED"
-	ActivationReadinessMessageActiveTargetRequired = "crawl datasource must have at least one active target"
-	ActivationReadinessMessageDatasourceStatus     = "datasource status is not eligible for project lifecycle command"
+	ActivationReadinessMessageDatasourceRequired   = contracts.ReadinessMsgDatasourceRequired
+	ActivationReadinessMessagePassiveUnconfirmed   = contracts.ReadinessMsgPassiveUnconfirmed
+	ActivationReadinessMessageTargetDryrunMissing  = contracts.ReadinessMsgTargetDryrunMissing
+	ActivationReadinessMessageTargetDryrunFailed   = contracts.ReadinessMsgTargetDryrunFailed
+	ActivationReadinessMessageActiveTargetRequired = contracts.ReadinessMsgActiveTargetRequired
+	ActivationReadinessMessageDatasourceStatus     = contracts.ReadinessMsgDatasourceStatus
 )
 
-type ActivationReadinessInput struct {
-	ProjectID string
-	Command   ActivationReadinessCommand
-}
+// ActivationReadinessInput is an alias for the shared contract type.
+type ActivationReadinessInput = contracts.ActivationReadinessInput
 
 // ActivationReadinessOutput summarizes activation readiness at project scope.
 type ActivationReadinessOutput struct {

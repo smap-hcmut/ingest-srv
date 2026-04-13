@@ -8,6 +8,7 @@ import (
 	executionRabbit "ingest-srv/internal/execution/delivery/rabbitmq"
 
 	amqp "github.com/rabbitmq/amqp091-go"
+	"github.com/smap-hcmut/shared-libs/go/constants"
 	"github.com/smap-hcmut/shared-libs/go/rabbitmq"
 )
 
@@ -67,21 +68,21 @@ func (p *implProducer) getWriterWithQueue(exchange rabbitmq.ExchangeArgs, queue 
 
 func (p *implProducer) getPublishRouteByQueue(queueName execution.QueueName) (rabbitmq.IChannel, string, string, error) {
 	switch queueName {
-	case execution.QueueName(executionRabbit.TikTokTasksQueueName):
+	case execution.QueueName(constants.QueueTikTokTasks):
 		if p.tikTokTasksWriter == nil {
 			return nil, "", "", fmt.Errorf("rabbitmq writer is not initialized for queue %s", queueName)
 		}
-		return p.tikTokTasksWriter, executionRabbit.TikTokTasksExchangeName, executionRabbit.TikTokTasksRoutingKey, nil
-	case execution.QueueName(executionRabbit.FacebookTasksQueueName):
+		return p.tikTokTasksWriter, constants.ExchangeTikTokTasks, executionRabbit.TikTokTasksRoutingKey, nil
+	case execution.QueueName(constants.QueueFacebookTasks):
 		if p.facebookTasksWriter == nil {
 			return nil, "", "", fmt.Errorf("rabbitmq writer is not initialized for queue %s", queueName)
 		}
-		return p.facebookTasksWriter, executionRabbit.FacebookTasksExchangeName, executionRabbit.FacebookTasksRoutingKey, nil
-	case execution.QueueName(executionRabbit.YoutubeTasksQueueName):
+		return p.facebookTasksWriter, constants.ExchangeFacebookTasks, executionRabbit.FacebookTasksRoutingKey, nil
+	case execution.QueueName(constants.QueueYouTubeTasks):
 		if p.youtubeTasksWriter == nil {
 			return nil, "", "", fmt.Errorf("rabbitmq writer is not initialized for queue %s", queueName)
 		}
-		return p.youtubeTasksWriter, executionRabbit.YoutubeTasksExchangeName, executionRabbit.YoutubeTasksRoutingKey, nil
+		return p.youtubeTasksWriter, constants.ExchangeYouTubeTasks, executionRabbit.YoutubeTasksRoutingKey, nil
 	default:
 		return nil, "", "", fmt.Errorf("unsupported queue %s", queueName)
 	}

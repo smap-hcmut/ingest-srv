@@ -8,6 +8,7 @@ import (
 	dryrunRabbit "ingest-srv/internal/dryrun/delivery/rabbitmq"
 
 	amqp "github.com/rabbitmq/amqp091-go"
+	"github.com/smap-hcmut/shared-libs/go/constants"
 	"github.com/smap-hcmut/shared-libs/go/rabbitmq"
 )
 
@@ -35,21 +36,21 @@ func (p *implProducer) PublishDispatch(ctx context.Context, input dryrun.Publish
 
 func (p *implProducer) getPublishRouteByQueue(queueName dryrun.QueueName) (rabbitmq.IChannel, string, string, error) {
 	switch queueName {
-	case dryrun.QueueName(dryrunRabbit.TikTokTasksQueueName):
+	case dryrun.QueueName(constants.QueueTikTokTasks):
 		if p.tikTokTasksWriter == nil {
 			return nil, "", "", fmt.Errorf("rabbitmq writer is not initialized for queue %s", queueName)
 		}
-		return p.tikTokTasksWriter, dryrunRabbit.TikTokTasksExchangeName, dryrunRabbit.TikTokTasksRoutingKey, nil
-	case dryrun.QueueName(dryrunRabbit.FacebookTasksQueueName):
+		return p.tikTokTasksWriter, constants.ExchangeTikTokTasks, dryrunRabbit.TikTokTasksRoutingKey, nil
+	case dryrun.QueueName(constants.QueueFacebookTasks):
 		if p.facebookTasksWriter == nil {
 			return nil, "", "", fmt.Errorf("rabbitmq writer is not initialized for queue %s", queueName)
 		}
-		return p.facebookTasksWriter, dryrunRabbit.FacebookTasksExchangeName, dryrunRabbit.FacebookTasksRoutingKey, nil
-	case dryrun.QueueName(dryrunRabbit.YoutubeTasksQueueName):
+		return p.facebookTasksWriter, constants.ExchangeFacebookTasks, dryrunRabbit.FacebookTasksRoutingKey, nil
+	case dryrun.QueueName(constants.QueueYouTubeTasks):
 		if p.youtubeTasksWriter == nil {
 			return nil, "", "", fmt.Errorf("rabbitmq writer is not initialized for queue %s", queueName)
 		}
-		return p.youtubeTasksWriter, dryrunRabbit.YoutubeTasksExchangeName, dryrunRabbit.YoutubeTasksRoutingKey, nil
+		return p.youtubeTasksWriter, constants.ExchangeYouTubeTasks, dryrunRabbit.YoutubeTasksRoutingKey, nil
 	default:
 		return nil, "", "", fmt.Errorf("unsupported queue %s", queueName)
 	}

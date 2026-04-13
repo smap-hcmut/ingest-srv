@@ -5,6 +5,7 @@ import (
 
 	"ingest-srv/internal/model"
 
+	"github.com/smap-hcmut/shared-libs/go/constants"
 	"github.com/smap-hcmut/shared-libs/go/paginator"
 )
 
@@ -25,8 +26,8 @@ type TriggerOutput struct {
 type QueueName string
 
 const (
-	QueueNameTikTokTasks   QueueName = "tiktok_tasks"
-	QueueNameFacebookTasks QueueName = "facebook_tasks"
+	QueueNameTikTokTasks   QueueName = QueueName(constants.QueueTikTokTasks)
+	QueueNameFacebookTasks QueueName = QueueName(constants.QueueFacebookTasks)
 )
 
 type ActionName string

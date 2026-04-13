@@ -6,6 +6,8 @@ import (
 
 	"ingest-srv/internal/uap"
 	uapKafka "ingest-srv/internal/uap/delivery/kafka"
+
+	"github.com/smap-hcmut/shared-libs/go/constants"
 )
 
 // Publish publishes a parsed UAP record to Kafka.
@@ -25,7 +27,7 @@ func (p *publisher) Publish(ctx context.Context, input uap.PublishUAPInput) erro
 }
 
 func (p *publisher) Topic() string {
-	return uapKafka.UAPTopicName
+	return constants.TopicCollectorOutput
 }
 
 // Close closes the underlying Kafka producer if needed.
