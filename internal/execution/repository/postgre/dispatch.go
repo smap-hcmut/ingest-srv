@@ -97,7 +97,7 @@ func (r *implRepository) CreateScheduledJob(ctx context.Context, opt repository.
 	defer rollbackTx(tx)
 
 	lockQuery := fmt.Sprintf(
-		`SELECT id FROM "schema_ingest"."%s" WHERE id = $1 AND data_source_id = $2 FOR UPDATE`,
+		`SELECT id FROM "ingest"."%s" WHERE id = $1 AND data_source_id = $2 FOR UPDATE`,
 		sqlboiler.TableNames.CrawlTargets,
 	)
 	var lockedTargetID string

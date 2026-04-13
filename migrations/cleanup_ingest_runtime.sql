@@ -1,5 +1,5 @@
 -- Purpose:
--- Clean runtime data in schema_ingest without dropping schema objects or defaults.
+-- Clean runtime data in ingest without dropping schema objects or defaults.
 --
 -- This script preserves:
 -- - enum types
@@ -20,7 +20,7 @@
 
 BEGIN;
 
-SET search_path TO schema_ingest;
+SET search_path TO ingest;
 
 -- -------------------------------------------------------------------
 -- Break the data_sources <-> dryrun_results back-reference first
@@ -45,18 +45,18 @@ COMMIT;
 -- -------------------------------------------------------------------
 -- Optional inspection queries
 -- -------------------------------------------------------------------
--- SELECT 'data_sources' AS table_name, COUNT(*) FROM schema_ingest.data_sources
+-- SELECT 'data_sources' AS table_name, COUNT(*) FROM ingest.data_sources
 -- UNION ALL
--- SELECT 'crawl_targets', COUNT(*) FROM schema_ingest.crawl_targets
+-- SELECT 'crawl_targets', COUNT(*) FROM ingest.crawl_targets
 -- UNION ALL
--- SELECT 'dryrun_results', COUNT(*) FROM schema_ingest.dryrun_results
+-- SELECT 'dryrun_results', COUNT(*) FROM ingest.dryrun_results
 -- UNION ALL
--- SELECT 'scheduled_jobs', COUNT(*) FROM schema_ingest.scheduled_jobs
+-- SELECT 'scheduled_jobs', COUNT(*) FROM ingest.scheduled_jobs
 -- UNION ALL
--- SELECT 'external_tasks', COUNT(*) FROM schema_ingest.external_tasks
+-- SELECT 'external_tasks', COUNT(*) FROM ingest.external_tasks
 -- UNION ALL
--- SELECT 'raw_batches', COUNT(*) FROM schema_ingest.raw_batches
+-- SELECT 'raw_batches', COUNT(*) FROM ingest.raw_batches
 -- UNION ALL
--- SELECT 'crawl_mode_changes', COUNT(*) FROM schema_ingest.crawl_mode_changes
+-- SELECT 'crawl_mode_changes', COUNT(*) FROM ingest.crawl_mode_changes
 -- UNION ALL
--- SELECT 'crawl_mode_defaults', COUNT(*) FROM schema_ingest.crawl_mode_defaults;
+-- SELECT 'crawl_mode_defaults', COUNT(*) FROM ingest.crawl_mode_defaults;

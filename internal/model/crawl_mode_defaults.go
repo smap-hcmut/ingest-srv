@@ -7,7 +7,7 @@ import (
 )
 
 // CrawlModeDefault stores system fallback interval by crawl mode.
-// This corresponds to schema_ingest.crawl_mode_defaults.
+// This corresponds to ingest.crawl_mode_defaults.
 type CrawlModeDefault struct {
 	Mode            CrawlMode `json:"mode"`                     // Mode hệ thống cần apply default interval.
 	IntervalMinutes int       `json:"interval_minutes"`         // Giá trị fallback để derive interval cho source khi đổi mode.

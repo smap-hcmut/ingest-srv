@@ -164,6 +164,7 @@ var ExternalTaskWhere = struct {
 	ID                 whereHelperstring
 	SourceID           whereHelperstring
 	ProjectID          whereHelperstring
+	DomainTypeCode     whereHelperstring
 	TargetID           whereHelpernull_String
 	ScheduledJobID     whereHelpernull_String
 	TaskID             whereHelperstring
@@ -178,22 +179,23 @@ var ExternalTaskWhere = struct {
 	ErrorMessage       whereHelpernull_String
 	CreatedAt          whereHelpertime_Time
 }{
-	ID:                 whereHelperstring{field: "\"schema_ingest\".\"external_tasks\".\"id\""},
-	SourceID:           whereHelperstring{field: "\"schema_ingest\".\"external_tasks\".\"source_id\""},
-	ProjectID:          whereHelperstring{field: "\"schema_ingest\".\"external_tasks\".\"project_id\""},
-	TargetID:           whereHelpernull_String{field: "\"schema_ingest\".\"external_tasks\".\"target_id\""},
-	ScheduledJobID:     whereHelpernull_String{field: "\"schema_ingest\".\"external_tasks\".\"scheduled_job_id\""},
-	TaskID:             whereHelperstring{field: "\"schema_ingest\".\"external_tasks\".\"task_id\""},
-	Platform:           whereHelperstring{field: "\"schema_ingest\".\"external_tasks\".\"platform\""},
-	TaskType:           whereHelperstring{field: "\"schema_ingest\".\"external_tasks\".\"task_type\""},
-	RoutingKey:         whereHelperstring{field: "\"schema_ingest\".\"external_tasks\".\"routing_key\""},
-	RequestPayload:     whereHelpertypes_JSON{field: "\"schema_ingest\".\"external_tasks\".\"request_payload\""},
-	Status:             whereHelperJobStatus{field: "\"schema_ingest\".\"external_tasks\".\"status\""},
-	PublishedAt:        whereHelpernull_Time{field: "\"schema_ingest\".\"external_tasks\".\"published_at\""},
-	ResponseReceivedAt: whereHelpernull_Time{field: "\"schema_ingest\".\"external_tasks\".\"response_received_at\""},
-	CompletedAt:        whereHelpernull_Time{field: "\"schema_ingest\".\"external_tasks\".\"completed_at\""},
-	ErrorMessage:       whereHelpernull_String{field: "\"schema_ingest\".\"external_tasks\".\"error_message\""},
-	CreatedAt:          whereHelpertime_Time{field: "\"schema_ingest\".\"external_tasks\".\"created_at\""},
+	ID:                 whereHelperstring{field: "\"ingest\".\"external_tasks\".\"id\""},
+	SourceID:           whereHelperstring{field: "\"ingest\".\"external_tasks\".\"source_id\""},
+	ProjectID:          whereHelperstring{field: "\"ingest\".\"external_tasks\".\"project_id\""},
+	DomainTypeCode:     whereHelperstring{field: "\"ingest\".\"external_tasks\".\"domain_type_code\""},
+	TargetID:           whereHelpernull_String{field: "\"ingest\".\"external_tasks\".\"target_id\""},
+	ScheduledJobID:     whereHelpernull_String{field: "\"ingest\".\"external_tasks\".\"scheduled_job_id\""},
+	TaskID:             whereHelperstring{field: "\"ingest\".\"external_tasks\".\"task_id\""},
+	Platform:           whereHelperstring{field: "\"ingest\".\"external_tasks\".\"platform\""},
+	TaskType:           whereHelperstring{field: "\"ingest\".\"external_tasks\".\"task_type\""},
+	RoutingKey:         whereHelperstring{field: "\"ingest\".\"external_tasks\".\"routing_key\""},
+	RequestPayload:     whereHelpertypes_JSON{field: "\"ingest\".\"external_tasks\".\"request_payload\""},
+	Status:             whereHelperJobStatus{field: "\"ingest\".\"external_tasks\".\"status\""},
+	PublishedAt:        whereHelpernull_Time{field: "\"ingest\".\"external_tasks\".\"published_at\""},
+	ResponseReceivedAt: whereHelpernull_Time{field: "\"ingest\".\"external_tasks\".\"response_received_at\""},
+	CompletedAt:        whereHelpernull_Time{field: "\"ingest\".\"external_tasks\".\"completed_at\""},
+	ErrorMessage:       whereHelpernull_String{field: "\"ingest\".\"external_tasks\".\"error_message\""},
+	CreatedAt:          whereHelpertime_Time{field: "\"ingest\".\"external_tasks\".\"created_at\""},
 }
 
 // ExternalTaskRels is where relationship names are stored.
@@ -290,9 +292,9 @@ func (r *externalTaskR) GetRawBatches() RawBatchSlice {
 type externalTaskL struct{}
 
 var (
-	externalTaskAllColumns            = []string{"id", "source_id", "project_id", "target_id", "scheduled_job_id", "task_id", "platform", "task_type", "routing_key", "request_payload", "status", "published_at", "response_received_at", "completed_at", "error_message", "created_at"}
+	externalTaskAllColumns            = []string{"id", "source_id", "project_id", "domain_type_code", "target_id", "scheduled_job_id", "task_id", "platform", "task_type", "routing_key", "request_payload", "status", "published_at", "response_received_at", "completed_at", "error_message", "created_at"}
 	externalTaskColumnsWithoutDefault = []string{"id", "source_id", "project_id", "task_id", "platform", "task_type", "routing_key"}
-	externalTaskColumnsWithDefault    = []string{"target_id", "scheduled_job_id", "request_payload", "status", "published_at", "response_received_at", "completed_at", "error_message", "created_at"}
+	externalTaskColumnsWithDefault    = []string{"domain_type_code", "target_id", "scheduled_job_id", "request_payload", "status", "published_at", "response_received_at", "completed_at", "error_message", "created_at"}
 	externalTaskPrimaryKeyColumns     = []string{"id"}
 	externalTaskGeneratedColumns      = []string{}
 )
@@ -643,7 +645,7 @@ func (o *ExternalTask) RawBatches(mods ...qm.QueryMod) rawBatchQuery {
 	}
 
 	queryMods = append(queryMods,
-		qm.Where("\"schema_ingest\".\"raw_batches\".\"external_task_id\"=?", o.ID),
+		qm.Where("\"ingest\".\"raw_batches\".\"external_task_id\"=?", o.ID),
 	)
 
 	return RawBatches(queryMods...)
@@ -711,8 +713,8 @@ func (externalTaskL) LoadScheduledJob(ctx context.Context, e boil.ContextExecuto
 	}
 
 	query := NewQuery(
-		qm.From(`schema_ingest.scheduled_jobs`),
-		qm.WhereIn(`schema_ingest.scheduled_jobs.id in ?`, argsSlice...),
+		qm.From(`ingest.scheduled_jobs`),
+		qm.WhereIn(`ingest.scheduled_jobs.id in ?`, argsSlice...),
 	)
 	if mods != nil {
 		mods.Apply(query)
@@ -831,9 +833,9 @@ func (externalTaskL) LoadSource(ctx context.Context, e boil.ContextExecutor, sin
 	}
 
 	query := NewQuery(
-		qm.From(`schema_ingest.data_sources`),
-		qm.WhereIn(`schema_ingest.data_sources.id in ?`, argsSlice...),
-		qmhelper.WhereIsNull(`schema_ingest.data_sources.deleted_at`),
+		qm.From(`ingest.data_sources`),
+		qm.WhereIn(`ingest.data_sources.id in ?`, argsSlice...),
+		qmhelper.WhereIsNull(`ingest.data_sources.deleted_at`),
 	)
 	if mods != nil {
 		mods.Apply(query)
@@ -956,8 +958,8 @@ func (externalTaskL) LoadTarget(ctx context.Context, e boil.ContextExecutor, sin
 	}
 
 	query := NewQuery(
-		qm.From(`schema_ingest.crawl_targets`),
-		qm.WhereIn(`schema_ingest.crawl_targets.id in ?`, argsSlice...),
+		qm.From(`ingest.crawl_targets`),
+		qm.WhereIn(`ingest.crawl_targets.id in ?`, argsSlice...),
 	)
 	if mods != nil {
 		mods.Apply(query)
@@ -1073,8 +1075,8 @@ func (externalTaskL) LoadRawBatches(ctx context.Context, e boil.ContextExecutor,
 	}
 
 	query := NewQuery(
-		qm.From(`schema_ingest.raw_batches`),
-		qm.WhereIn(`schema_ingest.raw_batches.external_task_id in ?`, argsSlice...),
+		qm.From(`ingest.raw_batches`),
+		qm.WhereIn(`ingest.raw_batches.external_task_id in ?`, argsSlice...),
 	)
 	if mods != nil {
 		mods.Apply(query)
@@ -1143,7 +1145,7 @@ func (o *ExternalTask) SetScheduledJob(ctx context.Context, exec boil.ContextExe
 	}
 
 	updateQuery := fmt.Sprintf(
-		"UPDATE \"schema_ingest\".\"external_tasks\" SET %s WHERE %s",
+		"UPDATE \"ingest\".\"external_tasks\" SET %s WHERE %s",
 		strmangle.SetParamNames("\"", "\"", 1, []string{"scheduled_job_id"}),
 		strmangle.WhereClause("\"", "\"", 2, externalTaskPrimaryKeyColumns),
 	)
@@ -1223,7 +1225,7 @@ func (o *ExternalTask) SetSource(ctx context.Context, exec boil.ContextExecutor,
 	}
 
 	updateQuery := fmt.Sprintf(
-		"UPDATE \"schema_ingest\".\"external_tasks\" SET %s WHERE %s",
+		"UPDATE \"ingest\".\"external_tasks\" SET %s WHERE %s",
 		strmangle.SetParamNames("\"", "\"", 1, []string{"source_id"}),
 		strmangle.WhereClause("\"", "\"", 2, externalTaskPrimaryKeyColumns),
 	)
@@ -1270,7 +1272,7 @@ func (o *ExternalTask) SetTarget(ctx context.Context, exec boil.ContextExecutor,
 	}
 
 	updateQuery := fmt.Sprintf(
-		"UPDATE \"schema_ingest\".\"external_tasks\" SET %s WHERE %s",
+		"UPDATE \"ingest\".\"external_tasks\" SET %s WHERE %s",
 		strmangle.SetParamNames("\"", "\"", 1, []string{"target_id"}),
 		strmangle.WhereClause("\"", "\"", 2, externalTaskPrimaryKeyColumns),
 	)
@@ -1352,7 +1354,7 @@ func (o *ExternalTask) AddRawBatches(ctx context.Context, exec boil.ContextExecu
 			}
 		} else {
 			updateQuery := fmt.Sprintf(
-				"UPDATE \"schema_ingest\".\"raw_batches\" SET %s WHERE %s",
+				"UPDATE \"ingest\".\"raw_batches\" SET %s WHERE %s",
 				strmangle.SetParamNames("\"", "\"", 1, []string{"external_task_id"}),
 				strmangle.WhereClause("\"", "\"", 2, rawBatchPrimaryKeyColumns),
 			)
@@ -1398,7 +1400,7 @@ func (o *ExternalTask) AddRawBatches(ctx context.Context, exec boil.ContextExecu
 // Replaces o.R.RawBatches with related.
 // Sets related.R.ExternalTask's RawBatches accordingly.
 func (o *ExternalTask) SetRawBatches(ctx context.Context, exec boil.ContextExecutor, insert bool, related ...*RawBatch) error {
-	query := "update \"schema_ingest\".\"raw_batches\" set \"external_task_id\" = null where \"external_task_id\" = $1"
+	query := "update \"ingest\".\"raw_batches\" set \"external_task_id\" = null where \"external_task_id\" = $1"
 	values := []any{o.ID}
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)
@@ -1467,10 +1469,10 @@ func (o *ExternalTask) RemoveRawBatches(ctx context.Context, exec boil.ContextEx
 
 // ExternalTasks retrieves all the records using an executor.
 func ExternalTasks(mods ...qm.QueryMod) externalTaskQuery {
-	mods = append(mods, qm.From("\"schema_ingest\".\"external_tasks\""))
+	mods = append(mods, qm.From("\"ingest\".\"external_tasks\""))
 	q := NewQuery(mods...)
 	if len(queries.GetSelect(q)) == 0 {
-		queries.SetSelect(q, []string{"\"schema_ingest\".\"external_tasks\".*"})
+		queries.SetSelect(q, []string{"\"ingest\".\"external_tasks\".*"})
 	}
 
 	return externalTaskQuery{q}
@@ -1486,7 +1488,7 @@ func FindExternalTask(ctx context.Context, exec boil.ContextExecutor, iD string,
 		sel = strings.Join(strmangle.IdentQuoteSlice(dialect.LQ, dialect.RQ, selectCols), ",")
 	}
 	query := fmt.Sprintf(
-		"select %s from \"schema_ingest\".\"external_tasks\" where \"id\"=$1", sel,
+		"select %s from \"ingest\".\"external_tasks\" where \"id\"=$1", sel,
 	)
 
 	q := queries.Raw(query, iD)
@@ -1550,9 +1552,9 @@ func (o *ExternalTask) Insert(ctx context.Context, exec boil.ContextExecutor, co
 			return err
 		}
 		if len(wl) != 0 {
-			cache.query = fmt.Sprintf("INSERT INTO \"schema_ingest\".\"external_tasks\" (\"%s\") %%sVALUES (%s)%%s", strings.Join(wl, "\",\""), strmangle.Placeholders(dialect.UseIndexPlaceholders, len(wl), 1, 1))
+			cache.query = fmt.Sprintf("INSERT INTO \"ingest\".\"external_tasks\" (\"%s\") %%sVALUES (%s)%%s", strings.Join(wl, "\",\""), strmangle.Placeholders(dialect.UseIndexPlaceholders, len(wl), 1, 1))
 		} else {
-			cache.query = "INSERT INTO \"schema_ingest\".\"external_tasks\" %sDEFAULT VALUES%s"
+			cache.query = "INSERT INTO \"ingest\".\"external_tasks\" %sDEFAULT VALUES%s"
 		}
 
 		var queryOutput, queryReturning string
@@ -1618,7 +1620,7 @@ func (o *ExternalTask) Update(ctx context.Context, exec boil.ContextExecutor, co
 			return 0, errors.New("sqlboiler: unable to update external_tasks, could not build whitelist")
 		}
 
-		cache.query = fmt.Sprintf("UPDATE \"schema_ingest\".\"external_tasks\" SET %s WHERE %s",
+		cache.query = fmt.Sprintf("UPDATE \"ingest\".\"external_tasks\" SET %s WHERE %s",
 			strmangle.SetParamNames("\"", "\"", 1, wl),
 			strmangle.WhereClause("\"", "\"", len(wl)+1, externalTaskPrimaryKeyColumns),
 		)
@@ -1699,7 +1701,7 @@ func (o ExternalTaskSlice) UpdateAll(ctx context.Context, exec boil.ContextExecu
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := fmt.Sprintf("UPDATE \"schema_ingest\".\"external_tasks\" SET %s WHERE %s",
+	sql := fmt.Sprintf("UPDATE \"ingest\".\"external_tasks\" SET %s WHERE %s",
 		strmangle.SetParamNames("\"", "\"", 1, colNames),
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), len(colNames)+1, externalTaskPrimaryKeyColumns, len(o)))
 
@@ -1802,7 +1804,7 @@ func (o *ExternalTask) Upsert(ctx context.Context, exec boil.ContextExecutor, up
 			conflict = make([]string, len(externalTaskPrimaryKeyColumns))
 			copy(conflict, externalTaskPrimaryKeyColumns)
 		}
-		cache.query = buildUpsertQueryPostgres(dialect, "\"schema_ingest\".\"external_tasks\"", updateOnConflict, ret, update, conflict, insert, opts...)
+		cache.query = buildUpsertQueryPostgres(dialect, "\"ingest\".\"external_tasks\"", updateOnConflict, ret, update, conflict, insert, opts...)
 
 		cache.valueMapping, err = queries.BindMapping(externalTaskType, externalTaskMapping, insert)
 		if err != nil {
@@ -1861,7 +1863,7 @@ func (o *ExternalTask) Delete(ctx context.Context, exec boil.ContextExecutor) (i
 	}
 
 	args := queries.ValuesFromMapping(reflect.Indirect(reflect.ValueOf(o)), externalTaskPrimaryKeyMapping)
-	sql := "DELETE FROM \"schema_ingest\".\"external_tasks\" WHERE \"id\"=$1"
+	sql := "DELETE FROM \"ingest\".\"external_tasks\" WHERE \"id\"=$1"
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)
@@ -1926,7 +1928,7 @@ func (o ExternalTaskSlice) DeleteAll(ctx context.Context, exec boil.ContextExecu
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := "DELETE FROM \"schema_ingest\".\"external_tasks\" WHERE " +
+	sql := "DELETE FROM \"ingest\".\"external_tasks\" WHERE " +
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), 1, externalTaskPrimaryKeyColumns, len(o))
 
 	if boil.IsDebug(ctx) {
@@ -1981,7 +1983,7 @@ func (o *ExternalTaskSlice) ReloadAll(ctx context.Context, exec boil.ContextExec
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := "SELECT \"schema_ingest\".\"external_tasks\".* FROM \"schema_ingest\".\"external_tasks\" WHERE " +
+	sql := "SELECT \"ingest\".\"external_tasks\".* FROM \"ingest\".\"external_tasks\" WHERE " +
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), 1, externalTaskPrimaryKeyColumns, len(*o))
 
 	q := queries.Raw(sql, args...)
@@ -1999,7 +2001,7 @@ func (o *ExternalTaskSlice) ReloadAll(ctx context.Context, exec boil.ContextExec
 // ExternalTaskExists checks if the ExternalTask row exists.
 func ExternalTaskExists(ctx context.Context, exec boil.ContextExecutor, iD string) (bool, error) {
 	var exists bool
-	sql := "select exists(select 1 from \"schema_ingest\".\"external_tasks\" where \"id\"=$1 limit 1)"
+	sql := "select exists(select 1 from \"ingest\".\"external_tasks\" where \"id\"=$1 limit 1)"
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)

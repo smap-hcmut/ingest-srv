@@ -271,6 +271,7 @@ var RawBatchWhere = struct {
 	ID                 whereHelperstring
 	SourceID           whereHelperstring
 	ProjectID          whereHelperstring
+	DomainTypeCode     whereHelperstring
 	ExternalTaskID     whereHelpernull_String
 	BatchID            whereHelperstring
 	Status             whereHelperBatchStatus
@@ -292,29 +293,30 @@ var RawBatchWhere = struct {
 	RawMetadata        whereHelpernull_JSON
 	CreatedAt          whereHelpertime_Time
 }{
-	ID:                 whereHelperstring{field: "\"schema_ingest\".\"raw_batches\".\"id\""},
-	SourceID:           whereHelperstring{field: "\"schema_ingest\".\"raw_batches\".\"source_id\""},
-	ProjectID:          whereHelperstring{field: "\"schema_ingest\".\"raw_batches\".\"project_id\""},
-	ExternalTaskID:     whereHelpernull_String{field: "\"schema_ingest\".\"raw_batches\".\"external_task_id\""},
-	BatchID:            whereHelperstring{field: "\"schema_ingest\".\"raw_batches\".\"batch_id\""},
-	Status:             whereHelperBatchStatus{field: "\"schema_ingest\".\"raw_batches\".\"status\""},
-	StorageBucket:      whereHelperstring{field: "\"schema_ingest\".\"raw_batches\".\"storage_bucket\""},
-	StoragePath:        whereHelperstring{field: "\"schema_ingest\".\"raw_batches\".\"storage_path\""},
-	StorageURL:         whereHelpernull_String{field: "\"schema_ingest\".\"raw_batches\".\"storage_url\""},
-	ItemCount:          whereHelpernull_Int{field: "\"schema_ingest\".\"raw_batches\".\"item_count\""},
-	SizeBytes:          whereHelpernull_Int64{field: "\"schema_ingest\".\"raw_batches\".\"size_bytes\""},
-	Checksum:           whereHelpernull_String{field: "\"schema_ingest\".\"raw_batches\".\"checksum\""},
-	ReceivedAt:         whereHelpertime_Time{field: "\"schema_ingest\".\"raw_batches\".\"received_at\""},
-	ParsedAt:           whereHelpernull_Time{field: "\"schema_ingest\".\"raw_batches\".\"parsed_at\""},
-	PublishStatus:      whereHelperPublishStatus{field: "\"schema_ingest\".\"raw_batches\".\"publish_status\""},
-	PublishRecordCount: whereHelperint{field: "\"schema_ingest\".\"raw_batches\".\"publish_record_count\""},
-	FirstEventID:       whereHelpernull_String{field: "\"schema_ingest\".\"raw_batches\".\"first_event_id\""},
-	LastEventID:        whereHelpernull_String{field: "\"schema_ingest\".\"raw_batches\".\"last_event_id\""},
-	UapPublishedAt:     whereHelpernull_Time{field: "\"schema_ingest\".\"raw_batches\".\"uap_published_at\""},
-	ErrorMessage:       whereHelpernull_String{field: "\"schema_ingest\".\"raw_batches\".\"error_message\""},
-	PublishError:       whereHelpernull_String{field: "\"schema_ingest\".\"raw_batches\".\"publish_error\""},
-	RawMetadata:        whereHelpernull_JSON{field: "\"schema_ingest\".\"raw_batches\".\"raw_metadata\""},
-	CreatedAt:          whereHelpertime_Time{field: "\"schema_ingest\".\"raw_batches\".\"created_at\""},
+	ID:                 whereHelperstring{field: "\"ingest\".\"raw_batches\".\"id\""},
+	SourceID:           whereHelperstring{field: "\"ingest\".\"raw_batches\".\"source_id\""},
+	ProjectID:          whereHelperstring{field: "\"ingest\".\"raw_batches\".\"project_id\""},
+	DomainTypeCode:     whereHelperstring{field: "\"ingest\".\"raw_batches\".\"domain_type_code\""},
+	ExternalTaskID:     whereHelpernull_String{field: "\"ingest\".\"raw_batches\".\"external_task_id\""},
+	BatchID:            whereHelperstring{field: "\"ingest\".\"raw_batches\".\"batch_id\""},
+	Status:             whereHelperBatchStatus{field: "\"ingest\".\"raw_batches\".\"status\""},
+	StorageBucket:      whereHelperstring{field: "\"ingest\".\"raw_batches\".\"storage_bucket\""},
+	StoragePath:        whereHelperstring{field: "\"ingest\".\"raw_batches\".\"storage_path\""},
+	StorageURL:         whereHelpernull_String{field: "\"ingest\".\"raw_batches\".\"storage_url\""},
+	ItemCount:          whereHelpernull_Int{field: "\"ingest\".\"raw_batches\".\"item_count\""},
+	SizeBytes:          whereHelpernull_Int64{field: "\"ingest\".\"raw_batches\".\"size_bytes\""},
+	Checksum:           whereHelpernull_String{field: "\"ingest\".\"raw_batches\".\"checksum\""},
+	ReceivedAt:         whereHelpertime_Time{field: "\"ingest\".\"raw_batches\".\"received_at\""},
+	ParsedAt:           whereHelpernull_Time{field: "\"ingest\".\"raw_batches\".\"parsed_at\""},
+	PublishStatus:      whereHelperPublishStatus{field: "\"ingest\".\"raw_batches\".\"publish_status\""},
+	PublishRecordCount: whereHelperint{field: "\"ingest\".\"raw_batches\".\"publish_record_count\""},
+	FirstEventID:       whereHelpernull_String{field: "\"ingest\".\"raw_batches\".\"first_event_id\""},
+	LastEventID:        whereHelpernull_String{field: "\"ingest\".\"raw_batches\".\"last_event_id\""},
+	UapPublishedAt:     whereHelpernull_Time{field: "\"ingest\".\"raw_batches\".\"uap_published_at\""},
+	ErrorMessage:       whereHelpernull_String{field: "\"ingest\".\"raw_batches\".\"error_message\""},
+	PublishError:       whereHelpernull_String{field: "\"ingest\".\"raw_batches\".\"publish_error\""},
+	RawMetadata:        whereHelpernull_JSON{field: "\"ingest\".\"raw_batches\".\"raw_metadata\""},
+	CreatedAt:          whereHelpertime_Time{field: "\"ingest\".\"raw_batches\".\"created_at\""},
 }
 
 // RawBatchRels is where relationship names are stored.
@@ -373,9 +375,9 @@ func (r *rawBatchR) GetSource() *DataSource {
 type rawBatchL struct{}
 
 var (
-	rawBatchAllColumns            = []string{"id", "source_id", "project_id", "external_task_id", "batch_id", "status", "storage_bucket", "storage_path", "storage_url", "item_count", "size_bytes", "checksum", "received_at", "parsed_at", "publish_status", "publish_record_count", "first_event_id", "last_event_id", "uap_published_at", "error_message", "publish_error", "raw_metadata", "created_at"}
+	rawBatchAllColumns            = []string{"id", "source_id", "project_id", "domain_type_code", "external_task_id", "batch_id", "status", "storage_bucket", "storage_path", "storage_url", "item_count", "size_bytes", "checksum", "received_at", "parsed_at", "publish_status", "publish_record_count", "first_event_id", "last_event_id", "uap_published_at", "error_message", "publish_error", "raw_metadata", "created_at"}
 	rawBatchColumnsWithoutDefault = []string{"id", "source_id", "project_id", "batch_id", "storage_bucket", "storage_path"}
-	rawBatchColumnsWithDefault    = []string{"external_task_id", "status", "storage_url", "item_count", "size_bytes", "checksum", "received_at", "parsed_at", "publish_status", "publish_record_count", "first_event_id", "last_event_id", "uap_published_at", "error_message", "publish_error", "raw_metadata", "created_at"}
+	rawBatchColumnsWithDefault    = []string{"domain_type_code", "external_task_id", "status", "storage_url", "item_count", "size_bytes", "checksum", "received_at", "parsed_at", "publish_status", "publish_record_count", "first_event_id", "last_event_id", "uap_published_at", "error_message", "publish_error", "raw_metadata", "created_at"}
 	rawBatchPrimaryKeyColumns     = []string{"id"}
 	rawBatchGeneratedColumns      = []string{}
 )
@@ -769,8 +771,8 @@ func (rawBatchL) LoadExternalTask(ctx context.Context, e boil.ContextExecutor, s
 	}
 
 	query := NewQuery(
-		qm.From(`schema_ingest.external_tasks`),
-		qm.WhereIn(`schema_ingest.external_tasks.id in ?`, argsSlice...),
+		qm.From(`ingest.external_tasks`),
+		qm.WhereIn(`ingest.external_tasks.id in ?`, argsSlice...),
 	)
 	if mods != nil {
 		mods.Apply(query)
@@ -889,9 +891,9 @@ func (rawBatchL) LoadSource(ctx context.Context, e boil.ContextExecutor, singula
 	}
 
 	query := NewQuery(
-		qm.From(`schema_ingest.data_sources`),
-		qm.WhereIn(`schema_ingest.data_sources.id in ?`, argsSlice...),
-		qmhelper.WhereIsNull(`schema_ingest.data_sources.deleted_at`),
+		qm.From(`ingest.data_sources`),
+		qm.WhereIn(`ingest.data_sources.id in ?`, argsSlice...),
+		qmhelper.WhereIsNull(`ingest.data_sources.deleted_at`),
 	)
 	if mods != nil {
 		mods.Apply(query)
@@ -964,7 +966,7 @@ func (o *RawBatch) SetExternalTask(ctx context.Context, exec boil.ContextExecuto
 	}
 
 	updateQuery := fmt.Sprintf(
-		"UPDATE \"schema_ingest\".\"raw_batches\" SET %s WHERE %s",
+		"UPDATE \"ingest\".\"raw_batches\" SET %s WHERE %s",
 		strmangle.SetParamNames("\"", "\"", 1, []string{"external_task_id"}),
 		strmangle.WhereClause("\"", "\"", 2, rawBatchPrimaryKeyColumns),
 	)
@@ -1044,7 +1046,7 @@ func (o *RawBatch) SetSource(ctx context.Context, exec boil.ContextExecutor, ins
 	}
 
 	updateQuery := fmt.Sprintf(
-		"UPDATE \"schema_ingest\".\"raw_batches\" SET %s WHERE %s",
+		"UPDATE \"ingest\".\"raw_batches\" SET %s WHERE %s",
 		strmangle.SetParamNames("\"", "\"", 1, []string{"source_id"}),
 		strmangle.WhereClause("\"", "\"", 2, rawBatchPrimaryKeyColumns),
 	)
@@ -1081,10 +1083,10 @@ func (o *RawBatch) SetSource(ctx context.Context, exec boil.ContextExecutor, ins
 
 // RawBatches retrieves all the records using an executor.
 func RawBatches(mods ...qm.QueryMod) rawBatchQuery {
-	mods = append(mods, qm.From("\"schema_ingest\".\"raw_batches\""))
+	mods = append(mods, qm.From("\"ingest\".\"raw_batches\""))
 	q := NewQuery(mods...)
 	if len(queries.GetSelect(q)) == 0 {
-		queries.SetSelect(q, []string{"\"schema_ingest\".\"raw_batches\".*"})
+		queries.SetSelect(q, []string{"\"ingest\".\"raw_batches\".*"})
 	}
 
 	return rawBatchQuery{q}
@@ -1100,7 +1102,7 @@ func FindRawBatch(ctx context.Context, exec boil.ContextExecutor, iD string, sel
 		sel = strings.Join(strmangle.IdentQuoteSlice(dialect.LQ, dialect.RQ, selectCols), ",")
 	}
 	query := fmt.Sprintf(
-		"select %s from \"schema_ingest\".\"raw_batches\" where \"id\"=$1", sel,
+		"select %s from \"ingest\".\"raw_batches\" where \"id\"=$1", sel,
 	)
 
 	q := queries.Raw(query, iD)
@@ -1164,9 +1166,9 @@ func (o *RawBatch) Insert(ctx context.Context, exec boil.ContextExecutor, column
 			return err
 		}
 		if len(wl) != 0 {
-			cache.query = fmt.Sprintf("INSERT INTO \"schema_ingest\".\"raw_batches\" (\"%s\") %%sVALUES (%s)%%s", strings.Join(wl, "\",\""), strmangle.Placeholders(dialect.UseIndexPlaceholders, len(wl), 1, 1))
+			cache.query = fmt.Sprintf("INSERT INTO \"ingest\".\"raw_batches\" (\"%s\") %%sVALUES (%s)%%s", strings.Join(wl, "\",\""), strmangle.Placeholders(dialect.UseIndexPlaceholders, len(wl), 1, 1))
 		} else {
-			cache.query = "INSERT INTO \"schema_ingest\".\"raw_batches\" %sDEFAULT VALUES%s"
+			cache.query = "INSERT INTO \"ingest\".\"raw_batches\" %sDEFAULT VALUES%s"
 		}
 
 		var queryOutput, queryReturning string
@@ -1232,7 +1234,7 @@ func (o *RawBatch) Update(ctx context.Context, exec boil.ContextExecutor, column
 			return 0, errors.New("sqlboiler: unable to update raw_batches, could not build whitelist")
 		}
 
-		cache.query = fmt.Sprintf("UPDATE \"schema_ingest\".\"raw_batches\" SET %s WHERE %s",
+		cache.query = fmt.Sprintf("UPDATE \"ingest\".\"raw_batches\" SET %s WHERE %s",
 			strmangle.SetParamNames("\"", "\"", 1, wl),
 			strmangle.WhereClause("\"", "\"", len(wl)+1, rawBatchPrimaryKeyColumns),
 		)
@@ -1313,7 +1315,7 @@ func (o RawBatchSlice) UpdateAll(ctx context.Context, exec boil.ContextExecutor,
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := fmt.Sprintf("UPDATE \"schema_ingest\".\"raw_batches\" SET %s WHERE %s",
+	sql := fmt.Sprintf("UPDATE \"ingest\".\"raw_batches\" SET %s WHERE %s",
 		strmangle.SetParamNames("\"", "\"", 1, colNames),
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), len(colNames)+1, rawBatchPrimaryKeyColumns, len(o)))
 
@@ -1416,7 +1418,7 @@ func (o *RawBatch) Upsert(ctx context.Context, exec boil.ContextExecutor, update
 			conflict = make([]string, len(rawBatchPrimaryKeyColumns))
 			copy(conflict, rawBatchPrimaryKeyColumns)
 		}
-		cache.query = buildUpsertQueryPostgres(dialect, "\"schema_ingest\".\"raw_batches\"", updateOnConflict, ret, update, conflict, insert, opts...)
+		cache.query = buildUpsertQueryPostgres(dialect, "\"ingest\".\"raw_batches\"", updateOnConflict, ret, update, conflict, insert, opts...)
 
 		cache.valueMapping, err = queries.BindMapping(rawBatchType, rawBatchMapping, insert)
 		if err != nil {
@@ -1475,7 +1477,7 @@ func (o *RawBatch) Delete(ctx context.Context, exec boil.ContextExecutor) (int64
 	}
 
 	args := queries.ValuesFromMapping(reflect.Indirect(reflect.ValueOf(o)), rawBatchPrimaryKeyMapping)
-	sql := "DELETE FROM \"schema_ingest\".\"raw_batches\" WHERE \"id\"=$1"
+	sql := "DELETE FROM \"ingest\".\"raw_batches\" WHERE \"id\"=$1"
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)
@@ -1540,7 +1542,7 @@ func (o RawBatchSlice) DeleteAll(ctx context.Context, exec boil.ContextExecutor)
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := "DELETE FROM \"schema_ingest\".\"raw_batches\" WHERE " +
+	sql := "DELETE FROM \"ingest\".\"raw_batches\" WHERE " +
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), 1, rawBatchPrimaryKeyColumns, len(o))
 
 	if boil.IsDebug(ctx) {
@@ -1595,7 +1597,7 @@ func (o *RawBatchSlice) ReloadAll(ctx context.Context, exec boil.ContextExecutor
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := "SELECT \"schema_ingest\".\"raw_batches\".* FROM \"schema_ingest\".\"raw_batches\" WHERE " +
+	sql := "SELECT \"ingest\".\"raw_batches\".* FROM \"ingest\".\"raw_batches\" WHERE " +
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), 1, rawBatchPrimaryKeyColumns, len(*o))
 
 	q := queries.Raw(sql, args...)
@@ -1613,7 +1615,7 @@ func (o *RawBatchSlice) ReloadAll(ctx context.Context, exec boil.ContextExecutor
 // RawBatchExists checks if the RawBatch row exists.
 func RawBatchExists(ctx context.Context, exec boil.ContextExecutor, iD string) (bool, error) {
 	var exists bool
-	sql := "select exists(select 1 from \"schema_ingest\".\"raw_batches\" where \"id\"=$1 limit 1)"
+	sql := "select exists(select 1 from \"ingest\".\"raw_batches\" where \"id\"=$1 limit 1)"
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)

@@ -234,7 +234,7 @@ func setDefaults() {
 	viper.SetDefault("postgres.password", "ingest_master_pwd")
 	viper.SetDefault("postgres.dbname", "smap")
 	viper.SetDefault("postgres.sslmode", "disable")
-	viper.SetDefault("postgres.schema", "schema_ingest")
+	viper.SetDefault("postgres.schema", "ingest")
 
 	viper.SetDefault("redis.host", "redis.tantai.dev")
 	viper.SetDefault("redis.port", 6379)

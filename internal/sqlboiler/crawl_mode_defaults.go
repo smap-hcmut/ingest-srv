@@ -99,12 +99,12 @@ var CrawlModeDefaultWhere = struct {
 	CreatedAt       whereHelpertime_Time
 	UpdatedAt       whereHelpertime_Time
 }{
-	Mode:            whereHelperCrawlMode{field: "\"schema_ingest\".\"crawl_mode_defaults\".\"mode\""},
-	IntervalMinutes: whereHelperint{field: "\"schema_ingest\".\"crawl_mode_defaults\".\"interval_minutes\""},
-	ModeMultiplier:  whereHelpertypes_Decimal{field: "\"schema_ingest\".\"crawl_mode_defaults\".\"mode_multiplier\""},
-	Description:     whereHelpernull_String{field: "\"schema_ingest\".\"crawl_mode_defaults\".\"description\""},
-	CreatedAt:       whereHelpertime_Time{field: "\"schema_ingest\".\"crawl_mode_defaults\".\"created_at\""},
-	UpdatedAt:       whereHelpertime_Time{field: "\"schema_ingest\".\"crawl_mode_defaults\".\"updated_at\""},
+	Mode:            whereHelperCrawlMode{field: "\"ingest\".\"crawl_mode_defaults\".\"mode\""},
+	IntervalMinutes: whereHelperint{field: "\"ingest\".\"crawl_mode_defaults\".\"interval_minutes\""},
+	ModeMultiplier:  whereHelpertypes_Decimal{field: "\"ingest\".\"crawl_mode_defaults\".\"mode_multiplier\""},
+	Description:     whereHelpernull_String{field: "\"ingest\".\"crawl_mode_defaults\".\"description\""},
+	CreatedAt:       whereHelpertime_Time{field: "\"ingest\".\"crawl_mode_defaults\".\"created_at\""},
+	UpdatedAt:       whereHelpertime_Time{field: "\"ingest\".\"crawl_mode_defaults\".\"updated_at\""},
 }
 
 // CrawlModeDefaultRels is where relationship names are stored.
@@ -438,10 +438,10 @@ func (q crawlModeDefaultQuery) Exists(ctx context.Context, exec boil.ContextExec
 
 // CrawlModeDefaults retrieves all the records using an executor.
 func CrawlModeDefaults(mods ...qm.QueryMod) crawlModeDefaultQuery {
-	mods = append(mods, qm.From("\"schema_ingest\".\"crawl_mode_defaults\""))
+	mods = append(mods, qm.From("\"ingest\".\"crawl_mode_defaults\""))
 	q := NewQuery(mods...)
 	if len(queries.GetSelect(q)) == 0 {
-		queries.SetSelect(q, []string{"\"schema_ingest\".\"crawl_mode_defaults\".*"})
+		queries.SetSelect(q, []string{"\"ingest\".\"crawl_mode_defaults\".*"})
 	}
 
 	return crawlModeDefaultQuery{q}
@@ -457,7 +457,7 @@ func FindCrawlModeDefault(ctx context.Context, exec boil.ContextExecutor, mode C
 		sel = strings.Join(strmangle.IdentQuoteSlice(dialect.LQ, dialect.RQ, selectCols), ",")
 	}
 	query := fmt.Sprintf(
-		"select %s from \"schema_ingest\".\"crawl_mode_defaults\" where \"mode\"=$1", sel,
+		"select %s from \"ingest\".\"crawl_mode_defaults\" where \"mode\"=$1", sel,
 	)
 
 	q := queries.Raw(query, mode)
@@ -524,9 +524,9 @@ func (o *CrawlModeDefault) Insert(ctx context.Context, exec boil.ContextExecutor
 			return err
 		}
 		if len(wl) != 0 {
-			cache.query = fmt.Sprintf("INSERT INTO \"schema_ingest\".\"crawl_mode_defaults\" (\"%s\") %%sVALUES (%s)%%s", strings.Join(wl, "\",\""), strmangle.Placeholders(dialect.UseIndexPlaceholders, len(wl), 1, 1))
+			cache.query = fmt.Sprintf("INSERT INTO \"ingest\".\"crawl_mode_defaults\" (\"%s\") %%sVALUES (%s)%%s", strings.Join(wl, "\",\""), strmangle.Placeholders(dialect.UseIndexPlaceholders, len(wl), 1, 1))
 		} else {
-			cache.query = "INSERT INTO \"schema_ingest\".\"crawl_mode_defaults\" %sDEFAULT VALUES%s"
+			cache.query = "INSERT INTO \"ingest\".\"crawl_mode_defaults\" %sDEFAULT VALUES%s"
 		}
 
 		var queryOutput, queryReturning string
@@ -598,7 +598,7 @@ func (o *CrawlModeDefault) Update(ctx context.Context, exec boil.ContextExecutor
 			return 0, errors.New("sqlboiler: unable to update crawl_mode_defaults, could not build whitelist")
 		}
 
-		cache.query = fmt.Sprintf("UPDATE \"schema_ingest\".\"crawl_mode_defaults\" SET %s WHERE %s",
+		cache.query = fmt.Sprintf("UPDATE \"ingest\".\"crawl_mode_defaults\" SET %s WHERE %s",
 			strmangle.SetParamNames("\"", "\"", 1, wl),
 			strmangle.WhereClause("\"", "\"", len(wl)+1, crawlModeDefaultPrimaryKeyColumns),
 		)
@@ -679,7 +679,7 @@ func (o CrawlModeDefaultSlice) UpdateAll(ctx context.Context, exec boil.ContextE
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := fmt.Sprintf("UPDATE \"schema_ingest\".\"crawl_mode_defaults\" SET %s WHERE %s",
+	sql := fmt.Sprintf("UPDATE \"ingest\".\"crawl_mode_defaults\" SET %s WHERE %s",
 		strmangle.SetParamNames("\"", "\"", 1, colNames),
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), len(colNames)+1, crawlModeDefaultPrimaryKeyColumns, len(o)))
 
@@ -783,7 +783,7 @@ func (o *CrawlModeDefault) Upsert(ctx context.Context, exec boil.ContextExecutor
 			conflict = make([]string, len(crawlModeDefaultPrimaryKeyColumns))
 			copy(conflict, crawlModeDefaultPrimaryKeyColumns)
 		}
-		cache.query = buildUpsertQueryPostgres(dialect, "\"schema_ingest\".\"crawl_mode_defaults\"", updateOnConflict, ret, update, conflict, insert, opts...)
+		cache.query = buildUpsertQueryPostgres(dialect, "\"ingest\".\"crawl_mode_defaults\"", updateOnConflict, ret, update, conflict, insert, opts...)
 
 		cache.valueMapping, err = queries.BindMapping(crawlModeDefaultType, crawlModeDefaultMapping, insert)
 		if err != nil {
@@ -842,7 +842,7 @@ func (o *CrawlModeDefault) Delete(ctx context.Context, exec boil.ContextExecutor
 	}
 
 	args := queries.ValuesFromMapping(reflect.Indirect(reflect.ValueOf(o)), crawlModeDefaultPrimaryKeyMapping)
-	sql := "DELETE FROM \"schema_ingest\".\"crawl_mode_defaults\" WHERE \"mode\"=$1"
+	sql := "DELETE FROM \"ingest\".\"crawl_mode_defaults\" WHERE \"mode\"=$1"
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)
@@ -907,7 +907,7 @@ func (o CrawlModeDefaultSlice) DeleteAll(ctx context.Context, exec boil.ContextE
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := "DELETE FROM \"schema_ingest\".\"crawl_mode_defaults\" WHERE " +
+	sql := "DELETE FROM \"ingest\".\"crawl_mode_defaults\" WHERE " +
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), 1, crawlModeDefaultPrimaryKeyColumns, len(o))
 
 	if boil.IsDebug(ctx) {
@@ -962,7 +962,7 @@ func (o *CrawlModeDefaultSlice) ReloadAll(ctx context.Context, exec boil.Context
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := "SELECT \"schema_ingest\".\"crawl_mode_defaults\".* FROM \"schema_ingest\".\"crawl_mode_defaults\" WHERE " +
+	sql := "SELECT \"ingest\".\"crawl_mode_defaults\".* FROM \"ingest\".\"crawl_mode_defaults\" WHERE " +
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), 1, crawlModeDefaultPrimaryKeyColumns, len(*o))
 
 	q := queries.Raw(sql, args...)
@@ -980,7 +980,7 @@ func (o *CrawlModeDefaultSlice) ReloadAll(ctx context.Context, exec boil.Context
 // CrawlModeDefaultExists checks if the CrawlModeDefault row exists.
 func CrawlModeDefaultExists(ctx context.Context, exec boil.ContextExecutor, mode CrawlMode) (bool, error) {
 	var exists bool
-	sql := "select exists(select 1 from \"schema_ingest\".\"crawl_mode_defaults\" where \"mode\"=$1 limit 1)"
+	sql := "select exists(select 1 from \"ingest\".\"crawl_mode_defaults\" where \"mode\"=$1 limit 1)"
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)

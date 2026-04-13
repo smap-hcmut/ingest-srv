@@ -1,5 +1,5 @@
 -- =====================================================
--- Seed Defaults: schema_ingest
+-- Seed Defaults: ingest
 -- Purpose: Store system default crawl intervals and mode multipliers
 -- Note: Used as fallback config for scheduler/adaptive crawl
 -- Multiplier: effective_interval = target.crawl_interval_minutes × multiplier
@@ -7,8 +7,8 @@
 
 BEGIN;
 
-CREATE TABLE IF NOT EXISTS schema_ingest.crawl_mode_defaults (
-    mode schema_ingest.crawl_mode PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS ingest.crawl_mode_defaults (
+    mode ingest.crawl_mode PRIMARY KEY,
     interval_minutes INTEGER NOT NULL,
     mode_multiplier NUMERIC(4,2) NOT NULL DEFAULT 1.0,
     description TEXT,
@@ -21,11 +21,11 @@ CREATE TABLE IF NOT EXISTS schema_ingest.crawl_mode_defaults (
 );
 
 CREATE TRIGGER trg_crawl_mode_defaults_set_updated_at
-BEFORE UPDATE ON schema_ingest.crawl_mode_defaults
+BEFORE UPDATE ON ingest.crawl_mode_defaults
 FOR EACH ROW
-EXECUTE FUNCTION schema_ingest.set_updated_at();
+EXECUTE FUNCTION ingest.set_updated_at();
 
-INSERT INTO schema_ingest.crawl_mode_defaults (
+INSERT INTO ingest.crawl_mode_defaults (
     mode,
     interval_minutes,
     mode_multiplier,

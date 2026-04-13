@@ -27,12 +27,12 @@
 -- Important:
 -- - this script only seeds data_sources + crawl_targets
 -- - scheduled_jobs / external_tasks / raw_batches are created by runtime
--- - written for schema_ingest
+-- - written for ingest
 -- - uses fixed UUIDs for repeatable inspection
 
 BEGIN;
 
-SET search_path TO schema_ingest;
+SET search_path TO ingest;
 
 -- -------------------------------------------------------------------
 -- Fixed IDs for repeatable debugging
@@ -638,14 +638,14 @@ COMMIT;
 --     ct.crawl_interval_minutes,
 --     ct.next_crawl_at,
 --     jsonb_array_length(ct.values) AS keyword_count
--- FROM schema_ingest.crawl_targets ct
--- JOIN schema_ingest.data_sources ds ON ds.id = ct.data_source_id
+-- FROM ingest.crawl_targets ct
+-- JOIN ingest.data_sources ds ON ds.id = ct.data_source_id
 -- WHERE ds.project_id = '44444444-4444-4444-4444-444444444444'
 -- ORDER BY ct.priority DESC, ct.created_at ASC;
 --
 -- SELECT source_type, COUNT(*) AS target_count
--- FROM schema_ingest.data_sources ds
--- JOIN schema_ingest.crawl_targets ct ON ct.data_source_id = ds.id
+-- FROM ingest.data_sources ds
+-- JOIN ingest.crawl_targets ct ON ct.data_source_id = ds.id
 -- WHERE ds.project_id = '44444444-4444-4444-4444-444444444444'
 -- GROUP BY source_type
 -- ORDER BY source_type;

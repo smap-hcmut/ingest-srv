@@ -320,19 +320,19 @@ var CrawlModeChangeWhere = struct {
 	TriggeredAt         whereHelpertime_Time
 	CreatedAt           whereHelpertime_Time
 }{
-	ID:                  whereHelperstring{field: "\"schema_ingest\".\"crawl_mode_changes\".\"id\""},
-	SourceID:            whereHelperstring{field: "\"schema_ingest\".\"crawl_mode_changes\".\"source_id\""},
-	ProjectID:           whereHelperstring{field: "\"schema_ingest\".\"crawl_mode_changes\".\"project_id\""},
-	TriggerType:         whereHelperTriggerType{field: "\"schema_ingest\".\"crawl_mode_changes\".\"trigger_type\""},
-	FromMode:            whereHelperCrawlMode{field: "\"schema_ingest\".\"crawl_mode_changes\".\"from_mode\""},
-	ToMode:              whereHelperCrawlMode{field: "\"schema_ingest\".\"crawl_mode_changes\".\"to_mode\""},
-	FromIntervalMinutes: whereHelperint{field: "\"schema_ingest\".\"crawl_mode_changes\".\"from_interval_minutes\""},
-	ToIntervalMinutes:   whereHelperint{field: "\"schema_ingest\".\"crawl_mode_changes\".\"to_interval_minutes\""},
-	Reason:              whereHelpernull_String{field: "\"schema_ingest\".\"crawl_mode_changes\".\"reason\""},
-	EventRef:            whereHelpernull_String{field: "\"schema_ingest\".\"crawl_mode_changes\".\"event_ref\""},
-	TriggeredBy:         whereHelpernull_String{field: "\"schema_ingest\".\"crawl_mode_changes\".\"triggered_by\""},
-	TriggeredAt:         whereHelpertime_Time{field: "\"schema_ingest\".\"crawl_mode_changes\".\"triggered_at\""},
-	CreatedAt:           whereHelpertime_Time{field: "\"schema_ingest\".\"crawl_mode_changes\".\"created_at\""},
+	ID:                  whereHelperstring{field: "\"ingest\".\"crawl_mode_changes\".\"id\""},
+	SourceID:            whereHelperstring{field: "\"ingest\".\"crawl_mode_changes\".\"source_id\""},
+	ProjectID:           whereHelperstring{field: "\"ingest\".\"crawl_mode_changes\".\"project_id\""},
+	TriggerType:         whereHelperTriggerType{field: "\"ingest\".\"crawl_mode_changes\".\"trigger_type\""},
+	FromMode:            whereHelperCrawlMode{field: "\"ingest\".\"crawl_mode_changes\".\"from_mode\""},
+	ToMode:              whereHelperCrawlMode{field: "\"ingest\".\"crawl_mode_changes\".\"to_mode\""},
+	FromIntervalMinutes: whereHelperint{field: "\"ingest\".\"crawl_mode_changes\".\"from_interval_minutes\""},
+	ToIntervalMinutes:   whereHelperint{field: "\"ingest\".\"crawl_mode_changes\".\"to_interval_minutes\""},
+	Reason:              whereHelpernull_String{field: "\"ingest\".\"crawl_mode_changes\".\"reason\""},
+	EventRef:            whereHelpernull_String{field: "\"ingest\".\"crawl_mode_changes\".\"event_ref\""},
+	TriggeredBy:         whereHelpernull_String{field: "\"ingest\".\"crawl_mode_changes\".\"triggered_by\""},
+	TriggeredAt:         whereHelpertime_Time{field: "\"ingest\".\"crawl_mode_changes\".\"triggered_at\""},
+	CreatedAt:           whereHelpertime_Time{field: "\"ingest\".\"crawl_mode_changes\".\"created_at\""},
 }
 
 // CrawlModeChangeRels is where relationship names are stored.
@@ -753,9 +753,9 @@ func (crawlModeChangeL) LoadSource(ctx context.Context, e boil.ContextExecutor, 
 	}
 
 	query := NewQuery(
-		qm.From(`schema_ingest.data_sources`),
-		qm.WhereIn(`schema_ingest.data_sources.id in ?`, argsSlice...),
-		qmhelper.WhereIsNull(`schema_ingest.data_sources.deleted_at`),
+		qm.From(`ingest.data_sources`),
+		qm.WhereIn(`ingest.data_sources.id in ?`, argsSlice...),
+		qmhelper.WhereIsNull(`ingest.data_sources.deleted_at`),
 	)
 	if mods != nil {
 		mods.Apply(query)
@@ -828,7 +828,7 @@ func (o *CrawlModeChange) SetSource(ctx context.Context, exec boil.ContextExecut
 	}
 
 	updateQuery := fmt.Sprintf(
-		"UPDATE \"schema_ingest\".\"crawl_mode_changes\" SET %s WHERE %s",
+		"UPDATE \"ingest\".\"crawl_mode_changes\" SET %s WHERE %s",
 		strmangle.SetParamNames("\"", "\"", 1, []string{"source_id"}),
 		strmangle.WhereClause("\"", "\"", 2, crawlModeChangePrimaryKeyColumns),
 	)
@@ -865,10 +865,10 @@ func (o *CrawlModeChange) SetSource(ctx context.Context, exec boil.ContextExecut
 
 // CrawlModeChanges retrieves all the records using an executor.
 func CrawlModeChanges(mods ...qm.QueryMod) crawlModeChangeQuery {
-	mods = append(mods, qm.From("\"schema_ingest\".\"crawl_mode_changes\""))
+	mods = append(mods, qm.From("\"ingest\".\"crawl_mode_changes\""))
 	q := NewQuery(mods...)
 	if len(queries.GetSelect(q)) == 0 {
-		queries.SetSelect(q, []string{"\"schema_ingest\".\"crawl_mode_changes\".*"})
+		queries.SetSelect(q, []string{"\"ingest\".\"crawl_mode_changes\".*"})
 	}
 
 	return crawlModeChangeQuery{q}
@@ -884,7 +884,7 @@ func FindCrawlModeChange(ctx context.Context, exec boil.ContextExecutor, iD stri
 		sel = strings.Join(strmangle.IdentQuoteSlice(dialect.LQ, dialect.RQ, selectCols), ",")
 	}
 	query := fmt.Sprintf(
-		"select %s from \"schema_ingest\".\"crawl_mode_changes\" where \"id\"=$1", sel,
+		"select %s from \"ingest\".\"crawl_mode_changes\" where \"id\"=$1", sel,
 	)
 
 	q := queries.Raw(query, iD)
@@ -948,9 +948,9 @@ func (o *CrawlModeChange) Insert(ctx context.Context, exec boil.ContextExecutor,
 			return err
 		}
 		if len(wl) != 0 {
-			cache.query = fmt.Sprintf("INSERT INTO \"schema_ingest\".\"crawl_mode_changes\" (\"%s\") %%sVALUES (%s)%%s", strings.Join(wl, "\",\""), strmangle.Placeholders(dialect.UseIndexPlaceholders, len(wl), 1, 1))
+			cache.query = fmt.Sprintf("INSERT INTO \"ingest\".\"crawl_mode_changes\" (\"%s\") %%sVALUES (%s)%%s", strings.Join(wl, "\",\""), strmangle.Placeholders(dialect.UseIndexPlaceholders, len(wl), 1, 1))
 		} else {
-			cache.query = "INSERT INTO \"schema_ingest\".\"crawl_mode_changes\" %sDEFAULT VALUES%s"
+			cache.query = "INSERT INTO \"ingest\".\"crawl_mode_changes\" %sDEFAULT VALUES%s"
 		}
 
 		var queryOutput, queryReturning string
@@ -1016,7 +1016,7 @@ func (o *CrawlModeChange) Update(ctx context.Context, exec boil.ContextExecutor,
 			return 0, errors.New("sqlboiler: unable to update crawl_mode_changes, could not build whitelist")
 		}
 
-		cache.query = fmt.Sprintf("UPDATE \"schema_ingest\".\"crawl_mode_changes\" SET %s WHERE %s",
+		cache.query = fmt.Sprintf("UPDATE \"ingest\".\"crawl_mode_changes\" SET %s WHERE %s",
 			strmangle.SetParamNames("\"", "\"", 1, wl),
 			strmangle.WhereClause("\"", "\"", len(wl)+1, crawlModeChangePrimaryKeyColumns),
 		)
@@ -1097,7 +1097,7 @@ func (o CrawlModeChangeSlice) UpdateAll(ctx context.Context, exec boil.ContextEx
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := fmt.Sprintf("UPDATE \"schema_ingest\".\"crawl_mode_changes\" SET %s WHERE %s",
+	sql := fmt.Sprintf("UPDATE \"ingest\".\"crawl_mode_changes\" SET %s WHERE %s",
 		strmangle.SetParamNames("\"", "\"", 1, colNames),
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), len(colNames)+1, crawlModeChangePrimaryKeyColumns, len(o)))
 
@@ -1200,7 +1200,7 @@ func (o *CrawlModeChange) Upsert(ctx context.Context, exec boil.ContextExecutor,
 			conflict = make([]string, len(crawlModeChangePrimaryKeyColumns))
 			copy(conflict, crawlModeChangePrimaryKeyColumns)
 		}
-		cache.query = buildUpsertQueryPostgres(dialect, "\"schema_ingest\".\"crawl_mode_changes\"", updateOnConflict, ret, update, conflict, insert, opts...)
+		cache.query = buildUpsertQueryPostgres(dialect, "\"ingest\".\"crawl_mode_changes\"", updateOnConflict, ret, update, conflict, insert, opts...)
 
 		cache.valueMapping, err = queries.BindMapping(crawlModeChangeType, crawlModeChangeMapping, insert)
 		if err != nil {
@@ -1259,7 +1259,7 @@ func (o *CrawlModeChange) Delete(ctx context.Context, exec boil.ContextExecutor)
 	}
 
 	args := queries.ValuesFromMapping(reflect.Indirect(reflect.ValueOf(o)), crawlModeChangePrimaryKeyMapping)
-	sql := "DELETE FROM \"schema_ingest\".\"crawl_mode_changes\" WHERE \"id\"=$1"
+	sql := "DELETE FROM \"ingest\".\"crawl_mode_changes\" WHERE \"id\"=$1"
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)
@@ -1324,7 +1324,7 @@ func (o CrawlModeChangeSlice) DeleteAll(ctx context.Context, exec boil.ContextEx
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := "DELETE FROM \"schema_ingest\".\"crawl_mode_changes\" WHERE " +
+	sql := "DELETE FROM \"ingest\".\"crawl_mode_changes\" WHERE " +
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), 1, crawlModeChangePrimaryKeyColumns, len(o))
 
 	if boil.IsDebug(ctx) {
@@ -1379,7 +1379,7 @@ func (o *CrawlModeChangeSlice) ReloadAll(ctx context.Context, exec boil.ContextE
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := "SELECT \"schema_ingest\".\"crawl_mode_changes\".* FROM \"schema_ingest\".\"crawl_mode_changes\" WHERE " +
+	sql := "SELECT \"ingest\".\"crawl_mode_changes\".* FROM \"ingest\".\"crawl_mode_changes\" WHERE " +
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), 1, crawlModeChangePrimaryKeyColumns, len(*o))
 
 	q := queries.Raw(sql, args...)
@@ -1397,7 +1397,7 @@ func (o *CrawlModeChangeSlice) ReloadAll(ctx context.Context, exec boil.ContextE
 // CrawlModeChangeExists checks if the CrawlModeChange row exists.
 func CrawlModeChangeExists(ctx context.Context, exec boil.ContextExecutor, iD string) (bool, error) {
 	var exists bool
-	sql := "select exists(select 1 from \"schema_ingest\".\"crawl_mode_changes\" where \"id\"=$1 limit 1)"
+	sql := "select exists(select 1 from \"ingest\".\"crawl_mode_changes\" where \"id\"=$1 limit 1)"
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)

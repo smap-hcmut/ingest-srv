@@ -131,21 +131,21 @@ var ScheduledJobWhere = struct {
 	Payload      whereHelpernull_JSON
 	CreatedAt    whereHelpertime_Time
 }{
-	ID:           whereHelperstring{field: "\"schema_ingest\".\"scheduled_jobs\".\"id\""},
-	SourceID:     whereHelperstring{field: "\"schema_ingest\".\"scheduled_jobs\".\"source_id\""},
-	ProjectID:    whereHelperstring{field: "\"schema_ingest\".\"scheduled_jobs\".\"project_id\""},
-	TargetID:     whereHelpernull_String{field: "\"schema_ingest\".\"scheduled_jobs\".\"target_id\""},
-	Status:       whereHelperJobStatus{field: "\"schema_ingest\".\"scheduled_jobs\".\"status\""},
-	TriggerType:  whereHelperTriggerType{field: "\"schema_ingest\".\"scheduled_jobs\".\"trigger_type\""},
-	CronExpr:     whereHelpernull_String{field: "\"schema_ingest\".\"scheduled_jobs\".\"cron_expr\""},
-	CrawlMode:    whereHelperCrawlMode{field: "\"schema_ingest\".\"scheduled_jobs\".\"crawl_mode\""},
-	ScheduledFor: whereHelpertime_Time{field: "\"schema_ingest\".\"scheduled_jobs\".\"scheduled_for\""},
-	StartedAt:    whereHelpernull_Time{field: "\"schema_ingest\".\"scheduled_jobs\".\"started_at\""},
-	CompletedAt:  whereHelpernull_Time{field: "\"schema_ingest\".\"scheduled_jobs\".\"completed_at\""},
-	RetryCount:   whereHelperint{field: "\"schema_ingest\".\"scheduled_jobs\".\"retry_count\""},
-	ErrorMessage: whereHelpernull_String{field: "\"schema_ingest\".\"scheduled_jobs\".\"error_message\""},
-	Payload:      whereHelpernull_JSON{field: "\"schema_ingest\".\"scheduled_jobs\".\"payload\""},
-	CreatedAt:    whereHelpertime_Time{field: "\"schema_ingest\".\"scheduled_jobs\".\"created_at\""},
+	ID:           whereHelperstring{field: "\"ingest\".\"scheduled_jobs\".\"id\""},
+	SourceID:     whereHelperstring{field: "\"ingest\".\"scheduled_jobs\".\"source_id\""},
+	ProjectID:    whereHelperstring{field: "\"ingest\".\"scheduled_jobs\".\"project_id\""},
+	TargetID:     whereHelpernull_String{field: "\"ingest\".\"scheduled_jobs\".\"target_id\""},
+	Status:       whereHelperJobStatus{field: "\"ingest\".\"scheduled_jobs\".\"status\""},
+	TriggerType:  whereHelperTriggerType{field: "\"ingest\".\"scheduled_jobs\".\"trigger_type\""},
+	CronExpr:     whereHelpernull_String{field: "\"ingest\".\"scheduled_jobs\".\"cron_expr\""},
+	CrawlMode:    whereHelperCrawlMode{field: "\"ingest\".\"scheduled_jobs\".\"crawl_mode\""},
+	ScheduledFor: whereHelpertime_Time{field: "\"ingest\".\"scheduled_jobs\".\"scheduled_for\""},
+	StartedAt:    whereHelpernull_Time{field: "\"ingest\".\"scheduled_jobs\".\"started_at\""},
+	CompletedAt:  whereHelpernull_Time{field: "\"ingest\".\"scheduled_jobs\".\"completed_at\""},
+	RetryCount:   whereHelperint{field: "\"ingest\".\"scheduled_jobs\".\"retry_count\""},
+	ErrorMessage: whereHelpernull_String{field: "\"ingest\".\"scheduled_jobs\".\"error_message\""},
+	Payload:      whereHelpernull_JSON{field: "\"ingest\".\"scheduled_jobs\".\"payload\""},
+	CreatedAt:    whereHelpertime_Time{field: "\"ingest\".\"scheduled_jobs\".\"created_at\""},
 }
 
 // ScheduledJobRels is where relationship names are stored.
@@ -565,7 +565,7 @@ func (o *ScheduledJob) ExternalTasks(mods ...qm.QueryMod) externalTaskQuery {
 	}
 
 	queryMods = append(queryMods,
-		qm.Where("\"schema_ingest\".\"external_tasks\".\"scheduled_job_id\"=?", o.ID),
+		qm.Where("\"ingest\".\"external_tasks\".\"scheduled_job_id\"=?", o.ID),
 	)
 
 	return ExternalTasks(queryMods...)
@@ -633,8 +633,8 @@ func (scheduledJobL) LoadTarget(ctx context.Context, e boil.ContextExecutor, sin
 	}
 
 	query := NewQuery(
-		qm.From(`schema_ingest.crawl_targets`),
-		qm.WhereIn(`schema_ingest.crawl_targets.id in ?`, argsSlice...),
+		qm.From(`ingest.crawl_targets`),
+		qm.WhereIn(`ingest.crawl_targets.id in ?`, argsSlice...),
 	)
 	if mods != nil {
 		mods.Apply(query)
@@ -753,9 +753,9 @@ func (scheduledJobL) LoadSource(ctx context.Context, e boil.ContextExecutor, sin
 	}
 
 	query := NewQuery(
-		qm.From(`schema_ingest.data_sources`),
-		qm.WhereIn(`schema_ingest.data_sources.id in ?`, argsSlice...),
-		qmhelper.WhereIsNull(`schema_ingest.data_sources.deleted_at`),
+		qm.From(`ingest.data_sources`),
+		qm.WhereIn(`ingest.data_sources.id in ?`, argsSlice...),
+		qmhelper.WhereIsNull(`ingest.data_sources.deleted_at`),
 	)
 	if mods != nil {
 		mods.Apply(query)
@@ -871,8 +871,8 @@ func (scheduledJobL) LoadExternalTasks(ctx context.Context, e boil.ContextExecut
 	}
 
 	query := NewQuery(
-		qm.From(`schema_ingest.external_tasks`),
-		qm.WhereIn(`schema_ingest.external_tasks.scheduled_job_id in ?`, argsSlice...),
+		qm.From(`ingest.external_tasks`),
+		qm.WhereIn(`ingest.external_tasks.scheduled_job_id in ?`, argsSlice...),
 	)
 	if mods != nil {
 		mods.Apply(query)
@@ -941,7 +941,7 @@ func (o *ScheduledJob) SetTarget(ctx context.Context, exec boil.ContextExecutor,
 	}
 
 	updateQuery := fmt.Sprintf(
-		"UPDATE \"schema_ingest\".\"scheduled_jobs\" SET %s WHERE %s",
+		"UPDATE \"ingest\".\"scheduled_jobs\" SET %s WHERE %s",
 		strmangle.SetParamNames("\"", "\"", 1, []string{"target_id"}),
 		strmangle.WhereClause("\"", "\"", 2, scheduledJobPrimaryKeyColumns),
 	)
@@ -1021,7 +1021,7 @@ func (o *ScheduledJob) SetSource(ctx context.Context, exec boil.ContextExecutor,
 	}
 
 	updateQuery := fmt.Sprintf(
-		"UPDATE \"schema_ingest\".\"scheduled_jobs\" SET %s WHERE %s",
+		"UPDATE \"ingest\".\"scheduled_jobs\" SET %s WHERE %s",
 		strmangle.SetParamNames("\"", "\"", 1, []string{"source_id"}),
 		strmangle.WhereClause("\"", "\"", 2, scheduledJobPrimaryKeyColumns),
 	)
@@ -1070,7 +1070,7 @@ func (o *ScheduledJob) AddExternalTasks(ctx context.Context, exec boil.ContextEx
 			}
 		} else {
 			updateQuery := fmt.Sprintf(
-				"UPDATE \"schema_ingest\".\"external_tasks\" SET %s WHERE %s",
+				"UPDATE \"ingest\".\"external_tasks\" SET %s WHERE %s",
 				strmangle.SetParamNames("\"", "\"", 1, []string{"scheduled_job_id"}),
 				strmangle.WhereClause("\"", "\"", 2, externalTaskPrimaryKeyColumns),
 			)
@@ -1116,7 +1116,7 @@ func (o *ScheduledJob) AddExternalTasks(ctx context.Context, exec boil.ContextEx
 // Replaces o.R.ExternalTasks with related.
 // Sets related.R.ScheduledJob's ExternalTasks accordingly.
 func (o *ScheduledJob) SetExternalTasks(ctx context.Context, exec boil.ContextExecutor, insert bool, related ...*ExternalTask) error {
-	query := "update \"schema_ingest\".\"external_tasks\" set \"scheduled_job_id\" = null where \"scheduled_job_id\" = $1"
+	query := "update \"ingest\".\"external_tasks\" set \"scheduled_job_id\" = null where \"scheduled_job_id\" = $1"
 	values := []any{o.ID}
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)
@@ -1185,10 +1185,10 @@ func (o *ScheduledJob) RemoveExternalTasks(ctx context.Context, exec boil.Contex
 
 // ScheduledJobs retrieves all the records using an executor.
 func ScheduledJobs(mods ...qm.QueryMod) scheduledJobQuery {
-	mods = append(mods, qm.From("\"schema_ingest\".\"scheduled_jobs\""))
+	mods = append(mods, qm.From("\"ingest\".\"scheduled_jobs\""))
 	q := NewQuery(mods...)
 	if len(queries.GetSelect(q)) == 0 {
-		queries.SetSelect(q, []string{"\"schema_ingest\".\"scheduled_jobs\".*"})
+		queries.SetSelect(q, []string{"\"ingest\".\"scheduled_jobs\".*"})
 	}
 
 	return scheduledJobQuery{q}
@@ -1204,7 +1204,7 @@ func FindScheduledJob(ctx context.Context, exec boil.ContextExecutor, iD string,
 		sel = strings.Join(strmangle.IdentQuoteSlice(dialect.LQ, dialect.RQ, selectCols), ",")
 	}
 	query := fmt.Sprintf(
-		"select %s from \"schema_ingest\".\"scheduled_jobs\" where \"id\"=$1", sel,
+		"select %s from \"ingest\".\"scheduled_jobs\" where \"id\"=$1", sel,
 	)
 
 	q := queries.Raw(query, iD)
@@ -1268,9 +1268,9 @@ func (o *ScheduledJob) Insert(ctx context.Context, exec boil.ContextExecutor, co
 			return err
 		}
 		if len(wl) != 0 {
-			cache.query = fmt.Sprintf("INSERT INTO \"schema_ingest\".\"scheduled_jobs\" (\"%s\") %%sVALUES (%s)%%s", strings.Join(wl, "\",\""), strmangle.Placeholders(dialect.UseIndexPlaceholders, len(wl), 1, 1))
+			cache.query = fmt.Sprintf("INSERT INTO \"ingest\".\"scheduled_jobs\" (\"%s\") %%sVALUES (%s)%%s", strings.Join(wl, "\",\""), strmangle.Placeholders(dialect.UseIndexPlaceholders, len(wl), 1, 1))
 		} else {
-			cache.query = "INSERT INTO \"schema_ingest\".\"scheduled_jobs\" %sDEFAULT VALUES%s"
+			cache.query = "INSERT INTO \"ingest\".\"scheduled_jobs\" %sDEFAULT VALUES%s"
 		}
 
 		var queryOutput, queryReturning string
@@ -1336,7 +1336,7 @@ func (o *ScheduledJob) Update(ctx context.Context, exec boil.ContextExecutor, co
 			return 0, errors.New("sqlboiler: unable to update scheduled_jobs, could not build whitelist")
 		}
 
-		cache.query = fmt.Sprintf("UPDATE \"schema_ingest\".\"scheduled_jobs\" SET %s WHERE %s",
+		cache.query = fmt.Sprintf("UPDATE \"ingest\".\"scheduled_jobs\" SET %s WHERE %s",
 			strmangle.SetParamNames("\"", "\"", 1, wl),
 			strmangle.WhereClause("\"", "\"", len(wl)+1, scheduledJobPrimaryKeyColumns),
 		)
@@ -1417,7 +1417,7 @@ func (o ScheduledJobSlice) UpdateAll(ctx context.Context, exec boil.ContextExecu
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := fmt.Sprintf("UPDATE \"schema_ingest\".\"scheduled_jobs\" SET %s WHERE %s",
+	sql := fmt.Sprintf("UPDATE \"ingest\".\"scheduled_jobs\" SET %s WHERE %s",
 		strmangle.SetParamNames("\"", "\"", 1, colNames),
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), len(colNames)+1, scheduledJobPrimaryKeyColumns, len(o)))
 
@@ -1520,7 +1520,7 @@ func (o *ScheduledJob) Upsert(ctx context.Context, exec boil.ContextExecutor, up
 			conflict = make([]string, len(scheduledJobPrimaryKeyColumns))
 			copy(conflict, scheduledJobPrimaryKeyColumns)
 		}
-		cache.query = buildUpsertQueryPostgres(dialect, "\"schema_ingest\".\"scheduled_jobs\"", updateOnConflict, ret, update, conflict, insert, opts...)
+		cache.query = buildUpsertQueryPostgres(dialect, "\"ingest\".\"scheduled_jobs\"", updateOnConflict, ret, update, conflict, insert, opts...)
 
 		cache.valueMapping, err = queries.BindMapping(scheduledJobType, scheduledJobMapping, insert)
 		if err != nil {
@@ -1579,7 +1579,7 @@ func (o *ScheduledJob) Delete(ctx context.Context, exec boil.ContextExecutor) (i
 	}
 
 	args := queries.ValuesFromMapping(reflect.Indirect(reflect.ValueOf(o)), scheduledJobPrimaryKeyMapping)
-	sql := "DELETE FROM \"schema_ingest\".\"scheduled_jobs\" WHERE \"id\"=$1"
+	sql := "DELETE FROM \"ingest\".\"scheduled_jobs\" WHERE \"id\"=$1"
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)
@@ -1644,7 +1644,7 @@ func (o ScheduledJobSlice) DeleteAll(ctx context.Context, exec boil.ContextExecu
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := "DELETE FROM \"schema_ingest\".\"scheduled_jobs\" WHERE " +
+	sql := "DELETE FROM \"ingest\".\"scheduled_jobs\" WHERE " +
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), 1, scheduledJobPrimaryKeyColumns, len(o))
 
 	if boil.IsDebug(ctx) {
@@ -1699,7 +1699,7 @@ func (o *ScheduledJobSlice) ReloadAll(ctx context.Context, exec boil.ContextExec
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := "SELECT \"schema_ingest\".\"scheduled_jobs\".* FROM \"schema_ingest\".\"scheduled_jobs\" WHERE " +
+	sql := "SELECT \"ingest\".\"scheduled_jobs\".* FROM \"ingest\".\"scheduled_jobs\" WHERE " +
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), 1, scheduledJobPrimaryKeyColumns, len(*o))
 
 	q := queries.Raw(sql, args...)
@@ -1717,7 +1717,7 @@ func (o *ScheduledJobSlice) ReloadAll(ctx context.Context, exec boil.ContextExec
 // ScheduledJobExists checks if the ScheduledJob row exists.
 func ScheduledJobExists(ctx context.Context, exec boil.ContextExecutor, iD string) (bool, error) {
 	var exists bool
-	sql := "select exists(select 1 from \"schema_ingest\".\"scheduled_jobs\" where \"id\"=$1 limit 1)"
+	sql := "select exists(select 1 from \"ingest\".\"scheduled_jobs\" where \"id\"=$1 limit 1)"
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)

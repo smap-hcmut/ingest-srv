@@ -131,21 +131,21 @@ var DryrunResultWhere = struct {
 	CompletedAt  whereHelpernull_Time
 	CreatedAt    whereHelpertime_Time
 }{
-	ID:           whereHelperstring{field: "\"schema_ingest\".\"dryrun_results\".\"id\""},
-	SourceID:     whereHelperstring{field: "\"schema_ingest\".\"dryrun_results\".\"source_id\""},
-	ProjectID:    whereHelperstring{field: "\"schema_ingest\".\"dryrun_results\".\"project_id\""},
-	TargetID:     whereHelpernull_String{field: "\"schema_ingest\".\"dryrun_results\".\"target_id\""},
-	JobID:        whereHelpernull_String{field: "\"schema_ingest\".\"dryrun_results\".\"job_id\""},
-	Status:       whereHelperDryrunStatus{field: "\"schema_ingest\".\"dryrun_results\".\"status\""},
-	SampleCount:  whereHelperint{field: "\"schema_ingest\".\"dryrun_results\".\"sample_count\""},
-	TotalFound:   whereHelpernull_Int{field: "\"schema_ingest\".\"dryrun_results\".\"total_found\""},
-	SampleData:   whereHelpernull_JSON{field: "\"schema_ingest\".\"dryrun_results\".\"sample_data\""},
-	Warnings:     whereHelpernull_JSON{field: "\"schema_ingest\".\"dryrun_results\".\"warnings\""},
-	ErrorMessage: whereHelpernull_String{field: "\"schema_ingest\".\"dryrun_results\".\"error_message\""},
-	RequestedBy:  whereHelpernull_String{field: "\"schema_ingest\".\"dryrun_results\".\"requested_by\""},
-	StartedAt:    whereHelpernull_Time{field: "\"schema_ingest\".\"dryrun_results\".\"started_at\""},
-	CompletedAt:  whereHelpernull_Time{field: "\"schema_ingest\".\"dryrun_results\".\"completed_at\""},
-	CreatedAt:    whereHelpertime_Time{field: "\"schema_ingest\".\"dryrun_results\".\"created_at\""},
+	ID:           whereHelperstring{field: "\"ingest\".\"dryrun_results\".\"id\""},
+	SourceID:     whereHelperstring{field: "\"ingest\".\"dryrun_results\".\"source_id\""},
+	ProjectID:    whereHelperstring{field: "\"ingest\".\"dryrun_results\".\"project_id\""},
+	TargetID:     whereHelpernull_String{field: "\"ingest\".\"dryrun_results\".\"target_id\""},
+	JobID:        whereHelpernull_String{field: "\"ingest\".\"dryrun_results\".\"job_id\""},
+	Status:       whereHelperDryrunStatus{field: "\"ingest\".\"dryrun_results\".\"status\""},
+	SampleCount:  whereHelperint{field: "\"ingest\".\"dryrun_results\".\"sample_count\""},
+	TotalFound:   whereHelpernull_Int{field: "\"ingest\".\"dryrun_results\".\"total_found\""},
+	SampleData:   whereHelpernull_JSON{field: "\"ingest\".\"dryrun_results\".\"sample_data\""},
+	Warnings:     whereHelpernull_JSON{field: "\"ingest\".\"dryrun_results\".\"warnings\""},
+	ErrorMessage: whereHelpernull_String{field: "\"ingest\".\"dryrun_results\".\"error_message\""},
+	RequestedBy:  whereHelpernull_String{field: "\"ingest\".\"dryrun_results\".\"requested_by\""},
+	StartedAt:    whereHelpernull_Time{field: "\"ingest\".\"dryrun_results\".\"started_at\""},
+	CompletedAt:  whereHelpernull_Time{field: "\"ingest\".\"dryrun_results\".\"completed_at\""},
+	CreatedAt:    whereHelpertime_Time{field: "\"ingest\".\"dryrun_results\".\"created_at\""},
 }
 
 // DryrunResultRels is where relationship names are stored.
@@ -565,7 +565,7 @@ func (o *DryrunResult) DryrunLastResultDataSources(mods ...qm.QueryMod) dataSour
 	}
 
 	queryMods = append(queryMods,
-		qm.Where("\"schema_ingest\".\"data_sources\".\"dryrun_last_result_id\"=?", o.ID),
+		qm.Where("\"ingest\".\"data_sources\".\"dryrun_last_result_id\"=?", o.ID),
 	)
 
 	return DataSources(queryMods...)
@@ -629,9 +629,9 @@ func (dryrunResultL) LoadSource(ctx context.Context, e boil.ContextExecutor, sin
 	}
 
 	query := NewQuery(
-		qm.From(`schema_ingest.data_sources`),
-		qm.WhereIn(`schema_ingest.data_sources.id in ?`, argsSlice...),
-		qmhelper.WhereIsNull(`schema_ingest.data_sources.deleted_at`),
+		qm.From(`ingest.data_sources`),
+		qm.WhereIn(`ingest.data_sources.id in ?`, argsSlice...),
+		qmhelper.WhereIsNull(`ingest.data_sources.deleted_at`),
 	)
 	if mods != nil {
 		mods.Apply(query)
@@ -754,8 +754,8 @@ func (dryrunResultL) LoadTarget(ctx context.Context, e boil.ContextExecutor, sin
 	}
 
 	query := NewQuery(
-		qm.From(`schema_ingest.crawl_targets`),
-		qm.WhereIn(`schema_ingest.crawl_targets.id in ?`, argsSlice...),
+		qm.From(`ingest.crawl_targets`),
+		qm.WhereIn(`ingest.crawl_targets.id in ?`, argsSlice...),
 	)
 	if mods != nil {
 		mods.Apply(query)
@@ -871,9 +871,9 @@ func (dryrunResultL) LoadDryrunLastResultDataSources(ctx context.Context, e boil
 	}
 
 	query := NewQuery(
-		qm.From(`schema_ingest.data_sources`),
-		qm.WhereIn(`schema_ingest.data_sources.dryrun_last_result_id in ?`, argsSlice...),
-		qmhelper.WhereIsNull(`schema_ingest.data_sources.deleted_at`),
+		qm.From(`ingest.data_sources`),
+		qm.WhereIn(`ingest.data_sources.dryrun_last_result_id in ?`, argsSlice...),
+		qmhelper.WhereIsNull(`ingest.data_sources.deleted_at`),
 	)
 	if mods != nil {
 		mods.Apply(query)
@@ -942,7 +942,7 @@ func (o *DryrunResult) SetSource(ctx context.Context, exec boil.ContextExecutor,
 	}
 
 	updateQuery := fmt.Sprintf(
-		"UPDATE \"schema_ingest\".\"dryrun_results\" SET %s WHERE %s",
+		"UPDATE \"ingest\".\"dryrun_results\" SET %s WHERE %s",
 		strmangle.SetParamNames("\"", "\"", 1, []string{"source_id"}),
 		strmangle.WhereClause("\"", "\"", 2, dryrunResultPrimaryKeyColumns),
 	)
@@ -989,7 +989,7 @@ func (o *DryrunResult) SetTarget(ctx context.Context, exec boil.ContextExecutor,
 	}
 
 	updateQuery := fmt.Sprintf(
-		"UPDATE \"schema_ingest\".\"dryrun_results\" SET %s WHERE %s",
+		"UPDATE \"ingest\".\"dryrun_results\" SET %s WHERE %s",
 		strmangle.SetParamNames("\"", "\"", 1, []string{"target_id"}),
 		strmangle.WhereClause("\"", "\"", 2, dryrunResultPrimaryKeyColumns),
 	)
@@ -1071,7 +1071,7 @@ func (o *DryrunResult) AddDryrunLastResultDataSources(ctx context.Context, exec 
 			}
 		} else {
 			updateQuery := fmt.Sprintf(
-				"UPDATE \"schema_ingest\".\"data_sources\" SET %s WHERE %s",
+				"UPDATE \"ingest\".\"data_sources\" SET %s WHERE %s",
 				strmangle.SetParamNames("\"", "\"", 1, []string{"dryrun_last_result_id"}),
 				strmangle.WhereClause("\"", "\"", 2, dataSourcePrimaryKeyColumns),
 			)
@@ -1117,7 +1117,7 @@ func (o *DryrunResult) AddDryrunLastResultDataSources(ctx context.Context, exec 
 // Replaces o.R.DryrunLastResultDataSources with related.
 // Sets related.R.DryrunLastResult's DryrunLastResultDataSources accordingly.
 func (o *DryrunResult) SetDryrunLastResultDataSources(ctx context.Context, exec boil.ContextExecutor, insert bool, related ...*DataSource) error {
-	query := "update \"schema_ingest\".\"data_sources\" set \"dryrun_last_result_id\" = null where \"dryrun_last_result_id\" = $1"
+	query := "update \"ingest\".\"data_sources\" set \"dryrun_last_result_id\" = null where \"dryrun_last_result_id\" = $1"
 	values := []any{o.ID}
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)
@@ -1186,10 +1186,10 @@ func (o *DryrunResult) RemoveDryrunLastResultDataSources(ctx context.Context, ex
 
 // DryrunResults retrieves all the records using an executor.
 func DryrunResults(mods ...qm.QueryMod) dryrunResultQuery {
-	mods = append(mods, qm.From("\"schema_ingest\".\"dryrun_results\""))
+	mods = append(mods, qm.From("\"ingest\".\"dryrun_results\""))
 	q := NewQuery(mods...)
 	if len(queries.GetSelect(q)) == 0 {
-		queries.SetSelect(q, []string{"\"schema_ingest\".\"dryrun_results\".*"})
+		queries.SetSelect(q, []string{"\"ingest\".\"dryrun_results\".*"})
 	}
 
 	return dryrunResultQuery{q}
@@ -1205,7 +1205,7 @@ func FindDryrunResult(ctx context.Context, exec boil.ContextExecutor, iD string,
 		sel = strings.Join(strmangle.IdentQuoteSlice(dialect.LQ, dialect.RQ, selectCols), ",")
 	}
 	query := fmt.Sprintf(
-		"select %s from \"schema_ingest\".\"dryrun_results\" where \"id\"=$1", sel,
+		"select %s from \"ingest\".\"dryrun_results\" where \"id\"=$1", sel,
 	)
 
 	q := queries.Raw(query, iD)
@@ -1269,9 +1269,9 @@ func (o *DryrunResult) Insert(ctx context.Context, exec boil.ContextExecutor, co
 			return err
 		}
 		if len(wl) != 0 {
-			cache.query = fmt.Sprintf("INSERT INTO \"schema_ingest\".\"dryrun_results\" (\"%s\") %%sVALUES (%s)%%s", strings.Join(wl, "\",\""), strmangle.Placeholders(dialect.UseIndexPlaceholders, len(wl), 1, 1))
+			cache.query = fmt.Sprintf("INSERT INTO \"ingest\".\"dryrun_results\" (\"%s\") %%sVALUES (%s)%%s", strings.Join(wl, "\",\""), strmangle.Placeholders(dialect.UseIndexPlaceholders, len(wl), 1, 1))
 		} else {
-			cache.query = "INSERT INTO \"schema_ingest\".\"dryrun_results\" %sDEFAULT VALUES%s"
+			cache.query = "INSERT INTO \"ingest\".\"dryrun_results\" %sDEFAULT VALUES%s"
 		}
 
 		var queryOutput, queryReturning string
@@ -1337,7 +1337,7 @@ func (o *DryrunResult) Update(ctx context.Context, exec boil.ContextExecutor, co
 			return 0, errors.New("sqlboiler: unable to update dryrun_results, could not build whitelist")
 		}
 
-		cache.query = fmt.Sprintf("UPDATE \"schema_ingest\".\"dryrun_results\" SET %s WHERE %s",
+		cache.query = fmt.Sprintf("UPDATE \"ingest\".\"dryrun_results\" SET %s WHERE %s",
 			strmangle.SetParamNames("\"", "\"", 1, wl),
 			strmangle.WhereClause("\"", "\"", len(wl)+1, dryrunResultPrimaryKeyColumns),
 		)
@@ -1418,7 +1418,7 @@ func (o DryrunResultSlice) UpdateAll(ctx context.Context, exec boil.ContextExecu
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := fmt.Sprintf("UPDATE \"schema_ingest\".\"dryrun_results\" SET %s WHERE %s",
+	sql := fmt.Sprintf("UPDATE \"ingest\".\"dryrun_results\" SET %s WHERE %s",
 		strmangle.SetParamNames("\"", "\"", 1, colNames),
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), len(colNames)+1, dryrunResultPrimaryKeyColumns, len(o)))
 
@@ -1521,7 +1521,7 @@ func (o *DryrunResult) Upsert(ctx context.Context, exec boil.ContextExecutor, up
 			conflict = make([]string, len(dryrunResultPrimaryKeyColumns))
 			copy(conflict, dryrunResultPrimaryKeyColumns)
 		}
-		cache.query = buildUpsertQueryPostgres(dialect, "\"schema_ingest\".\"dryrun_results\"", updateOnConflict, ret, update, conflict, insert, opts...)
+		cache.query = buildUpsertQueryPostgres(dialect, "\"ingest\".\"dryrun_results\"", updateOnConflict, ret, update, conflict, insert, opts...)
 
 		cache.valueMapping, err = queries.BindMapping(dryrunResultType, dryrunResultMapping, insert)
 		if err != nil {
@@ -1580,7 +1580,7 @@ func (o *DryrunResult) Delete(ctx context.Context, exec boil.ContextExecutor) (i
 	}
 
 	args := queries.ValuesFromMapping(reflect.Indirect(reflect.ValueOf(o)), dryrunResultPrimaryKeyMapping)
-	sql := "DELETE FROM \"schema_ingest\".\"dryrun_results\" WHERE \"id\"=$1"
+	sql := "DELETE FROM \"ingest\".\"dryrun_results\" WHERE \"id\"=$1"
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)
@@ -1645,7 +1645,7 @@ func (o DryrunResultSlice) DeleteAll(ctx context.Context, exec boil.ContextExecu
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := "DELETE FROM \"schema_ingest\".\"dryrun_results\" WHERE " +
+	sql := "DELETE FROM \"ingest\".\"dryrun_results\" WHERE " +
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), 1, dryrunResultPrimaryKeyColumns, len(o))
 
 	if boil.IsDebug(ctx) {
@@ -1700,7 +1700,7 @@ func (o *DryrunResultSlice) ReloadAll(ctx context.Context, exec boil.ContextExec
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := "SELECT \"schema_ingest\".\"dryrun_results\".* FROM \"schema_ingest\".\"dryrun_results\" WHERE " +
+	sql := "SELECT \"ingest\".\"dryrun_results\".* FROM \"ingest\".\"dryrun_results\" WHERE " +
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), 1, dryrunResultPrimaryKeyColumns, len(*o))
 
 	q := queries.Raw(sql, args...)
@@ -1718,7 +1718,7 @@ func (o *DryrunResultSlice) ReloadAll(ctx context.Context, exec boil.ContextExec
 // DryrunResultExists checks if the DryrunResult row exists.
 func DryrunResultExists(ctx context.Context, exec boil.ContextExecutor, iD string) (bool, error) {
 	var exists bool
-	sql := "select exists(select 1 from \"schema_ingest\".\"dryrun_results\" where \"id\"=$1 limit 1)"
+	sql := "select exists(select 1 from \"ingest\".\"dryrun_results\" where \"id\"=$1 limit 1)"
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)

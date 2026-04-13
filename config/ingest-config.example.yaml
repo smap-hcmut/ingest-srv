@@ -21,7 +21,7 @@ postgres:
   password: ingest_master_pwd
   dbname: smap
   sslmode: disable
-  schema: schema_ingest
+  schema: ingest
 
 redis:
   host: redis.tantai.dev

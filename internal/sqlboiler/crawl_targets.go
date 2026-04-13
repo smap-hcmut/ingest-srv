@@ -251,22 +251,22 @@ var CrawlTargetWhere = struct {
 	CreatedAt            whereHelpertime_Time
 	UpdatedAt            whereHelpertime_Time
 }{
-	ID:                   whereHelperstring{field: "\"schema_ingest\".\"crawl_targets\".\"id\""},
-	DataSourceID:         whereHelperstring{field: "\"schema_ingest\".\"crawl_targets\".\"data_source_id\""},
-	TargetType:           whereHelperTargetType{field: "\"schema_ingest\".\"crawl_targets\".\"target_type\""},
-	Values:               whereHelpertypes_JSON{field: "\"schema_ingest\".\"crawl_targets\".\"values\""},
-	Label:                whereHelpernull_String{field: "\"schema_ingest\".\"crawl_targets\".\"label\""},
-	PlatformMeta:         whereHelpernull_JSON{field: "\"schema_ingest\".\"crawl_targets\".\"platform_meta\""},
-	IsActive:             whereHelperbool{field: "\"schema_ingest\".\"crawl_targets\".\"is_active\""},
-	Priority:             whereHelperint{field: "\"schema_ingest\".\"crawl_targets\".\"priority\""},
-	CrawlIntervalMinutes: whereHelperint{field: "\"schema_ingest\".\"crawl_targets\".\"crawl_interval_minutes\""},
-	NextCrawlAt:          whereHelpernull_Time{field: "\"schema_ingest\".\"crawl_targets\".\"next_crawl_at\""},
-	LastCrawlAt:          whereHelpernull_Time{field: "\"schema_ingest\".\"crawl_targets\".\"last_crawl_at\""},
-	LastSuccessAt:        whereHelpernull_Time{field: "\"schema_ingest\".\"crawl_targets\".\"last_success_at\""},
-	LastErrorAt:          whereHelpernull_Time{field: "\"schema_ingest\".\"crawl_targets\".\"last_error_at\""},
-	LastErrorMessage:     whereHelpernull_String{field: "\"schema_ingest\".\"crawl_targets\".\"last_error_message\""},
-	CreatedAt:            whereHelpertime_Time{field: "\"schema_ingest\".\"crawl_targets\".\"created_at\""},
-	UpdatedAt:            whereHelpertime_Time{field: "\"schema_ingest\".\"crawl_targets\".\"updated_at\""},
+	ID:                   whereHelperstring{field: "\"ingest\".\"crawl_targets\".\"id\""},
+	DataSourceID:         whereHelperstring{field: "\"ingest\".\"crawl_targets\".\"data_source_id\""},
+	TargetType:           whereHelperTargetType{field: "\"ingest\".\"crawl_targets\".\"target_type\""},
+	Values:               whereHelpertypes_JSON{field: "\"ingest\".\"crawl_targets\".\"values\""},
+	Label:                whereHelpernull_String{field: "\"ingest\".\"crawl_targets\".\"label\""},
+	PlatformMeta:         whereHelpernull_JSON{field: "\"ingest\".\"crawl_targets\".\"platform_meta\""},
+	IsActive:             whereHelperbool{field: "\"ingest\".\"crawl_targets\".\"is_active\""},
+	Priority:             whereHelperint{field: "\"ingest\".\"crawl_targets\".\"priority\""},
+	CrawlIntervalMinutes: whereHelperint{field: "\"ingest\".\"crawl_targets\".\"crawl_interval_minutes\""},
+	NextCrawlAt:          whereHelpernull_Time{field: "\"ingest\".\"crawl_targets\".\"next_crawl_at\""},
+	LastCrawlAt:          whereHelpernull_Time{field: "\"ingest\".\"crawl_targets\".\"last_crawl_at\""},
+	LastSuccessAt:        whereHelpernull_Time{field: "\"ingest\".\"crawl_targets\".\"last_success_at\""},
+	LastErrorAt:          whereHelpernull_Time{field: "\"ingest\".\"crawl_targets\".\"last_error_at\""},
+	LastErrorMessage:     whereHelpernull_String{field: "\"ingest\".\"crawl_targets\".\"last_error_message\""},
+	CreatedAt:            whereHelpertime_Time{field: "\"ingest\".\"crawl_targets\".\"created_at\""},
+	UpdatedAt:            whereHelpertime_Time{field: "\"ingest\".\"crawl_targets\".\"updated_at\""},
 }
 
 // CrawlTargetRels is where relationship names are stored.
@@ -694,7 +694,7 @@ func (o *CrawlTarget) TargetDryrunResults(mods ...qm.QueryMod) dryrunResultQuery
 	}
 
 	queryMods = append(queryMods,
-		qm.Where("\"schema_ingest\".\"dryrun_results\".\"target_id\"=?", o.ID),
+		qm.Where("\"ingest\".\"dryrun_results\".\"target_id\"=?", o.ID),
 	)
 
 	return DryrunResults(queryMods...)
@@ -708,7 +708,7 @@ func (o *CrawlTarget) TargetExternalTasks(mods ...qm.QueryMod) externalTaskQuery
 	}
 
 	queryMods = append(queryMods,
-		qm.Where("\"schema_ingest\".\"external_tasks\".\"target_id\"=?", o.ID),
+		qm.Where("\"ingest\".\"external_tasks\".\"target_id\"=?", o.ID),
 	)
 
 	return ExternalTasks(queryMods...)
@@ -722,7 +722,7 @@ func (o *CrawlTarget) TargetScheduledJobs(mods ...qm.QueryMod) scheduledJobQuery
 	}
 
 	queryMods = append(queryMods,
-		qm.Where("\"schema_ingest\".\"scheduled_jobs\".\"target_id\"=?", o.ID),
+		qm.Where("\"ingest\".\"scheduled_jobs\".\"target_id\"=?", o.ID),
 	)
 
 	return ScheduledJobs(queryMods...)
@@ -786,9 +786,9 @@ func (crawlTargetL) LoadDataSource(ctx context.Context, e boil.ContextExecutor, 
 	}
 
 	query := NewQuery(
-		qm.From(`schema_ingest.data_sources`),
-		qm.WhereIn(`schema_ingest.data_sources.id in ?`, argsSlice...),
-		qmhelper.WhereIsNull(`schema_ingest.data_sources.deleted_at`),
+		qm.From(`ingest.data_sources`),
+		qm.WhereIn(`ingest.data_sources.id in ?`, argsSlice...),
+		qmhelper.WhereIsNull(`ingest.data_sources.deleted_at`),
 	)
 	if mods != nil {
 		mods.Apply(query)
@@ -904,8 +904,8 @@ func (crawlTargetL) LoadTargetDryrunResults(ctx context.Context, e boil.ContextE
 	}
 
 	query := NewQuery(
-		qm.From(`schema_ingest.dryrun_results`),
-		qm.WhereIn(`schema_ingest.dryrun_results.target_id in ?`, argsSlice...),
+		qm.From(`ingest.dryrun_results`),
+		qm.WhereIn(`ingest.dryrun_results.target_id in ?`, argsSlice...),
 	)
 	if mods != nil {
 		mods.Apply(query)
@@ -1017,8 +1017,8 @@ func (crawlTargetL) LoadTargetExternalTasks(ctx context.Context, e boil.ContextE
 	}
 
 	query := NewQuery(
-		qm.From(`schema_ingest.external_tasks`),
-		qm.WhereIn(`schema_ingest.external_tasks.target_id in ?`, argsSlice...),
+		qm.From(`ingest.external_tasks`),
+		qm.WhereIn(`ingest.external_tasks.target_id in ?`, argsSlice...),
 	)
 	if mods != nil {
 		mods.Apply(query)
@@ -1130,8 +1130,8 @@ func (crawlTargetL) LoadTargetScheduledJobs(ctx context.Context, e boil.ContextE
 	}
 
 	query := NewQuery(
-		qm.From(`schema_ingest.scheduled_jobs`),
-		qm.WhereIn(`schema_ingest.scheduled_jobs.target_id in ?`, argsSlice...),
+		qm.From(`ingest.scheduled_jobs`),
+		qm.WhereIn(`ingest.scheduled_jobs.target_id in ?`, argsSlice...),
 	)
 	if mods != nil {
 		mods.Apply(query)
@@ -1200,7 +1200,7 @@ func (o *CrawlTarget) SetDataSource(ctx context.Context, exec boil.ContextExecut
 	}
 
 	updateQuery := fmt.Sprintf(
-		"UPDATE \"schema_ingest\".\"crawl_targets\" SET %s WHERE %s",
+		"UPDATE \"ingest\".\"crawl_targets\" SET %s WHERE %s",
 		strmangle.SetParamNames("\"", "\"", 1, []string{"data_source_id"}),
 		strmangle.WhereClause("\"", "\"", 2, crawlTargetPrimaryKeyColumns),
 	)
@@ -1249,7 +1249,7 @@ func (o *CrawlTarget) AddTargetDryrunResults(ctx context.Context, exec boil.Cont
 			}
 		} else {
 			updateQuery := fmt.Sprintf(
-				"UPDATE \"schema_ingest\".\"dryrun_results\" SET %s WHERE %s",
+				"UPDATE \"ingest\".\"dryrun_results\" SET %s WHERE %s",
 				strmangle.SetParamNames("\"", "\"", 1, []string{"target_id"}),
 				strmangle.WhereClause("\"", "\"", 2, dryrunResultPrimaryKeyColumns),
 			)
@@ -1295,7 +1295,7 @@ func (o *CrawlTarget) AddTargetDryrunResults(ctx context.Context, exec boil.Cont
 // Replaces o.R.TargetDryrunResults with related.
 // Sets related.R.Target's TargetDryrunResults accordingly.
 func (o *CrawlTarget) SetTargetDryrunResults(ctx context.Context, exec boil.ContextExecutor, insert bool, related ...*DryrunResult) error {
-	query := "update \"schema_ingest\".\"dryrun_results\" set \"target_id\" = null where \"target_id\" = $1"
+	query := "update \"ingest\".\"dryrun_results\" set \"target_id\" = null where \"target_id\" = $1"
 	values := []any{o.ID}
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)
@@ -1376,7 +1376,7 @@ func (o *CrawlTarget) AddTargetExternalTasks(ctx context.Context, exec boil.Cont
 			}
 		} else {
 			updateQuery := fmt.Sprintf(
-				"UPDATE \"schema_ingest\".\"external_tasks\" SET %s WHERE %s",
+				"UPDATE \"ingest\".\"external_tasks\" SET %s WHERE %s",
 				strmangle.SetParamNames("\"", "\"", 1, []string{"target_id"}),
 				strmangle.WhereClause("\"", "\"", 2, externalTaskPrimaryKeyColumns),
 			)
@@ -1422,7 +1422,7 @@ func (o *CrawlTarget) AddTargetExternalTasks(ctx context.Context, exec boil.Cont
 // Replaces o.R.TargetExternalTasks with related.
 // Sets related.R.Target's TargetExternalTasks accordingly.
 func (o *CrawlTarget) SetTargetExternalTasks(ctx context.Context, exec boil.ContextExecutor, insert bool, related ...*ExternalTask) error {
-	query := "update \"schema_ingest\".\"external_tasks\" set \"target_id\" = null where \"target_id\" = $1"
+	query := "update \"ingest\".\"external_tasks\" set \"target_id\" = null where \"target_id\" = $1"
 	values := []any{o.ID}
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)
@@ -1503,7 +1503,7 @@ func (o *CrawlTarget) AddTargetScheduledJobs(ctx context.Context, exec boil.Cont
 			}
 		} else {
 			updateQuery := fmt.Sprintf(
-				"UPDATE \"schema_ingest\".\"scheduled_jobs\" SET %s WHERE %s",
+				"UPDATE \"ingest\".\"scheduled_jobs\" SET %s WHERE %s",
 				strmangle.SetParamNames("\"", "\"", 1, []string{"target_id"}),
 				strmangle.WhereClause("\"", "\"", 2, scheduledJobPrimaryKeyColumns),
 			)
@@ -1549,7 +1549,7 @@ func (o *CrawlTarget) AddTargetScheduledJobs(ctx context.Context, exec boil.Cont
 // Replaces o.R.TargetScheduledJobs with related.
 // Sets related.R.Target's TargetScheduledJobs accordingly.
 func (o *CrawlTarget) SetTargetScheduledJobs(ctx context.Context, exec boil.ContextExecutor, insert bool, related ...*ScheduledJob) error {
-	query := "update \"schema_ingest\".\"scheduled_jobs\" set \"target_id\" = null where \"target_id\" = $1"
+	query := "update \"ingest\".\"scheduled_jobs\" set \"target_id\" = null where \"target_id\" = $1"
 	values := []any{o.ID}
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)
@@ -1618,10 +1618,10 @@ func (o *CrawlTarget) RemoveTargetScheduledJobs(ctx context.Context, exec boil.C
 
 // CrawlTargets retrieves all the records using an executor.
 func CrawlTargets(mods ...qm.QueryMod) crawlTargetQuery {
-	mods = append(mods, qm.From("\"schema_ingest\".\"crawl_targets\""))
+	mods = append(mods, qm.From("\"ingest\".\"crawl_targets\""))
 	q := NewQuery(mods...)
 	if len(queries.GetSelect(q)) == 0 {
-		queries.SetSelect(q, []string{"\"schema_ingest\".\"crawl_targets\".*"})
+		queries.SetSelect(q, []string{"\"ingest\".\"crawl_targets\".*"})
 	}
 
 	return crawlTargetQuery{q}
@@ -1637,7 +1637,7 @@ func FindCrawlTarget(ctx context.Context, exec boil.ContextExecutor, iD string, 
 		sel = strings.Join(strmangle.IdentQuoteSlice(dialect.LQ, dialect.RQ, selectCols), ",")
 	}
 	query := fmt.Sprintf(
-		"select %s from \"schema_ingest\".\"crawl_targets\" where \"id\"=$1", sel,
+		"select %s from \"ingest\".\"crawl_targets\" where \"id\"=$1", sel,
 	)
 
 	q := queries.Raw(query, iD)
@@ -1704,9 +1704,9 @@ func (o *CrawlTarget) Insert(ctx context.Context, exec boil.ContextExecutor, col
 			return err
 		}
 		if len(wl) != 0 {
-			cache.query = fmt.Sprintf("INSERT INTO \"schema_ingest\".\"crawl_targets\" (\"%s\") %%sVALUES (%s)%%s", strings.Join(wl, "\",\""), strmangle.Placeholders(dialect.UseIndexPlaceholders, len(wl), 1, 1))
+			cache.query = fmt.Sprintf("INSERT INTO \"ingest\".\"crawl_targets\" (\"%s\") %%sVALUES (%s)%%s", strings.Join(wl, "\",\""), strmangle.Placeholders(dialect.UseIndexPlaceholders, len(wl), 1, 1))
 		} else {
-			cache.query = "INSERT INTO \"schema_ingest\".\"crawl_targets\" %sDEFAULT VALUES%s"
+			cache.query = "INSERT INTO \"ingest\".\"crawl_targets\" %sDEFAULT VALUES%s"
 		}
 
 		var queryOutput, queryReturning string
@@ -1778,7 +1778,7 @@ func (o *CrawlTarget) Update(ctx context.Context, exec boil.ContextExecutor, col
 			return 0, errors.New("sqlboiler: unable to update crawl_targets, could not build whitelist")
 		}
 
-		cache.query = fmt.Sprintf("UPDATE \"schema_ingest\".\"crawl_targets\" SET %s WHERE %s",
+		cache.query = fmt.Sprintf("UPDATE \"ingest\".\"crawl_targets\" SET %s WHERE %s",
 			strmangle.SetParamNames("\"", "\"", 1, wl),
 			strmangle.WhereClause("\"", "\"", len(wl)+1, crawlTargetPrimaryKeyColumns),
 		)
@@ -1859,7 +1859,7 @@ func (o CrawlTargetSlice) UpdateAll(ctx context.Context, exec boil.ContextExecut
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := fmt.Sprintf("UPDATE \"schema_ingest\".\"crawl_targets\" SET %s WHERE %s",
+	sql := fmt.Sprintf("UPDATE \"ingest\".\"crawl_targets\" SET %s WHERE %s",
 		strmangle.SetParamNames("\"", "\"", 1, colNames),
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), len(colNames)+1, crawlTargetPrimaryKeyColumns, len(o)))
 
@@ -1963,7 +1963,7 @@ func (o *CrawlTarget) Upsert(ctx context.Context, exec boil.ContextExecutor, upd
 			conflict = make([]string, len(crawlTargetPrimaryKeyColumns))
 			copy(conflict, crawlTargetPrimaryKeyColumns)
 		}
-		cache.query = buildUpsertQueryPostgres(dialect, "\"schema_ingest\".\"crawl_targets\"", updateOnConflict, ret, update, conflict, insert, opts...)
+		cache.query = buildUpsertQueryPostgres(dialect, "\"ingest\".\"crawl_targets\"", updateOnConflict, ret, update, conflict, insert, opts...)
 
 		cache.valueMapping, err = queries.BindMapping(crawlTargetType, crawlTargetMapping, insert)
 		if err != nil {
@@ -2022,7 +2022,7 @@ func (o *CrawlTarget) Delete(ctx context.Context, exec boil.ContextExecutor) (in
 	}
 
 	args := queries.ValuesFromMapping(reflect.Indirect(reflect.ValueOf(o)), crawlTargetPrimaryKeyMapping)
-	sql := "DELETE FROM \"schema_ingest\".\"crawl_targets\" WHERE \"id\"=$1"
+	sql := "DELETE FROM \"ingest\".\"crawl_targets\" WHERE \"id\"=$1"
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)
@@ -2087,7 +2087,7 @@ func (o CrawlTargetSlice) DeleteAll(ctx context.Context, exec boil.ContextExecut
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := "DELETE FROM \"schema_ingest\".\"crawl_targets\" WHERE " +
+	sql := "DELETE FROM \"ingest\".\"crawl_targets\" WHERE " +
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), 1, crawlTargetPrimaryKeyColumns, len(o))
 
 	if boil.IsDebug(ctx) {
@@ -2142,7 +2142,7 @@ func (o *CrawlTargetSlice) ReloadAll(ctx context.Context, exec boil.ContextExecu
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := "SELECT \"schema_ingest\".\"crawl_targets\".* FROM \"schema_ingest\".\"crawl_targets\" WHERE " +
+	sql := "SELECT \"ingest\".\"crawl_targets\".* FROM \"ingest\".\"crawl_targets\" WHERE " +
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), 1, crawlTargetPrimaryKeyColumns, len(*o))
 
 	q := queries.Raw(sql, args...)
@@ -2160,7 +2160,7 @@ func (o *CrawlTargetSlice) ReloadAll(ctx context.Context, exec boil.ContextExecu
 // CrawlTargetExists checks if the CrawlTarget row exists.
 func CrawlTargetExists(ctx context.Context, exec boil.ContextExecutor, iD string) (bool, error) {
 	var exists bool
-	sql := "select exists(select 1 from \"schema_ingest\".\"crawl_targets\" where \"id\"=$1 limit 1)"
+	sql := "select exists(select 1 from \"ingest\".\"crawl_targets\" where \"id\"=$1 limit 1)"
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)

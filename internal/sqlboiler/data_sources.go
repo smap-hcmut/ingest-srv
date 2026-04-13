@@ -467,35 +467,35 @@ var DataSourceWhere = struct {
 	UpdatedAt              whereHelpertime_Time
 	DeletedAt              whereHelpernull_Time
 }{
-	ID:                     whereHelperstring{field: "\"schema_ingest\".\"data_sources\".\"id\""},
-	ProjectID:              whereHelperstring{field: "\"schema_ingest\".\"data_sources\".\"project_id\""},
-	Name:                   whereHelperstring{field: "\"schema_ingest\".\"data_sources\".\"name\""},
-	Description:            whereHelpernull_String{field: "\"schema_ingest\".\"data_sources\".\"description\""},
-	SourceType:             whereHelperSourceType{field: "\"schema_ingest\".\"data_sources\".\"source_type\""},
-	SourceCategory:         whereHelperSourceCategory{field: "\"schema_ingest\".\"data_sources\".\"source_category\""},
-	Status:                 whereHelperSourceStatus{field: "\"schema_ingest\".\"data_sources\".\"status\""},
-	Config:                 whereHelpertypes_JSON{field: "\"schema_ingest\".\"data_sources\".\"config\""},
-	AccountRef:             whereHelpernull_JSON{field: "\"schema_ingest\".\"data_sources\".\"account_ref\""},
-	MappingRules:           whereHelpernull_JSON{field: "\"schema_ingest\".\"data_sources\".\"mapping_rules\""},
-	OnboardingStatus:       whereHelperOnboardingStatus{field: "\"schema_ingest\".\"data_sources\".\"onboarding_status\""},
-	DryrunStatus:           whereHelperDryrunStatus{field: "\"schema_ingest\".\"data_sources\".\"dryrun_status\""},
-	DryrunLastResultID:     whereHelpernull_String{field: "\"schema_ingest\".\"data_sources\".\"dryrun_last_result_id\""},
-	CrawlMode:              whereHelperNullCrawlMode{field: "\"schema_ingest\".\"data_sources\".\"crawl_mode\""},
-	CrawlIntervalMinutes:   whereHelpernull_Int{field: "\"schema_ingest\".\"data_sources\".\"crawl_interval_minutes\""},
-	NextCrawlAt:            whereHelpernull_Time{field: "\"schema_ingest\".\"data_sources\".\"next_crawl_at\""},
-	LastCrawlAt:            whereHelpernull_Time{field: "\"schema_ingest\".\"data_sources\".\"last_crawl_at\""},
-	LastSuccessAt:          whereHelpernull_Time{field: "\"schema_ingest\".\"data_sources\".\"last_success_at\""},
-	LastErrorAt:            whereHelpernull_Time{field: "\"schema_ingest\".\"data_sources\".\"last_error_at\""},
-	LastErrorMessage:       whereHelpernull_String{field: "\"schema_ingest\".\"data_sources\".\"last_error_message\""},
-	WebhookID:              whereHelpernull_String{field: "\"schema_ingest\".\"data_sources\".\"webhook_id\""},
-	WebhookSecretEncrypted: whereHelpernull_String{field: "\"schema_ingest\".\"data_sources\".\"webhook_secret_encrypted\""},
-	CreatedBy:              whereHelpernull_String{field: "\"schema_ingest\".\"data_sources\".\"created_by\""},
-	ActivatedAt:            whereHelpernull_Time{field: "\"schema_ingest\".\"data_sources\".\"activated_at\""},
-	PausedAt:               whereHelpernull_Time{field: "\"schema_ingest\".\"data_sources\".\"paused_at\""},
-	ArchivedAt:             whereHelpernull_Time{field: "\"schema_ingest\".\"data_sources\".\"archived_at\""},
-	CreatedAt:              whereHelpertime_Time{field: "\"schema_ingest\".\"data_sources\".\"created_at\""},
-	UpdatedAt:              whereHelpertime_Time{field: "\"schema_ingest\".\"data_sources\".\"updated_at\""},
-	DeletedAt:              whereHelpernull_Time{field: "\"schema_ingest\".\"data_sources\".\"deleted_at\""},
+	ID:                     whereHelperstring{field: "\"ingest\".\"data_sources\".\"id\""},
+	ProjectID:              whereHelperstring{field: "\"ingest\".\"data_sources\".\"project_id\""},
+	Name:                   whereHelperstring{field: "\"ingest\".\"data_sources\".\"name\""},
+	Description:            whereHelpernull_String{field: "\"ingest\".\"data_sources\".\"description\""},
+	SourceType:             whereHelperSourceType{field: "\"ingest\".\"data_sources\".\"source_type\""},
+	SourceCategory:         whereHelperSourceCategory{field: "\"ingest\".\"data_sources\".\"source_category\""},
+	Status:                 whereHelperSourceStatus{field: "\"ingest\".\"data_sources\".\"status\""},
+	Config:                 whereHelpertypes_JSON{field: "\"ingest\".\"data_sources\".\"config\""},
+	AccountRef:             whereHelpernull_JSON{field: "\"ingest\".\"data_sources\".\"account_ref\""},
+	MappingRules:           whereHelpernull_JSON{field: "\"ingest\".\"data_sources\".\"mapping_rules\""},
+	OnboardingStatus:       whereHelperOnboardingStatus{field: "\"ingest\".\"data_sources\".\"onboarding_status\""},
+	DryrunStatus:           whereHelperDryrunStatus{field: "\"ingest\".\"data_sources\".\"dryrun_status\""},
+	DryrunLastResultID:     whereHelpernull_String{field: "\"ingest\".\"data_sources\".\"dryrun_last_result_id\""},
+	CrawlMode:              whereHelperNullCrawlMode{field: "\"ingest\".\"data_sources\".\"crawl_mode\""},
+	CrawlIntervalMinutes:   whereHelpernull_Int{field: "\"ingest\".\"data_sources\".\"crawl_interval_minutes\""},
+	NextCrawlAt:            whereHelpernull_Time{field: "\"ingest\".\"data_sources\".\"next_crawl_at\""},
+	LastCrawlAt:            whereHelpernull_Time{field: "\"ingest\".\"data_sources\".\"last_crawl_at\""},
+	LastSuccessAt:          whereHelpernull_Time{field: "\"ingest\".\"data_sources\".\"last_success_at\""},
+	LastErrorAt:            whereHelpernull_Time{field: "\"ingest\".\"data_sources\".\"last_error_at\""},
+	LastErrorMessage:       whereHelpernull_String{field: "\"ingest\".\"data_sources\".\"last_error_message\""},
+	WebhookID:              whereHelpernull_String{field: "\"ingest\".\"data_sources\".\"webhook_id\""},
+	WebhookSecretEncrypted: whereHelpernull_String{field: "\"ingest\".\"data_sources\".\"webhook_secret_encrypted\""},
+	CreatedBy:              whereHelpernull_String{field: "\"ingest\".\"data_sources\".\"created_by\""},
+	ActivatedAt:            whereHelpernull_Time{field: "\"ingest\".\"data_sources\".\"activated_at\""},
+	PausedAt:               whereHelpernull_Time{field: "\"ingest\".\"data_sources\".\"paused_at\""},
+	ArchivedAt:             whereHelpernull_Time{field: "\"ingest\".\"data_sources\".\"archived_at\""},
+	CreatedAt:              whereHelpertime_Time{field: "\"ingest\".\"data_sources\".\"created_at\""},
+	UpdatedAt:              whereHelpertime_Time{field: "\"ingest\".\"data_sources\".\"updated_at\""},
+	DeletedAt:              whereHelpernull_Time{field: "\"ingest\".\"data_sources\".\"deleted_at\""},
 }
 
 // DataSourceRels is where relationship names are stored.
@@ -980,7 +980,7 @@ func (o *DataSource) SourceCrawlModeChanges(mods ...qm.QueryMod) crawlModeChange
 	}
 
 	queryMods = append(queryMods,
-		qm.Where("\"schema_ingest\".\"crawl_mode_changes\".\"source_id\"=?", o.ID),
+		qm.Where("\"ingest\".\"crawl_mode_changes\".\"source_id\"=?", o.ID),
 	)
 
 	return CrawlModeChanges(queryMods...)
@@ -994,7 +994,7 @@ func (o *DataSource) CrawlTargets(mods ...qm.QueryMod) crawlTargetQuery {
 	}
 
 	queryMods = append(queryMods,
-		qm.Where("\"schema_ingest\".\"crawl_targets\".\"data_source_id\"=?", o.ID),
+		qm.Where("\"ingest\".\"crawl_targets\".\"data_source_id\"=?", o.ID),
 	)
 
 	return CrawlTargets(queryMods...)
@@ -1008,7 +1008,7 @@ func (o *DataSource) SourceDryrunResults(mods ...qm.QueryMod) dryrunResultQuery 
 	}
 
 	queryMods = append(queryMods,
-		qm.Where("\"schema_ingest\".\"dryrun_results\".\"source_id\"=?", o.ID),
+		qm.Where("\"ingest\".\"dryrun_results\".\"source_id\"=?", o.ID),
 	)
 
 	return DryrunResults(queryMods...)
@@ -1022,7 +1022,7 @@ func (o *DataSource) SourceExternalTasks(mods ...qm.QueryMod) externalTaskQuery 
 	}
 
 	queryMods = append(queryMods,
-		qm.Where("\"schema_ingest\".\"external_tasks\".\"source_id\"=?", o.ID),
+		qm.Where("\"ingest\".\"external_tasks\".\"source_id\"=?", o.ID),
 	)
 
 	return ExternalTasks(queryMods...)
@@ -1036,7 +1036,7 @@ func (o *DataSource) SourceRawBatches(mods ...qm.QueryMod) rawBatchQuery {
 	}
 
 	queryMods = append(queryMods,
-		qm.Where("\"schema_ingest\".\"raw_batches\".\"source_id\"=?", o.ID),
+		qm.Where("\"ingest\".\"raw_batches\".\"source_id\"=?", o.ID),
 	)
 
 	return RawBatches(queryMods...)
@@ -1050,7 +1050,7 @@ func (o *DataSource) SourceScheduledJobs(mods ...qm.QueryMod) scheduledJobQuery 
 	}
 
 	queryMods = append(queryMods,
-		qm.Where("\"schema_ingest\".\"scheduled_jobs\".\"source_id\"=?", o.ID),
+		qm.Where("\"ingest\".\"scheduled_jobs\".\"source_id\"=?", o.ID),
 	)
 
 	return ScheduledJobs(queryMods...)
@@ -1118,8 +1118,8 @@ func (dataSourceL) LoadDryrunLastResult(ctx context.Context, e boil.ContextExecu
 	}
 
 	query := NewQuery(
-		qm.From(`schema_ingest.dryrun_results`),
-		qm.WhereIn(`schema_ingest.dryrun_results.id in ?`, argsSlice...),
+		qm.From(`ingest.dryrun_results`),
+		qm.WhereIn(`ingest.dryrun_results.id in ?`, argsSlice...),
 	)
 	if mods != nil {
 		mods.Apply(query)
@@ -1235,8 +1235,8 @@ func (dataSourceL) LoadSourceCrawlModeChanges(ctx context.Context, e boil.Contex
 	}
 
 	query := NewQuery(
-		qm.From(`schema_ingest.crawl_mode_changes`),
-		qm.WhereIn(`schema_ingest.crawl_mode_changes.source_id in ?`, argsSlice...),
+		qm.From(`ingest.crawl_mode_changes`),
+		qm.WhereIn(`ingest.crawl_mode_changes.source_id in ?`, argsSlice...),
 	)
 	if mods != nil {
 		mods.Apply(query)
@@ -1348,8 +1348,8 @@ func (dataSourceL) LoadCrawlTargets(ctx context.Context, e boil.ContextExecutor,
 	}
 
 	query := NewQuery(
-		qm.From(`schema_ingest.crawl_targets`),
-		qm.WhereIn(`schema_ingest.crawl_targets.data_source_id in ?`, argsSlice...),
+		qm.From(`ingest.crawl_targets`),
+		qm.WhereIn(`ingest.crawl_targets.data_source_id in ?`, argsSlice...),
 	)
 	if mods != nil {
 		mods.Apply(query)
@@ -1461,8 +1461,8 @@ func (dataSourceL) LoadSourceDryrunResults(ctx context.Context, e boil.ContextEx
 	}
 
 	query := NewQuery(
-		qm.From(`schema_ingest.dryrun_results`),
-		qm.WhereIn(`schema_ingest.dryrun_results.source_id in ?`, argsSlice...),
+		qm.From(`ingest.dryrun_results`),
+		qm.WhereIn(`ingest.dryrun_results.source_id in ?`, argsSlice...),
 	)
 	if mods != nil {
 		mods.Apply(query)
@@ -1574,8 +1574,8 @@ func (dataSourceL) LoadSourceExternalTasks(ctx context.Context, e boil.ContextEx
 	}
 
 	query := NewQuery(
-		qm.From(`schema_ingest.external_tasks`),
-		qm.WhereIn(`schema_ingest.external_tasks.source_id in ?`, argsSlice...),
+		qm.From(`ingest.external_tasks`),
+		qm.WhereIn(`ingest.external_tasks.source_id in ?`, argsSlice...),
 	)
 	if mods != nil {
 		mods.Apply(query)
@@ -1687,8 +1687,8 @@ func (dataSourceL) LoadSourceRawBatches(ctx context.Context, e boil.ContextExecu
 	}
 
 	query := NewQuery(
-		qm.From(`schema_ingest.raw_batches`),
-		qm.WhereIn(`schema_ingest.raw_batches.source_id in ?`, argsSlice...),
+		qm.From(`ingest.raw_batches`),
+		qm.WhereIn(`ingest.raw_batches.source_id in ?`, argsSlice...),
 	)
 	if mods != nil {
 		mods.Apply(query)
@@ -1800,8 +1800,8 @@ func (dataSourceL) LoadSourceScheduledJobs(ctx context.Context, e boil.ContextEx
 	}
 
 	query := NewQuery(
-		qm.From(`schema_ingest.scheduled_jobs`),
-		qm.WhereIn(`schema_ingest.scheduled_jobs.source_id in ?`, argsSlice...),
+		qm.From(`ingest.scheduled_jobs`),
+		qm.WhereIn(`ingest.scheduled_jobs.source_id in ?`, argsSlice...),
 	)
 	if mods != nil {
 		mods.Apply(query)
@@ -1870,7 +1870,7 @@ func (o *DataSource) SetDryrunLastResult(ctx context.Context, exec boil.ContextE
 	}
 
 	updateQuery := fmt.Sprintf(
-		"UPDATE \"schema_ingest\".\"data_sources\" SET %s WHERE %s",
+		"UPDATE \"ingest\".\"data_sources\" SET %s WHERE %s",
 		strmangle.SetParamNames("\"", "\"", 1, []string{"dryrun_last_result_id"}),
 		strmangle.WhereClause("\"", "\"", 2, dataSourcePrimaryKeyColumns),
 	)
@@ -1952,7 +1952,7 @@ func (o *DataSource) AddSourceCrawlModeChanges(ctx context.Context, exec boil.Co
 			}
 		} else {
 			updateQuery := fmt.Sprintf(
-				"UPDATE \"schema_ingest\".\"crawl_mode_changes\" SET %s WHERE %s",
+				"UPDATE \"ingest\".\"crawl_mode_changes\" SET %s WHERE %s",
 				strmangle.SetParamNames("\"", "\"", 1, []string{"source_id"}),
 				strmangle.WhereClause("\"", "\"", 2, crawlModeChangePrimaryKeyColumns),
 			)
@@ -2005,7 +2005,7 @@ func (o *DataSource) AddCrawlTargets(ctx context.Context, exec boil.ContextExecu
 			}
 		} else {
 			updateQuery := fmt.Sprintf(
-				"UPDATE \"schema_ingest\".\"crawl_targets\" SET %s WHERE %s",
+				"UPDATE \"ingest\".\"crawl_targets\" SET %s WHERE %s",
 				strmangle.SetParamNames("\"", "\"", 1, []string{"data_source_id"}),
 				strmangle.WhereClause("\"", "\"", 2, crawlTargetPrimaryKeyColumns),
 			)
@@ -2058,7 +2058,7 @@ func (o *DataSource) AddSourceDryrunResults(ctx context.Context, exec boil.Conte
 			}
 		} else {
 			updateQuery := fmt.Sprintf(
-				"UPDATE \"schema_ingest\".\"dryrun_results\" SET %s WHERE %s",
+				"UPDATE \"ingest\".\"dryrun_results\" SET %s WHERE %s",
 				strmangle.SetParamNames("\"", "\"", 1, []string{"source_id"}),
 				strmangle.WhereClause("\"", "\"", 2, dryrunResultPrimaryKeyColumns),
 			)
@@ -2111,7 +2111,7 @@ func (o *DataSource) AddSourceExternalTasks(ctx context.Context, exec boil.Conte
 			}
 		} else {
 			updateQuery := fmt.Sprintf(
-				"UPDATE \"schema_ingest\".\"external_tasks\" SET %s WHERE %s",
+				"UPDATE \"ingest\".\"external_tasks\" SET %s WHERE %s",
 				strmangle.SetParamNames("\"", "\"", 1, []string{"source_id"}),
 				strmangle.WhereClause("\"", "\"", 2, externalTaskPrimaryKeyColumns),
 			)
@@ -2164,7 +2164,7 @@ func (o *DataSource) AddSourceRawBatches(ctx context.Context, exec boil.ContextE
 			}
 		} else {
 			updateQuery := fmt.Sprintf(
-				"UPDATE \"schema_ingest\".\"raw_batches\" SET %s WHERE %s",
+				"UPDATE \"ingest\".\"raw_batches\" SET %s WHERE %s",
 				strmangle.SetParamNames("\"", "\"", 1, []string{"source_id"}),
 				strmangle.WhereClause("\"", "\"", 2, rawBatchPrimaryKeyColumns),
 			)
@@ -2217,7 +2217,7 @@ func (o *DataSource) AddSourceScheduledJobs(ctx context.Context, exec boil.Conte
 			}
 		} else {
 			updateQuery := fmt.Sprintf(
-				"UPDATE \"schema_ingest\".\"scheduled_jobs\" SET %s WHERE %s",
+				"UPDATE \"ingest\".\"scheduled_jobs\" SET %s WHERE %s",
 				strmangle.SetParamNames("\"", "\"", 1, []string{"source_id"}),
 				strmangle.WhereClause("\"", "\"", 2, scheduledJobPrimaryKeyColumns),
 			)
@@ -2258,10 +2258,10 @@ func (o *DataSource) AddSourceScheduledJobs(ctx context.Context, exec boil.Conte
 
 // DataSources retrieves all the records using an executor.
 func DataSources(mods ...qm.QueryMod) dataSourceQuery {
-	mods = append(mods, qm.From("\"schema_ingest\".\"data_sources\""), qmhelper.WhereIsNull("\"schema_ingest\".\"data_sources\".\"deleted_at\""))
+	mods = append(mods, qm.From("\"ingest\".\"data_sources\""), qmhelper.WhereIsNull("\"ingest\".\"data_sources\".\"deleted_at\""))
 	q := NewQuery(mods...)
 	if len(queries.GetSelect(q)) == 0 {
-		queries.SetSelect(q, []string{"\"schema_ingest\".\"data_sources\".*"})
+		queries.SetSelect(q, []string{"\"ingest\".\"data_sources\".*"})
 	}
 
 	return dataSourceQuery{q}
@@ -2277,7 +2277,7 @@ func FindDataSource(ctx context.Context, exec boil.ContextExecutor, iD string, s
 		sel = strings.Join(strmangle.IdentQuoteSlice(dialect.LQ, dialect.RQ, selectCols), ",")
 	}
 	query := fmt.Sprintf(
-		"select %s from \"schema_ingest\".\"data_sources\" where \"id\"=$1 and \"deleted_at\" is null", sel,
+		"select %s from \"ingest\".\"data_sources\" where \"id\"=$1 and \"deleted_at\" is null", sel,
 	)
 
 	q := queries.Raw(query, iD)
@@ -2344,9 +2344,9 @@ func (o *DataSource) Insert(ctx context.Context, exec boil.ContextExecutor, colu
 			return err
 		}
 		if len(wl) != 0 {
-			cache.query = fmt.Sprintf("INSERT INTO \"schema_ingest\".\"data_sources\" (\"%s\") %%sVALUES (%s)%%s", strings.Join(wl, "\",\""), strmangle.Placeholders(dialect.UseIndexPlaceholders, len(wl), 1, 1))
+			cache.query = fmt.Sprintf("INSERT INTO \"ingest\".\"data_sources\" (\"%s\") %%sVALUES (%s)%%s", strings.Join(wl, "\",\""), strmangle.Placeholders(dialect.UseIndexPlaceholders, len(wl), 1, 1))
 		} else {
-			cache.query = "INSERT INTO \"schema_ingest\".\"data_sources\" %sDEFAULT VALUES%s"
+			cache.query = "INSERT INTO \"ingest\".\"data_sources\" %sDEFAULT VALUES%s"
 		}
 
 		var queryOutput, queryReturning string
@@ -2418,7 +2418,7 @@ func (o *DataSource) Update(ctx context.Context, exec boil.ContextExecutor, colu
 			return 0, errors.New("sqlboiler: unable to update data_sources, could not build whitelist")
 		}
 
-		cache.query = fmt.Sprintf("UPDATE \"schema_ingest\".\"data_sources\" SET %s WHERE %s",
+		cache.query = fmt.Sprintf("UPDATE \"ingest\".\"data_sources\" SET %s WHERE %s",
 			strmangle.SetParamNames("\"", "\"", 1, wl),
 			strmangle.WhereClause("\"", "\"", len(wl)+1, dataSourcePrimaryKeyColumns),
 		)
@@ -2499,7 +2499,7 @@ func (o DataSourceSlice) UpdateAll(ctx context.Context, exec boil.ContextExecuto
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := fmt.Sprintf("UPDATE \"schema_ingest\".\"data_sources\" SET %s WHERE %s",
+	sql := fmt.Sprintf("UPDATE \"ingest\".\"data_sources\" SET %s WHERE %s",
 		strmangle.SetParamNames("\"", "\"", 1, colNames),
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), len(colNames)+1, dataSourcePrimaryKeyColumns, len(o)))
 
@@ -2603,7 +2603,7 @@ func (o *DataSource) Upsert(ctx context.Context, exec boil.ContextExecutor, upda
 			conflict = make([]string, len(dataSourcePrimaryKeyColumns))
 			copy(conflict, dataSourcePrimaryKeyColumns)
 		}
-		cache.query = buildUpsertQueryPostgres(dialect, "\"schema_ingest\".\"data_sources\"", updateOnConflict, ret, update, conflict, insert, opts...)
+		cache.query = buildUpsertQueryPostgres(dialect, "\"ingest\".\"data_sources\"", updateOnConflict, ret, update, conflict, insert, opts...)
 
 		cache.valueMapping, err = queries.BindMapping(dataSourceType, dataSourceMapping, insert)
 		if err != nil {
@@ -2667,12 +2667,12 @@ func (o *DataSource) Delete(ctx context.Context, exec boil.ContextExecutor, hard
 	)
 	if hardDelete {
 		args = queries.ValuesFromMapping(reflect.Indirect(reflect.ValueOf(o)), dataSourcePrimaryKeyMapping)
-		sql = "DELETE FROM \"schema_ingest\".\"data_sources\" WHERE \"id\"=$1"
+		sql = "DELETE FROM \"ingest\".\"data_sources\" WHERE \"id\"=$1"
 	} else {
 		currTime := time.Now().In(boil.GetLocation())
 		o.DeletedAt = null.TimeFrom(currTime)
 		wl := []string{"deleted_at"}
-		sql = fmt.Sprintf("UPDATE \"schema_ingest\".\"data_sources\" SET %s WHERE \"id\"=$2",
+		sql = fmt.Sprintf("UPDATE \"ingest\".\"data_sources\" SET %s WHERE \"id\"=$2",
 			strmangle.SetParamNames("\"", "\"", 1, wl),
 		)
 		valueMapping, err := queries.BindMapping(dataSourceType, dataSourceMapping, append(wl, dataSourcePrimaryKeyColumns...))
@@ -2753,7 +2753,7 @@ func (o DataSourceSlice) DeleteAll(ctx context.Context, exec boil.ContextExecuto
 			pkeyArgs := queries.ValuesFromMapping(reflect.Indirect(reflect.ValueOf(obj)), dataSourcePrimaryKeyMapping)
 			args = append(args, pkeyArgs...)
 		}
-		sql = "DELETE FROM \"schema_ingest\".\"data_sources\" WHERE " +
+		sql = "DELETE FROM \"ingest\".\"data_sources\" WHERE " +
 			strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), 1, dataSourcePrimaryKeyColumns, len(o))
 	} else {
 		currTime := time.Now().In(boil.GetLocation())
@@ -2763,7 +2763,7 @@ func (o DataSourceSlice) DeleteAll(ctx context.Context, exec boil.ContextExecuto
 			obj.DeletedAt = null.TimeFrom(currTime)
 		}
 		wl := []string{"deleted_at"}
-		sql = fmt.Sprintf("UPDATE \"schema_ingest\".\"data_sources\" SET %s WHERE "+
+		sql = fmt.Sprintf("UPDATE \"ingest\".\"data_sources\" SET %s WHERE "+
 			strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), 2, dataSourcePrimaryKeyColumns, len(o)),
 			strmangle.SetParamNames("\"", "\"", 1, wl),
 		)
@@ -2822,7 +2822,7 @@ func (o *DataSourceSlice) ReloadAll(ctx context.Context, exec boil.ContextExecut
 		args = append(args, pkeyArgs...)
 	}
 
-	sql := "SELECT \"schema_ingest\".\"data_sources\".* FROM \"schema_ingest\".\"data_sources\" WHERE " +
+	sql := "SELECT \"ingest\".\"data_sources\".* FROM \"ingest\".\"data_sources\" WHERE " +
 		strmangle.WhereClauseRepeated(string(dialect.LQ), string(dialect.RQ), 1, dataSourcePrimaryKeyColumns, len(*o)) +
 		"and \"deleted_at\" is null"
 
@@ -2841,7 +2841,7 @@ func (o *DataSourceSlice) ReloadAll(ctx context.Context, exec boil.ContextExecut
 // DataSourceExists checks if the DataSource row exists.
 func DataSourceExists(ctx context.Context, exec boil.ContextExecutor, iD string) (bool, error) {
 	var exists bool
-	sql := "select exists(select 1 from \"schema_ingest\".\"data_sources\" where \"id\"=$1 and \"deleted_at\" is null limit 1)"
+	sql := "select exists(select 1 from \"ingest\".\"data_sources\" where \"id\"=$1 and \"deleted_at\" is null limit 1)"
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)
