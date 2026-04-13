@@ -71,12 +71,16 @@ func (r createReq) validate() error {
 }
 
 func (r createReq) toInput() datasource.CreateInput {
+	category := strings.TrimSpace(r.SourceCategory)
+	if category == "" {
+		category = inferSourceCategory(strings.TrimSpace(r.SourceType))
+	}
 	return datasource.CreateInput{
 		ProjectID:            strings.TrimSpace(r.ProjectID),
 		Name:                 strings.TrimSpace(r.Name),
 		Description:          r.Description,
 		SourceType:           strings.TrimSpace(r.SourceType),
-		SourceCategory:       strings.TrimSpace(r.SourceCategory),
+		SourceCategory:       category,
 		Config:               r.Config,
 		AccountRef:           r.AccountRef,
 		MappingRules:         r.MappingRules,
