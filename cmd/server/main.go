@@ -27,9 +27,8 @@ import (
 // @title       SMAP Ingest Service API
 // @description SMAP Ingest Service API documentation.
 // @version     1
-// @host        localhost:8080
-// @schemes     http https
-// @BasePath    /api/v1
+// @schemes     https http
+// @BasePath    /ingest/api/v1
 //
 // @securityDefinitions.apikey CookieAuth
 // @in cookie
