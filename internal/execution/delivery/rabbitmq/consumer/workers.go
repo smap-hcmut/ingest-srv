@@ -28,8 +28,8 @@ func (c Consumer) handleCompletionWorker(delivery amqp.Delivery) {
 	}
 
 	if err := c.execUC.HandleCompletion(ctx, message.ToHandleCompletionInput()); err != nil {
-		if errors.Is(err, execution.ErrInvalidCompletionInput) {
-			c.l.Warnf(ctx, "execution.delivery.rabbitmq.consumer.handleCompletionWorker.invalid_input: task_id=%s err=%v", message.TaskID, err)
+		if errors.Is(err, execution.ErrCompletionTaskNotFound) || errors.Is(err, execution.ErrInvalidCompletionInput) {
+			c.l.Warnf(ctx, "execution.delivery.rabbitmq.consumer.handleCompletionWorker.discard: task_id=%s err=%v", message.TaskID, err)
 			_ = delivery.Ack(false)
 			return
 		}
