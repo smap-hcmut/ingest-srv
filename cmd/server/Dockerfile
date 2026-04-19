@@ -10,15 +10,16 @@ WORKDIR /app
 ARG TARGETOS
 ARG TARGETARCH
 
-RUN apk add --no-cache ca-certificates tzdata
+# Install swag alongside apk deps — cached before source COPY
+RUN apk add --no-cache ca-certificates tzdata && \
+    go install github.com/swaggo/swag/cmd/swag@v1.8.12
 
 COPY go.mod go.sum ./
 COPY vendor/ vendor/
 
 COPY . .
 
-# Install swag tool and generate Swagger docs
-RUN go install github.com/swaggo/swag/cmd/swag@v1.8.12
+# Generate Swagger docs (swag already installed above)
 RUN swag init -g cmd/server/main.go --parseVendor
 
 RUN --mount=type=cache,target=/root/.cache/go-build \
