@@ -126,7 +126,7 @@ func (uc *implUseCase) DispatchDueTargets(ctx context.Context, input execution.D
 		currentDispatchCtx, currentErr := uc.repo.GetDispatchContext(ctx, dueTarget.Source.ID, dueTarget.Target.ID)
 		if currentErr != nil {
 			output.SkippedRaceCount++
-			uc.l.Warnf(
+			uc.l.Errorf(
 				ctx,
 				"execution.usecase.DispatchDueTargets.GetDispatchContext.afterClaim: source_id=%s target_id=%s err=%v",
 				dueTarget.Source.ID,
@@ -142,7 +142,7 @@ func (uc *implUseCase) DispatchDueTargets(ctx context.Context, input execution.D
 
 		if err := uc.validateScheduledDispatchContext(currentDispatchCtx); err != nil {
 			output.SkippedRaceCount++
-			uc.l.Warnf(
+			uc.l.Errorf(
 				ctx,
 				"execution.usecase.DispatchDueTargets.validateScheduledDispatchContext.afterClaim: source_id=%s target_id=%s err=%v",
 				dueTarget.Source.ID,

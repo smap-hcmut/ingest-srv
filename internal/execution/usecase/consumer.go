@@ -63,7 +63,7 @@ func (uc *implUseCase) HandleCompletion(ctx context.Context, input execution.Han
 
 		fileInfo, err := uc.verifyMinIOObject(ctx, input.StorageBucket, input.StoragePath)
 		if err != nil {
-			uc.l.Warnf(ctx, "execution.usecase.HandleCompletion.verifyMinIOObject: task_id=%s err=%v", input.TaskID, err)
+			uc.l.Errorf(ctx, "execution.usecase.HandleCompletion.verifyMinIOObject: task_id=%s err=%v", input.TaskID, err)
 			return uc.repo.CompleteTaskError(ctx, repo.CompleteTaskErrorOptions{
 				CompletionContext: completionCtx,
 				ErrorMessage:      err.Error(),
