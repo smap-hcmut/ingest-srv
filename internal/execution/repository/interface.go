@@ -7,6 +7,8 @@ import (
 	"ingest-srv/internal/model"
 )
 
+//go:generate mockery --name Repository
+
 // Repository defines persistence operations for the execution runtime.
 type Repository interface {
 	GetDispatchContext(ctx context.Context, dataSourceID, targetID string) (DispatchContext, error)

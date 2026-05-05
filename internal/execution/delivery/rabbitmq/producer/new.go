@@ -17,6 +17,8 @@ type Producer interface {
 	Close()
 }
 
+//go:generate mockery --name Producer
+
 type implProducer struct {
 	l                   log.Logger
 	conn                rabbitmq.IRabbitMQ

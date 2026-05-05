@@ -4,6 +4,8 @@ import (
 	"context"
 )
 
+//go:generate mockery --name UseCase
+
 // UseCase defines dryrun business operations.
 type UseCase interface {
 	Trigger(ctx context.Context, input TriggerInput) (TriggerOutput, error)

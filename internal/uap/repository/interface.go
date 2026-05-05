@@ -2,6 +2,8 @@ package repository
 
 import "context"
 
+//go:generate mockery --name Repository
+
 type Repository interface {
 	ClaimRawBatchForParsing(ctx context.Context, rawBatchID string) (bool, error)
 	MarkRawBatchDownloaded(ctx context.Context, opt MarkRawBatchDownloadedOptions) error

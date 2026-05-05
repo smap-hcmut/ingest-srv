@@ -3,6 +3,15 @@ BINARY=ingest-srv
 
 LOCAL_CONFIG_FILE=./config/ingest-config.local.yaml
 
+TEST_PACKAGES := \
+	./internal/datasource/delivery/http \
+	./internal/datasource/usecase \
+	./internal/dryrun/delivery/http \
+	./internal/dryrun/usecase \
+	./internal/execution/delivery/http \
+	./internal/execution/usecase \
+	./internal/uap/usecase
+
 ifeq ($(OS),Windows_NT)
 RUN_WITH_LOCAL_CONFIG=set "INGEST_CONFIG_FILE=$(LOCAL_CONFIG_FILE)" &&
 FIX_SWAGGER=powershell -Command "(Get-Content docs/docs.go) | Where-Object { $$_ -notmatch 'LeftDelim:|RightDelim:' } | Set-Content docs/docs.go"
@@ -32,6 +41,13 @@ run: swagger
 run-local:
 	@echo "Running with local docker-compose infrastructure config"
 	@$(RUN_WITH_LOCAL_CONFIG) go run cmd/server/main.go
+
+test:
+	@echo "Running tests..."
+	@go test -mod=readonly -coverprofile=coverage.out -failfast -timeout 5m $(TEST_PACKAGES)
+	@grep -v 'mock_' coverage.out | grep -v 'internal/sqlboiler' | grep -v 'internal/httpserver' | grep -v 'internal/consumer' | grep -v 'internal/scheduler' > c.out
+	@GOFLAGS=-mod=readonly go tool cover -func=c.out
+	@rm -f *.out
 
 build-docker-compose:
 	@echo "make models first"
@@ -88,6 +104,6 @@ help:
 	@echo "  make docker-run"
 	@echo "  REGISTRY=docker.io/username make docker-push"
 
-.PHONY: models swagger run run-local build-docker-compose \
+.PHONY: models swagger run run-local test build-docker-compose \
         docker-build docker-build-amd64 docker-build-multi \
         docker-run docker-clean docker-push

@@ -1,0 +1,5 @@
+with-expecter: true
+inpackage: true
+testonly: false
+mockname: "Mock{{.InterfaceName}}"
+outpkg: "{{.PackageName}}"

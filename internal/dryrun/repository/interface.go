@@ -8,6 +8,8 @@ import (
 	"github.com/smap-hcmut/shared-libs/go/paginator"
 )
 
+//go:generate mockery --name Repository
+
 // Repository provides persistence for dryrun results.
 type Repository interface {
 	CreateResult(ctx context.Context, opt CreateResultOptions) (model.DryrunResult, error)

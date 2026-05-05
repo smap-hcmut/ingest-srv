@@ -2,6 +2,8 @@ package execution
 
 import "context"
 
+//go:generate mockery --name UseCase
+
 // UseCase defines execution-plane runtime operations.
 type UseCase interface {
 	DispatchTarget(ctx context.Context, input DispatchTargetInput) (DispatchTargetOutput, error)

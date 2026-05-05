@@ -2,6 +2,9 @@ package uap
 
 import "context"
 
+//go:generate mockery --dir . --name UseCase
+//go:generate mockery --dir . --name Publisher
+
 // UseCase defines UAP parsing operations.
 type UseCase interface {
 	ParseAndStoreRawBatch(ctx context.Context, input ParseAndStoreRawBatchInput) error

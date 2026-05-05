@@ -4,6 +4,8 @@ import (
 	"context"
 )
 
+//go:generate mockery --name UseCase
+
 // UseCase defines the business logic interface for DataSource operations.
 type UseCase interface {
 	DataSourceUseCase

@@ -8,6 +8,8 @@ import (
 	"github.com/smap-hcmut/shared-libs/go/paginator"
 )
 
+//go:generate mockery --name Repository
+
 // Repository defines the data access interface for DataSource.
 // Convention: One interface per domain module.
 // Split by entity if module grows (DataSourceRepository + DryrunRepository).

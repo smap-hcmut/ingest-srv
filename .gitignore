@@ -4,6 +4,8 @@
 vendor/
 .go-version
 bin/
+**/mock_*.go
+*.out
 
 # Environment variables
 .env
