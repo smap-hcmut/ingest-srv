@@ -118,7 +118,7 @@ func main() {
 		kafkaProducer = nil
 	} else {
 		defer configKafka.DisconnectProducer()
-		logger.Info(ctx, "Kafka producer initialized (topic: %s)", cfg.Kafka.UAPTopic)
+		logger.Infof(ctx, "Kafka producer initialized (topic: %s)", cfg.Kafka.UAPTopic)
 	}
 
 	rabbitConn, err := configRabbit.Connect(cfg.RabbitMQ)

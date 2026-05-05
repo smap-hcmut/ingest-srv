@@ -173,6 +173,18 @@ func (uc *implUseCase) DispatchDueTargets(ctx context.Context, input execution.D
 			CronExpr:     input.CronExpr,
 		})
 		if dispatchErr != nil {
+			if dispatchErr == execution.ErrDispatchNotAllowed {
+				output.SkippedRaceCount++
+				uc.l.Infof(
+					ctx,
+					"execution.usecase.DispatchDueTargets.DispatchTarget.skipped: source_id=%s target_id=%s err=%v",
+					dueTarget.Source.ID,
+					dueTarget.Target.ID,
+					dispatchErr,
+				)
+				continue
+			}
+
 			output.FailedCount++
 			uc.l.Errorf(
 				ctx,

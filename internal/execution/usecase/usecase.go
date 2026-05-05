@@ -69,10 +69,11 @@ func (uc *implUseCase) dispatchPrepared(
 		CreatedAt:    requestedAt,
 	})
 	if err != nil {
-		uc.l.Errorf(ctx, "execution.usecase.DispatchTarget.CreateScheduledJob: %v", err)
 		if err == repo.ErrDispatchConflict {
+			uc.l.Infof(ctx, "execution.usecase.DispatchTarget.CreateScheduledJob: %v", err)
 			return execution.DispatchTargetOutput{}, execution.ErrDispatchNotAllowed
 		}
+		uc.l.Errorf(ctx, "execution.usecase.DispatchTarget.CreateScheduledJob: %v", err)
 		return execution.DispatchTargetOutput{}, execution.ErrDispatchFailed
 	}
 

@@ -119,7 +119,7 @@ func (r *implRepository) CreateScheduledJob(ctx context.Context, opt repository.
 		return model.ScheduledJob{}, repository.ErrCreateDispatch
 	}
 	if runningJobExists {
-		r.l.Warnf(ctx, "execution.repository.CreateScheduledJob: source_id=%s target_id=%s already has running job", opt.Source.ID, opt.Target.ID)
+		r.l.Infof(ctx, "execution.repository.CreateScheduledJob: source_id=%s target_id=%s already has running job", opt.Source.ID, opt.Target.ID)
 		return model.ScheduledJob{}, repository.ErrDispatchConflict
 	}
 
