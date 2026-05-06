@@ -105,6 +105,11 @@ func TestDispatchTarget(t *testing.T) {
 			mock:  mockDispatch{getCalled: true, getErr: repo.ErrTargetNotFound},
 			err:   execution.ErrTargetNotFound,
 		},
+		"source_not_found": {
+			input: execution.DispatchTargetInput{DataSourceID: testSourceID, TargetID: testTargetID},
+			mock:  mockDispatch{getCalled: true, getErr: repo.ErrDataSourceNotFound},
+			err:   execution.ErrDataSourceNotFound,
+		},
 		"not_allowed_context": {
 			input: execution.DispatchTargetInput{DataSourceID: testSourceID, TargetID: testTargetID},
 			mock: mockDispatch{getCalled: true, getOutput: func() repo.DispatchContext {
@@ -113,6 +118,15 @@ func TestDispatchTarget(t *testing.T) {
 				return c
 			}()},
 			err: execution.ErrDispatchNotAllowed,
+		},
+		"unsupported_mapping": {
+			input: execution.DispatchTargetInput{DataSourceID: testSourceID, TargetID: testTargetID},
+			mock: mockDispatch{getCalled: true, getOutput: func() repo.DispatchContext {
+				c := ctx
+				c.Source.SourceType = model.SourceTypeWebhook
+				return c
+			}()},
+			err: execution.ErrUnsupportedDispatchMapping,
 		},
 		"publish_failed": {
 			input:  execution.DispatchTargetInput{DataSourceID: testSourceID, TargetID: testTargetID, RequestedAt: now, ScheduledFor: now},
@@ -189,6 +203,189 @@ func TestDispatchTargetManually(t *testing.T) {
 	}
 }
 
+func TestDispatchPrepared(t *testing.T) {
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	ctx := repo.DispatchContext{Source: executionSource(), Target: executionTarget()}
+	goodSpec := execution.DispatchSpec{Queue: execution.QueueName("q"), Action: execution.ActionNameFullFlow, Keyword: "vinfast", Params: map[string]interface{}{"keyword": "vinfast"}}
+	badSpec := execution.DispatchSpec{Queue: execution.QueueName("q"), Action: execution.ActionNameFullFlow, Keyword: "bad", Params: map[string]interface{}{"bad": func() {}}}
+
+	tcs := map[string]struct {
+		input struct {
+			specs []execution.DispatchSpec
+		}
+		mock struct {
+			createJobErr error
+			publishErr   error
+			finalizeErr  error
+		}
+		output string
+		err    error
+	}{
+		"empty_specs": {
+			err: execution.ErrDispatchNotAllowed,
+		},
+		"create_job_conflict": {
+			input: struct{ specs []execution.DispatchSpec }{specs: []execution.DispatchSpec{goodSpec}},
+			mock:  struct{ createJobErr, publishErr, finalizeErr error }{createJobErr: repo.ErrDispatchConflict},
+			err:   execution.ErrDispatchNotAllowed,
+		},
+		"create_job_error": {
+			input: struct{ specs []execution.DispatchSpec }{specs: []execution.DispatchSpec{goodSpec}},
+			mock:  struct{ createJobErr, publishErr, finalizeErr error }{createJobErr: errors.New("db")},
+			err:   execution.ErrDispatchFailed,
+		},
+		"all_failed_bad_payload": {
+			input:  struct{ specs []execution.DispatchSpec }{specs: []execution.DispatchSpec{badSpec}},
+			output: string(model.JobStatusFailed),
+			err:    execution.ErrDispatchFailed,
+		},
+		"all_failed_finalize_error": {
+			input:  struct{ specs []execution.DispatchSpec }{specs: []execution.DispatchSpec{badSpec}},
+			mock:   struct{ createJobErr, publishErr, finalizeErr error }{finalizeErr: errors.New("finalize")},
+			output: string(model.JobStatusFailed),
+			err:    execution.ErrDispatchFailed,
+		},
+		"partial_success": {
+			input:  struct{ specs []execution.DispatchSpec }{specs: []execution.DispatchSpec{goodSpec, badSpec}},
+			output: string(model.JobStatusPartial),
+		},
+		"default_requested_at": {
+			input:  struct{ specs []execution.DispatchSpec }{specs: []execution.DispatchSpec{goodSpec}},
+			output: string(model.JobStatusRunning),
+		},
+		"partial_finalize_error": {
+			input: struct{ specs []execution.DispatchSpec }{specs: []execution.DispatchSpec{goodSpec, badSpec}},
+			mock:  struct{ createJobErr, publishErr, finalizeErr error }{finalizeErr: errors.New("finalize")},
+			err:   execution.ErrDispatchFailed,
+		},
+	}
+
+	for name, tc := range tcs {
+		t.Run(name, func(t *testing.T) {
+			uc, r, pub, project := newExecutionUC(t)
+			if len(tc.input.specs) > 0 {
+				r.EXPECT().CreateScheduledJob(context.Background(), mock.AnythingOfType("repository.CreateScheduledJobOptions")).Return(model.ScheduledJob{ID: "job-1"}, tc.mock.createJobErr).Once()
+			}
+			if tc.mock.createJobErr == nil && len(tc.input.specs) > 0 {
+				for _, spec := range tc.input.specs {
+					if _, ok := spec.Params["bad"]; ok {
+						continue
+					}
+					project.EXPECT().Detail(context.Background(), testProjectID).Return(microservice.ProjectDetail{ID: testProjectID, Status: microservice.ProjectStatusActive, DomainTypeCode: "domain"}, nil).Once()
+					r.EXPECT().CreateExternalTask(context.Background(), mock.AnythingOfType("repository.CreateExternalTaskOptions")).Return(model.ExternalTask{ID: "external-1"}, nil).Once()
+					pub.EXPECT().PublishDispatch(context.Background(), mock.AnythingOfType("execution.PublishDispatchInput")).Return(tc.mock.publishErr).Once()
+					if tc.mock.publishErr != nil {
+						r.EXPECT().MarkExternalTaskFailed(context.Background(), mock.AnythingOfType("repository.MarkExternalTaskFailedOptions")).Return(nil).Once()
+					} else {
+						r.EXPECT().MarkExternalTaskPublished(context.Background(), mock.AnythingOfType("repository.MarkExternalTaskPublishedOptions")).Return(nil).Once()
+					}
+				}
+				if name == "all_failed_bad_payload" || name == "all_failed_finalize_error" || name == "partial_success" || name == "partial_finalize_error" {
+					r.EXPECT().FinalizeScheduledJob(context.Background(), mock.AnythingOfType("repository.FinalizeScheduledJobOptions")).Return(tc.mock.finalizeErr).Once()
+				}
+			}
+
+			dispatchInput := execution.DispatchTargetInput{RequestedAt: now}
+			if name == "default_requested_at" {
+				dispatchInput = execution.DispatchTargetInput{}
+			}
+			output, err := uc.dispatchPrepared(context.Background(), ctx, tc.input.specs, dispatchInput)
+
+			require.ErrorIs(t, err, tc.err)
+			if tc.output != "" {
+				require.Equal(t, tc.output, output.Status)
+			}
+		})
+	}
+}
+
+func TestDispatchOneSpec(t *testing.T) {
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	ctx := repo.DispatchContext{Source: executionSource(), Target: executionTarget()}
+	spec := execution.DispatchSpec{Queue: execution.QueueName("q"), Action: execution.ActionNameFullFlow, Keyword: "vinfast", Params: map[string]interface{}{"keyword": "vinfast"}}
+
+	tcs := map[string]struct {
+		mock struct {
+			projectErr error
+			createErr  error
+			publishErr error
+			markErr    error
+			failErr    error
+		}
+		err bool
+	}{
+		"project_error": {
+			mock: struct {
+				projectErr error
+				createErr  error
+				publishErr error
+				markErr    error
+				failErr    error
+			}{projectErr: errors.New("project")},
+			err: true,
+		},
+		"create_external_error": {
+			mock: struct {
+				projectErr error
+				createErr  error
+				publishErr error
+				markErr    error
+				failErr    error
+			}{createErr: errors.New("db")},
+			err: true,
+		},
+		"publish_error_mark_failed_error": {
+			mock: struct {
+				projectErr error
+				createErr  error
+				publishErr error
+				markErr    error
+				failErr    error
+			}{publishErr: errors.New("publish"), failErr: errors.New("mark failed")},
+			err: true,
+		},
+		"mark_published_error": {
+			mock: struct {
+				projectErr error
+				createErr  error
+				publishErr error
+				markErr    error
+				failErr    error
+			}{markErr: errors.New("mark")},
+			err: true,
+		},
+	}
+
+	for name, tc := range tcs {
+		t.Run(name, func(t *testing.T) {
+			uc, r, pub, project := newExecutionUC(t)
+			project.EXPECT().Detail(context.Background(), testProjectID).Return(microservice.ProjectDetail{ID: testProjectID, Status: microservice.ProjectStatusActive, DomainTypeCode: "domain"}, tc.mock.projectErr).Once()
+			if tc.mock.projectErr == nil {
+				r.EXPECT().CreateExternalTask(context.Background(), mock.AnythingOfType("repository.CreateExternalTaskOptions")).Return(model.ExternalTask{ID: "external-1"}, tc.mock.createErr).Once()
+			}
+			if tc.mock.projectErr == nil && tc.mock.createErr == nil {
+				pub.EXPECT().PublishDispatch(context.Background(), mock.AnythingOfType("execution.PublishDispatchInput")).Return(tc.mock.publishErr).Once()
+				if tc.mock.publishErr != nil {
+					r.EXPECT().MarkExternalTaskFailed(context.Background(), mock.AnythingOfType("repository.MarkExternalTaskFailedOptions")).Return(tc.mock.failErr).Once()
+				} else {
+					r.EXPECT().MarkExternalTaskPublished(context.Background(), mock.AnythingOfType("repository.MarkExternalTaskPublishedOptions")).Return(tc.mock.markErr).Once()
+					if tc.mock.markErr != nil {
+						r.EXPECT().MarkExternalTaskFailed(context.Background(), mock.AnythingOfType("repository.MarkExternalTaskFailedOptions")).Return(nil).Once()
+					}
+				}
+			}
+
+			_, err := uc.dispatchOneSpec(context.Background(), ctx, "job-1", spec, now)
+
+			if tc.err {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}
+
 func TestExecutionFlowHelpers(t *testing.T) {
 	modeCrisis := model.CrawlModeCrisis
 	modeSleep := model.CrawlModeSleep
@@ -233,7 +430,11 @@ func TestExecutionFlowHelpers(t *testing.T) {
 
 func TestHandleCompletion(t *testing.T) {
 	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	errDB := errors.New("db")
 	task := model.ExternalTask{ID: "external-1", SourceID: testSourceID, ProjectID: testProjectID, DomainTypeCode: "domain", TaskID: "task-1", Platform: "tiktok", TaskType: "full_flow", Status: model.JobStatusRunning}
+	failed := task
+	failed.Status = model.JobStatusFailed
+	failed.CompletedAt = &now
 	cancelled := task
 	cancelled.Status = model.JobStatusCancelled
 	cancelled.CompletedAt = &now
@@ -246,9 +447,11 @@ func TestHandleCompletion(t *testing.T) {
 		hasErr         error
 		errorCalled    bool
 		errorInput     repo.CompleteTaskErrorOptions
+		errorErr       error
 		successCalled  bool
 		successOutput  model.RawBatch
 		successErr     error
+		minioOK        bool
 		parseSupported bool
 		parseCalled    bool
 	}
@@ -265,21 +468,63 @@ func TestHandleCompletion(t *testing.T) {
 			mock:  mockCompletion{getCalled: true, getErr: repo.ErrExternalTaskNotFound},
 			err:   execution.ErrCompletionTaskNotFound,
 		},
+		"get_context_error": {
+			input: execution.HandleCompletionInput{TaskID: "task-1", Status: "error"},
+			mock:  mockCompletion{getCalled: true, getErr: errDB},
+			err:   errDB,
+		},
 		"cancelled_duplicate": {
 			input: execution.HandleCompletionInput{TaskID: "task-1", Status: "error"},
 			mock:  mockCompletion{getCalled: true, getOutput: repo.CompletionContext{ExternalTask: cancelled}},
+		},
+		"failed_duplicate": {
+			input: execution.HandleCompletionInput{TaskID: "task-1", Status: "error"},
+			mock:  mockCompletion{getCalled: true, getOutput: repo.CompletionContext{ExternalTask: failed}},
 		},
 		"error_status": {
 			input: execution.HandleCompletionInput{TaskID: "task-1", Status: "error", Error: " boom ", CompletedAt: now.Format(time.RFC3339)},
 			mock:  mockCompletion{getCalled: true, getOutput: repo.CompletionContext{ExternalTask: task}, errorCalled: true, errorInput: repo.CompleteTaskErrorOptions{CompletionContext: repo.CompletionContext{ExternalTask: task}, ErrorMessage: "boom", CompletedAt: now}},
 		},
+		"error_default_message": {
+			input: execution.HandleCompletionInput{TaskID: "task-1", Status: "error", CompletedAt: now.Format(time.RFC3339)},
+			mock:  mockCompletion{getCalled: true, getOutput: repo.CompletionContext{ExternalTask: task}, errorCalled: true, errorInput: repo.CompleteTaskErrorOptions{CompletionContext: repo.CompletionContext{ExternalTask: task}, ErrorMessage: "crawler returned error completion without error message", CompletedAt: now}},
+		},
+		"error_complete_failed": {
+			input: execution.HandleCompletionInput{TaskID: "task-1", Status: "error", Error: "boom", CompletedAt: now.Format(time.RFC3339)},
+			mock:  mockCompletion{getCalled: true, getOutput: repo.CompletionContext{ExternalTask: task}, errorCalled: true, errorErr: errDB},
+			err:   errDB,
+		},
 		"success_duplicate_batch": {
 			input: execution.HandleCompletionInput{TaskID: "task-1", Status: "success", StorageBucket: "bucket", StoragePath: "path", BatchID: "batch-1"},
 			mock:  mockCompletion{getCalled: true, getOutput: repo.CompletionContext{ExternalTask: task}, hasCalled: true, hasOutput: true},
 		},
+		"success_has_raw_batch_error": {
+			input: execution.HandleCompletionInput{TaskID: "task-1", Status: "success", StorageBucket: "bucket", StoragePath: "path", BatchID: "batch-1"},
+			mock:  mockCompletion{getCalled: true, getOutput: repo.CompletionContext{ExternalTask: task}, hasCalled: true, hasErr: errDB},
+			err:   errDB,
+		},
 		"success_verify_failed": {
 			input: execution.HandleCompletionInput{TaskID: "task-1", Status: "success", StorageBucket: "bucket", StoragePath: "path", BatchID: "batch-1"},
 			mock:  mockCompletion{getCalled: true, getOutput: repo.CompletionContext{ExternalTask: task}, hasCalled: true, errorCalled: true},
+		},
+		"success_verify_failed_complete_error": {
+			input: execution.HandleCompletionInput{TaskID: "task-1", Status: "success", StorageBucket: "bucket", StoragePath: "path", BatchID: "batch-1"},
+			mock:  mockCompletion{getCalled: true, getOutput: repo.CompletionContext{ExternalTask: task}, hasCalled: true, errorCalled: true, errorErr: errDB},
+			err:   errDB,
+		},
+		"success_metadata_marshal_error": {
+			input: execution.HandleCompletionInput{TaskID: "task-1", Status: "success", StorageBucket: "bucket", StoragePath: "path", BatchID: "batch-1", Metadata: map[string]interface{}{"bad": func() {}}},
+			mock:  mockCompletion{getCalled: true, getOutput: repo.CompletionContext{ExternalTask: task}, hasCalled: true, minioOK: true},
+			err:   execution.ErrInvalidCompletionInput,
+		},
+		"success_complete_already_exists": {
+			input: execution.HandleCompletionInput{TaskID: "task-1", Status: "success", StorageBucket: "bucket", StoragePath: "path", BatchID: "batch-1"},
+			mock:  mockCompletion{getCalled: true, getOutput: repo.CompletionContext{ExternalTask: task}, hasCalled: true, minioOK: true, successCalled: true, successErr: repo.ErrRawBatchAlreadyExists},
+		},
+		"success_complete_error": {
+			input: execution.HandleCompletionInput{TaskID: "task-1", Status: "success", StorageBucket: "bucket", StoragePath: "path", BatchID: "batch-1"},
+			mock:  mockCompletion{getCalled: true, getOutput: repo.CompletionContext{ExternalTask: task}, hasCalled: true, minioOK: true, successCalled: true, successErr: errDB},
+			err:   errDB,
 		},
 	}
 
@@ -292,10 +537,19 @@ func TestHandleCompletion(t *testing.T) {
 			if tc.mock.hasCalled {
 				r.EXPECT().HasRawBatch(context.Background(), testSourceID, "batch-1").Return(tc.mock.hasOutput, tc.mock.hasErr)
 			}
+			if tc.mock.minioOK {
+				uc.minio = fakeMinIO{exists: true, info: &sharedMinio.FileInfo{Size: 123}}
+			}
 			if tc.mock.errorCalled {
 				r.EXPECT().CompleteTaskError(context.Background(), mock.MatchedBy(func(opt repo.CompleteTaskErrorOptions) bool {
-					return opt.CompletionContext.ExternalTask.ID == task.ID
-				})).Return(nil)
+					if opt.CompletionContext.ExternalTask.ID != task.ID {
+						return false
+					}
+					if tc.mock.errorInput.ErrorMessage != "" && opt.ErrorMessage != tc.mock.errorInput.ErrorMessage {
+						return false
+					}
+					return true
+				})).Return(tc.mock.errorErr)
 			}
 			if tc.mock.successCalled {
 				r.EXPECT().CompleteTaskSuccess(context.Background(), mock.AnythingOfType("repository.CompleteTaskSuccessOptions")).Return(tc.mock.successOutput, tc.mock.successErr)
@@ -314,13 +568,21 @@ func TestHandleCompletionSuccess(t *testing.T) {
 	task := model.ExternalTask{ID: "external-1", SourceID: testSourceID, ProjectID: testProjectID, DomainTypeCode: "domain", TaskID: "task-1", Platform: "tiktok", TaskType: "full_flow", Status: model.JobStatusRunning}
 	rawBatch := model.RawBatch{ID: "raw-1", SourceID: testSourceID, ProjectID: testProjectID, DomainTypeCode: "domain", ExternalTaskID: "external-1", BatchID: "batch-1", StorageBucket: "bucket", StoragePath: "path", RawMetadata: []byte(`{"size_bytes":123}`)}
 	tcs := map[string]struct {
-		input  execution.HandleCompletionInput
-		mock   struct{}
+		input execution.HandleCompletionInput
+		mock  struct {
+			parseErr error
+		}
 		output struct{}
 		err    error
 	}{
 		"success_with_parse": {
 			input: execution.HandleCompletionInput{TaskID: "task-1", Status: "success", CompletedAt: now.Format(time.RFC3339), StorageBucket: "bucket", StoragePath: "path", BatchID: "batch-1", ItemCount: &itemCount, Metadata: map[string]interface{}{"size_bytes": float64(123)}},
+		},
+		"success_parse_error_ignored": {
+			input: execution.HandleCompletionInput{TaskID: "task-1", Status: "success", CompletedAt: now.Format(time.RFC3339), StorageBucket: "bucket", StoragePath: "path", BatchID: "batch-1", ItemCount: &itemCount, Metadata: map[string]interface{}{"size_bytes": float64(123)}},
+			mock: struct{ parseErr error }{
+				parseErr: errors.New("parse"),
+			},
 		},
 	}
 
@@ -338,7 +600,7 @@ func TestHandleCompletionSuccess(t *testing.T) {
 			parser.EXPECT().SupportsParse("tiktok", "full_flow").Return(true)
 			parser.EXPECT().ParseAndStoreRawBatch(context.Background(), mock.MatchedBy(func(input uap.ParseAndStoreRawBatchInput) bool {
 				return input.RawBatchID == "raw-1" && input.ExternalTaskID == "external-1"
-			})).Return(nil)
+			})).Return(tc.mock.parseErr)
 
 			err := uc.HandleCompletion(context.Background(), tc.input)
 
@@ -377,42 +639,95 @@ func TestShouldParseUAP(t *testing.T) {
 
 func TestDispatchDueTargets(t *testing.T) {
 	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	due := repo.DueTarget{Source: executionSource(), Target: executionTarget()}
-	ctx := repo.DispatchContext{Source: executionSource(), Target: executionTarget()}
+	baseDue := repo.DueTarget{Source: executionSource(), Target: executionTarget()}
+	baseCtx := repo.DispatchContext{Source: executionSource(), Target: executionTarget()}
+
+	type mockDue struct {
+		dueTargets []repo.DueTarget
+		listErr    error
+		claim      bool
+		claimErr   error
+		afterCtx   repo.DispatchContext
+		afterErr   error
+		publishErr error
+	}
 
 	tcs := map[string]struct {
-		input execution.DispatchDueTargetsInput
-		mock  struct {
-			listErr    error
-			claim      bool
-			claimErr   error
-			afterErr   error
-			publishErr error
-		}
+		input  execution.DispatchDueTargetsInput
+		mock   mockDue
 		output execution.DispatchDueTargetsOutput
 		err    error
 	}{
-		"success": {input: execution.DispatchDueTargetsInput{Now: now, Limit: 1, CronExpr: "* * * * *"}, mock: struct {
-			listErr    error
-			claim      bool
-			claimErr   error
-			afterErr   error
-			publishErr error
-		}{claim: true}, output: execution.DispatchDueTargetsOutput{DueCount: 1, ClaimedCount: 1, DispatchedCount: 1}},
-		"list_error": {input: execution.DispatchDueTargetsInput{Now: now, Limit: 1}, mock: struct {
-			listErr    error
-			claim      bool
-			claimErr   error
-			afterErr   error
-			publishErr error
-		}{listErr: repo.ErrListDueTargets}, err: execution.ErrDispatchFailed},
-		"claim_race": {input: execution.DispatchDueTargetsInput{Now: now, Limit: 1}, mock: struct {
-			listErr    error
-			claim      bool
-			claimErr   error
-			afterErr   error
-			publishErr error
-		}{claim: false}, output: execution.DispatchDueTargetsOutput{DueCount: 1, SkippedRaceCount: 1}},
+		"success": {
+			input:  execution.DispatchDueTargetsInput{Now: now, Limit: 1, CronExpr: "* * * * *"},
+			mock:   mockDue{dueTargets: []repo.DueTarget{baseDue}, claim: true, afterCtx: baseCtx},
+			output: execution.DispatchDueTargetsOutput{DueCount: 1, ClaimedCount: 1, DispatchedCount: 1},
+		},
+		"default_now_limit_empty": {
+			input:  execution.DispatchDueTargetsInput{},
+			output: execution.DispatchDueTargetsOutput{},
+		},
+		"list_error": {
+			input: execution.DispatchDueTargetsInput{Now: now, Limit: 1},
+			mock:  mockDue{listErr: repo.ErrListDueTargets},
+			err:   execution.ErrDispatchFailed,
+		},
+		"invalid_due_context": {
+			input: execution.DispatchDueTargetsInput{Now: now, Limit: 1},
+			mock: mockDue{dueTargets: []repo.DueTarget{func() repo.DueTarget {
+				due := baseDue
+				due.Source.Status = model.SourceStatusPaused
+				return due
+			}()}},
+			output: execution.DispatchDueTargetsOutput{DueCount: 1, FailedCount: 1},
+		},
+		"unsupported_dispatch_mapping": {
+			input: execution.DispatchDueTargetsInput{Now: now, Limit: 1},
+			mock: mockDue{dueTargets: []repo.DueTarget{func() repo.DueTarget {
+				due := baseDue
+				due.Source.SourceType = model.SourceTypeWebhook
+				return due
+			}()}},
+			output: execution.DispatchDueTargetsOutput{DueCount: 1, FailedCount: 1},
+		},
+		"interval_error": {
+			input: execution.DispatchDueTargetsInput{Now: now, Limit: 1},
+			mock: mockDue{dueTargets: []repo.DueTarget{func() repo.DueTarget {
+				due := baseDue
+				due.Target.CrawlIntervalMinutes = 0
+				return due
+			}()}},
+			output: execution.DispatchDueTargetsOutput{DueCount: 1, FailedCount: 1},
+		},
+		"claim_error": {
+			input:  execution.DispatchDueTargetsInput{Now: now, Limit: 1},
+			mock:   mockDue{dueTargets: []repo.DueTarget{baseDue}, claimErr: errors.New("claim")},
+			output: execution.DispatchDueTargetsOutput{DueCount: 1, FailedCount: 1},
+		},
+		"claim_race": {
+			input:  execution.DispatchDueTargetsInput{Now: now, Limit: 1},
+			mock:   mockDue{dueTargets: []repo.DueTarget{baseDue}, claim: false},
+			output: execution.DispatchDueTargetsOutput{DueCount: 1, SkippedRaceCount: 1},
+		},
+		"after_claim_context_error": {
+			input:  execution.DispatchDueTargetsInput{Now: now, Limit: 1},
+			mock:   mockDue{dueTargets: []repo.DueTarget{baseDue}, claim: true, afterErr: repo.ErrTargetNotFound},
+			output: execution.DispatchDueTargetsOutput{DueCount: 1, ClaimedCount: 1, SkippedRaceCount: 1},
+		},
+		"after_claim_context_invalid": {
+			input: execution.DispatchDueTargetsInput{Now: now, Limit: 1},
+			mock: mockDue{dueTargets: []repo.DueTarget{baseDue}, claim: true, afterCtx: func() repo.DispatchContext {
+				ctx := baseCtx
+				ctx.Target.IsActive = false
+				return ctx
+			}()},
+			output: execution.DispatchDueTargetsOutput{DueCount: 1, ClaimedCount: 1, SkippedRaceCount: 1},
+		},
+		"dispatch_failed": {
+			input:  execution.DispatchDueTargetsInput{Now: now, Limit: 1},
+			mock:   mockDue{dueTargets: []repo.DueTarget{baseDue}, claim: true, afterCtx: baseCtx, publishErr: errors.New("publish")},
+			output: execution.DispatchDueTargetsOutput{DueCount: 1, ClaimedCount: 1, FailedCount: 1},
+		},
 	}
 
 	for name, tc := range tcs {
@@ -421,17 +736,35 @@ func TestDispatchDueTargets(t *testing.T) {
 			if tc.mock.listErr != nil {
 				r.EXPECT().ListDueTargets(context.Background(), now, 1).Return(nil, tc.mock.listErr)
 			} else {
-				r.EXPECT().ListDueTargets(context.Background(), now, 1).Return([]repo.DueTarget{due}, nil)
-				if name != "list_error" {
+				expectedNow := tc.input.Now
+				if expectedNow.IsZero() {
+					expectedNow = now
+				}
+				expectedLimit := tc.input.Limit
+				if expectedLimit <= 0 {
+					expectedLimit = 1
+				}
+				r.EXPECT().ListDueTargets(context.Background(), expectedNow, expectedLimit).Return(tc.mock.dueTargets, nil)
+				if len(tc.mock.dueTargets) > 0 && tc.mock.dueTargets[0].Source.Status == model.SourceStatusActive && tc.mock.dueTargets[0].Source.SourceType != model.SourceTypeWebhook && tc.mock.dueTargets[0].Target.CrawlIntervalMinutes > 0 {
 					r.EXPECT().ClaimTarget(context.Background(), mock.AnythingOfType("repository.ClaimTargetOptions")).Return(tc.mock.claim, tc.mock.claimErr)
 				}
-				if tc.mock.claim {
-					r.EXPECT().GetDispatchContext(context.Background(), testSourceID, testTargetID).Return(ctx, tc.mock.afterErr)
-					r.EXPECT().CreateScheduledJob(context.Background(), mock.AnythingOfType("repository.CreateScheduledJobOptions")).Return(model.ScheduledJob{ID: "job-1"}, nil)
-					project.EXPECT().Detail(context.Background(), testProjectID).Return(microservice.ProjectDetail{ID: testProjectID, Status: microservice.ProjectStatusActive, DomainTypeCode: "domain"}, nil)
-					r.EXPECT().CreateExternalTask(context.Background(), mock.AnythingOfType("repository.CreateExternalTaskOptions")).Return(model.ExternalTask{ID: "external-1"}, nil)
-					pub.EXPECT().PublishDispatch(context.Background(), mock.AnythingOfType("execution.PublishDispatchInput")).Return(tc.mock.publishErr)
-					r.EXPECT().MarkExternalTaskPublished(context.Background(), mock.AnythingOfType("repository.MarkExternalTaskPublishedOptions")).Return(nil)
+				if tc.mock.claim && tc.mock.claimErr == nil {
+					r.EXPECT().GetDispatchContext(context.Background(), testSourceID, testTargetID).Return(tc.mock.afterCtx, tc.mock.afterErr)
+					if tc.mock.afterErr != nil || !tc.mock.afterCtx.Target.IsActive {
+						r.EXPECT().ReleaseClaimTarget(context.Background(), repo.ReleaseClaimTargetOptions{SourceID: testSourceID, TargetID: testTargetID}).Return(nil)
+					}
+					if tc.mock.afterErr == nil && tc.mock.afterCtx.Target.IsActive {
+						r.EXPECT().CreateScheduledJob(context.Background(), mock.AnythingOfType("repository.CreateScheduledJobOptions")).Return(model.ScheduledJob{ID: "job-1"}, nil)
+						project.EXPECT().Detail(context.Background(), testProjectID).Return(microservice.ProjectDetail{ID: testProjectID, Status: microservice.ProjectStatusActive, DomainTypeCode: "domain"}, nil)
+						r.EXPECT().CreateExternalTask(context.Background(), mock.AnythingOfType("repository.CreateExternalTaskOptions")).Return(model.ExternalTask{ID: "external-1"}, nil)
+						pub.EXPECT().PublishDispatch(context.Background(), mock.AnythingOfType("execution.PublishDispatchInput")).Return(tc.mock.publishErr)
+						if tc.mock.publishErr != nil {
+							r.EXPECT().MarkExternalTaskFailed(context.Background(), mock.AnythingOfType("repository.MarkExternalTaskFailedOptions")).Return(nil)
+							r.EXPECT().FinalizeScheduledJob(context.Background(), mock.AnythingOfType("repository.FinalizeScheduledJobOptions")).Return(nil)
+						} else {
+							r.EXPECT().MarkExternalTaskPublished(context.Background(), mock.AnythingOfType("repository.MarkExternalTaskPublishedOptions")).Return(nil)
+						}
+					}
 				}
 			}
 
@@ -520,9 +853,11 @@ func int64Ptr(v int64) *int64 {
 }
 
 type fakeMinIO struct {
-	exists bool
-	info   *sharedMinio.FileInfo
-	err    error
+	exists    bool
+	info      *sharedMinio.FileInfo
+	err       error
+	existsErr error
+	statErr   error
 }
 
 func (f fakeMinIO) Connect(context.Context) error                                  { return nil }
@@ -549,12 +884,20 @@ func (f fakeMinIO) GetPresignedDownloadURL(context.Context, *sharedMinio.Presign
 	return nil, nil
 }
 func (f fakeMinIO) GetFileInfo(context.Context, string, string) (*sharedMinio.FileInfo, error) {
+	if f.statErr != nil {
+		return nil, f.statErr
+	}
 	return f.info, f.err
 }
 func (f fakeMinIO) DeleteFile(context.Context, string, string) error               { return nil }
 func (f fakeMinIO) CopyFile(context.Context, string, string, string, string) error { return nil }
 func (f fakeMinIO) MoveFile(context.Context, string, string, string, string) error { return nil }
-func (f fakeMinIO) FileExists(context.Context, string, string) (bool, error)       { return f.exists, f.err }
+func (f fakeMinIO) FileExists(context.Context, string, string) (bool, error) {
+	if f.existsErr != nil {
+		return false, f.existsErr
+	}
+	return f.exists, f.err
+}
 func (f fakeMinIO) ListFiles(context.Context, *sharedMinio.ListRequest) (*sharedMinio.ListResponse, error) {
 	return nil, nil
 }

@@ -18,10 +18,7 @@ func (h *handler) processTriggerReq(c *gin.Context) (triggerReq, error) {
 
 func (h *handler) processLatestReq(c *gin.Context) (latestReq, error) {
 	var req latestReq
-	if err := c.ShouldBindQuery(&req); err != nil {
-		h.l.Warnf(c.Request.Context(), "dryrun.delivery.processLatestReq.ShouldBindQuery: %v", err)
-		return req, errWrongBody
-	}
+	_ = c.ShouldBindQuery(&req)
 	req.SourceID = c.Param("id")
 	if err := req.validate(); err != nil {
 		h.l.Warnf(c.Request.Context(), "dryrun.delivery.processLatestReq.validate: %v", err)

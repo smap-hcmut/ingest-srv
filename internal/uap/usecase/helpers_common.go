@@ -444,9 +444,6 @@ func (uc *implUseCase) extractLinks(texts ...string) []string {
 	for _, text := range texts {
 		for _, match := range linkPattern.FindAllString(text, -1) {
 			link := strings.TrimSpace(strings.TrimRight(match, ".,);!?:]}'\""))
-			if link == "" {
-				continue
-			}
 			if _, ok := seen[link]; ok {
 				continue
 			}
@@ -519,7 +516,7 @@ func (uc *implUseCase) parseDurationText(raw string) *int {
 	return uc.intPtr(total)
 }
 
-func (uc *implUseCase) mergeRawMetadata(existing json.RawMessage, parts []uap.ArtifactPart, totalRecords int, publishStats *uap.KafkaPublishStats) (json.RawMessage, error) {
+func (uc *implUseCase) mergeRawMetadata(existing json.RawMessage, parts []uap.ArtifactPart, totalRecords int, publishStats *uap.KafkaPublishStats) json.RawMessage {
 	root := make(map[string]interface{})
 	if len(existing) > 0 {
 		if err := json.Unmarshal(existing, &root); err != nil {
@@ -556,7 +553,8 @@ func (uc *implUseCase) mergeRawMetadata(existing json.RawMessage, parts []uap.Ar
 		}
 	}
 
-	return json.Marshal(root)
+	data, _ := json.Marshal(root)
+	return data
 }
 
 func (uc *implUseCase) failRawBatch(
@@ -567,7 +565,7 @@ func (uc *implUseCase) failRawBatch(
 	totalRecords int,
 	publishStats *uap.KafkaPublishStats,
 ) error {
-	metadata, _ := uc.mergeRawMetadata(input.RawMetadata, parts, totalRecords, publishStats)
+	metadata := uc.mergeRawMetadata(input.RawMetadata, parts, totalRecords, publishStats)
 	if err := uc.repo.MarkRawBatchFailed(ctx, repo.MarkRawBatchFailedOptions{
 		RawBatchID:   input.RawBatchID,
 		ErrorMessage: errMessage,

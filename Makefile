@@ -3,23 +3,6 @@ BINARY=ingest-srv
 
 LOCAL_CONFIG_FILE=./config/ingest-config.local.yaml
 
-TEST_PACKAGES := \
-	./internal/datasource/delivery/http \
-	./internal/datasource/usecase \
-	./internal/dryrun/delivery/http \
-	./internal/dryrun/usecase \
-	./internal/execution/delivery/http \
-	./internal/execution/usecase \
-	./internal/uap/usecase
-
-ifeq ($(OS),Windows_NT)
-RUN_WITH_LOCAL_CONFIG=set "INGEST_CONFIG_FILE=$(LOCAL_CONFIG_FILE)" &&
-FIX_SWAGGER=powershell -Command "(Get-Content docs/docs.go) | Where-Object { $$_ -notmatch 'LeftDelim:|RightDelim:' } | Set-Content docs/docs.go"
-else
-RUN_WITH_LOCAL_CONFIG=INGEST_CONFIG_FILE=$(LOCAL_CONFIG_FILE)
-FIX_SWAGGER=sed -i '' '/LeftDelim:/d' docs/docs.go && sed -i '' '/RightDelim:/d' docs/docs.go
-endif
-
 models:
 	@echo "Generating models"
 	@sqlboiler psql
@@ -42,11 +25,12 @@ run-local:
 	@echo "Running with local docker-compose infrastructure config"
 	@$(RUN_WITH_LOCAL_CONFIG) go run cmd/server/main.go
 
-test:
+test: 
 	@echo "Running tests..."
-	@go test -mod=readonly -coverprofile=coverage.out -failfast -timeout 5m $(TEST_PACKAGES)
-	@grep -v 'mock_' coverage.out | grep -v 'internal/sqlboiler' | grep -v 'internal/httpserver' | grep -v 'internal/consumer' | grep -v 'internal/scheduler' > c.out
-	@GOFLAGS=-mod=readonly go tool cover -func=c.out
+	@go test -mod=vendor -coverprofile=coverage.out -failfast -timeout 5m ./internal/...
+	@grep -v 'mock_' coverage.out > c.out
+	@go tool cover -func=c.out
+	@echo "Coverage report generated in c.out"
 	@rm -f *.out
 
 build-docker-compose:

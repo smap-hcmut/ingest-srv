@@ -265,7 +265,7 @@ func (uc *implUseCase) readAllAndClose(reader io.ReadCloser) ([]byte, error) {
 	return io.ReadAll(reader)
 }
 
-func (uc *implUseCase) buildSuccessUpdate(rawBytes []byte, fallbackItemCount *int) (dryrunRepo.UpdateResultOptions, model.DryrunStatus, error) {
+func (uc *implUseCase) buildSuccessUpdate(rawBytes []byte, fallbackItemCount *int) (dryrunRepo.UpdateResultOptions, model.DryrunStatus) {
 	var artifact map[string]interface{}
 	if err := json.Unmarshal(rawBytes, &artifact); err != nil {
 		warnings := uc.marshalWarnings([]map[string]string{{
@@ -276,7 +276,7 @@ func (uc *implUseCase) buildSuccessUpdate(rawBytes []byte, fallbackItemCount *in
 			Status:      string(model.DryrunStatusWarning),
 			SampleCount: 0,
 			Warnings:    warnings,
-		}, model.DryrunStatusWarning, nil
+		}, model.DryrunStatusWarning
 	}
 
 	params, _ := artifact["params"].(map[string]interface{})
@@ -302,7 +302,7 @@ func (uc *implUseCase) buildSuccessUpdate(rawBytes []byte, fallbackItemCount *in
 		TotalFound:  totalFound,
 		SampleData:  sampleData,
 		Warnings:    warnings,
-	}, finalStatus, nil
+	}, finalStatus
 }
 
 func (uc *implUseCase) buildSamplePayload(resultRaw json.RawMessage, sampleLimit int, artifactItemCount int, fallbackItemCount *int) (json.RawMessage, int, *int, json.RawMessage) {

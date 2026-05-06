@@ -33,6 +33,97 @@ func TestValidationHelpers(t *testing.T) {
 		"valid crisis trigger":    {input: func() error { return uc.validateTriggerType(string(model.TriggerTypeCrisisEvent)) }},
 		"valid webhook trigger":   {input: func() error { return uc.validateTriggerType(string(model.TriggerTypeWebhookPush)) }},
 		"invalid trigger":         {input: func() error { return uc.validateTriggerType("bad") }, err: datasource.ErrCrawlModeNotAllowed},
+		"create missing name": {
+			input: func() error {
+				return uc.validCreateInput(datasource.CreateInput{ProjectID: testProjectID, SourceType: string(model.SourceTypeTikTok)})
+			},
+			err: datasource.ErrNameRequired,
+		},
+		"create missing source type": {
+			input: func() error {
+				return uc.validCreateInput(datasource.CreateInput{ProjectID: testProjectID, Name: "source"})
+			},
+			err: datasource.ErrSourceTypeRequired,
+		},
+		"create invalid source type": {
+			input: func() error {
+				return uc.validCreateInput(datasource.CreateInput{ProjectID: testProjectID, Name: "source", SourceType: "bad"})
+			},
+			err: datasource.ErrInvalidSourceType,
+		},
+		"create invalid explicit category": {
+			input: func() error {
+				return uc.validCreateInput(datasource.CreateInput{ProjectID: testProjectID, Name: "source", SourceType: string(model.SourceTypeTikTok), SourceCategory: "bad"})
+			},
+			err: datasource.ErrInvalidCategory,
+		},
+		"create crawl config required": {
+			input: func() error {
+				return uc.validCreateInput(datasource.CreateInput{ProjectID: testProjectID, Name: "source", SourceType: string(model.SourceTypeTikTok), SourceCategory: string(model.SourceCategoryCrawl)})
+			},
+			err: datasource.ErrCrawlConfigRequired,
+		},
+		"create invalid crawl mode": {
+			input: func() error {
+				return uc.validCreateInput(datasource.CreateInput{ProjectID: testProjectID, Name: "source", SourceType: string(model.SourceTypeTikTok), SourceCategory: string(model.SourceCategoryCrawl), CrawlMode: "bad", CrawlIntervalMinutes: 10})
+			},
+			err: datasource.ErrInvalidCrawlMode,
+		},
+		"list invalid category": {
+			input: func() error {
+				return uc.validListInput(datasource.ListInput{ProjectID: testProjectID, SourceCategory: "bad"})
+			},
+			err: datasource.ErrInvalidCategory,
+		},
+		"list invalid crawl mode": {
+			input: func() error {
+				return uc.validListInput(datasource.ListInput{ProjectID: testProjectID, CrawlMode: "bad"})
+			},
+			err: datasource.ErrInvalidCrawlMode,
+		},
+		"create target missing source": {
+			input: func() error {
+				return uc.validCreateTargetGroupInput(datasource.CreateTargetGroupInput{CrawlIntervalMinutes: 10})
+			},
+			err: datasource.ErrProjectIDRequired,
+		},
+		"create target invalid interval": {
+			input: func() error {
+				return uc.validCreateTargetGroupInput(datasource.CreateTargetGroupInput{DataSourceID: testSourceID})
+			},
+			err: datasource.ErrInvalidTargetInterval,
+		},
+		"list targets missing source": {
+			input: func() error {
+				return uc.validListTargetsInput(datasource.ListTargetsInput{})
+			},
+			err: datasource.ErrProjectIDRequired,
+		},
+		"list targets invalid type": {
+			input: func() error {
+				return uc.validListTargetsInput(datasource.ListTargetsInput{DataSourceID: testSourceID, TargetType: "bad"})
+			},
+			err: datasource.ErrInvalidTargetType,
+		},
+		"empty datasource id": {
+			input: func() error {
+				return uc.validDataSourceID(" ")
+			},
+			err: datasource.ErrNotFound,
+		},
+		"update crawl mode missing id": {
+			input: func() error {
+				return uc.validUpdateCrawlModeInput(datasource.UpdateCrawlModeInput{CrawlMode: string(model.CrawlModeNormal), TriggerType: string(model.TriggerTypeScheduled)})
+			},
+			err: datasource.ErrNotFound,
+		},
+		"update target invalid interval": {
+			input: func() error {
+				interval := 0
+				return uc.validUpdateTargetInput(datasource.UpdateTargetInput{DataSourceID: testSourceID, ID: testTargetID, CrawlIntervalMinutes: &interval})
+			},
+			err: datasource.ErrInvalidTargetInterval,
+		},
 	}
 
 	for name, tc := range tcs {
@@ -121,6 +212,11 @@ func TestDryrunGuardHelpers(t *testing.T) {
 			},
 			err: datasource.ErrSourceDryrunRunning,
 		},
+		"ensure source dryrun not running success": {
+			run: func(uc *implUseCase) error {
+				return uc.ensureDatasourceDryrunNotRunning(testSource(model.SourceStatusReady))
+			},
+		},
 		"ensure target mutation not running": {
 			run: func(uc *implUseCase) error {
 				source := testSource(model.SourceStatusReady)
@@ -128,6 +224,22 @@ func TestDryrunGuardHelpers(t *testing.T) {
 				return uc.ensureDatasourceTargetMutationNotRunning(source)
 			},
 			err: datasource.ErrTargetDryrunRunning,
+		},
+		"ensure target mutation not running success": {
+			run: func(uc *implUseCase) error {
+				return uc.ensureDatasourceTargetMutationNotRunning(testSource(model.SourceStatusReady))
+			},
+		},
+		"source not archived success": {
+			run: func(uc *implUseCase) error {
+				return uc.ensureDataSourceNotArchived(testSource(model.SourceStatusReady))
+			},
+		},
+		"source archived": {
+			run: func(uc *implUseCase) error {
+				return uc.ensureDataSourceNotArchived(testSource(model.SourceStatusArchived))
+			},
+			err: datasource.ErrSourceArchived,
 		},
 		"latest dryrun repo error": {
 			mock: func(r *repo.MockRepository) {
@@ -176,6 +288,16 @@ func TestDryrunGuardHelpers(t *testing.T) {
 				return uc.ensureDatasourceTargetsDryrunNotRunning(context.Background(), testSourceID)
 			},
 			err: datasource.ErrSourceDryrunRunning,
+		},
+		"runtime prerequisites skip no dryrun target": {
+			mock: func(r *repo.MockRepository) {
+				target := testCrawlTarget(true)
+				target.TargetType = model.TargetTypeProfile
+				r.EXPECT().ListTargets(mock.Anything, repo.ListTargetsOptions{DataSourceID: testSourceID}).Return([]model.CrawlTarget{target}, nil).Once()
+			},
+			run: func(uc *implUseCase) error {
+				return uc.ensureRuntimePrerequisites(context.Background(), testSource(model.SourceStatusReady), datasource.ErrActivateNotAllowed)
+			},
 		},
 	}
 

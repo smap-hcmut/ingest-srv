@@ -37,7 +37,7 @@ func TestChunkRecords(t *testing.T) {
 func TestMergeRawMetadata(t *testing.T) {
 	existing := json.RawMessage(`{"crawler_version":"1.0.0"}`)
 	uc := &implUseCase{}
-	metadata, err := uc.mergeRawMetadata(existing, []uap.ArtifactPart{
+	metadata := uc.mergeRawMetadata(existing, []uap.ArtifactPart{
 		{
 			PartNo:        1,
 			StorageBucket: "ingest-data",
@@ -51,9 +51,6 @@ func TestMergeRawMetadata(t *testing.T) {
 		FailedCount:    1,
 		LastError:      "boom",
 	})
-	if err != nil {
-		t.Fatalf("mergeRawMetadata() error = %v", err)
-	}
 
 	var root map[string]interface{}
 	if err := json.Unmarshal(metadata, &root); err != nil {

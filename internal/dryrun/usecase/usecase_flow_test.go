@@ -59,6 +59,9 @@ func TestNew(t *testing.T) {
 			got := New(uc.l, r, dsUC, nil, pub)
 
 			require.NotNil(t, got)
+			impl, ok := got.(*implUseCase)
+			require.True(t, ok)
+			require.False(t, impl.now().IsZero())
 		})
 	}
 }
@@ -86,8 +89,10 @@ func TestTrigger(t *testing.T) {
 	type mockTrigger struct {
 		detailCalled       bool
 		source             model.DataSource
+		detailErr          error
 		targetCalled       bool
 		target             model.CrawlTarget
+		targetErr          error
 		latestCalled       bool
 		latest             model.DryrunResult
 		latestErr          error
@@ -96,9 +101,11 @@ func TestTrigger(t *testing.T) {
 		createErr          error
 		markCalled         bool
 		markResult         datasource.MarkDryrunRunningOutput
+		markErr            error
 		publishCalled      bool
 		publishErr         error
 		completeFailCalled bool
+		completeFailErr    error
 	}
 
 	tcs := map[string]struct {
@@ -120,20 +127,69 @@ func TestTrigger(t *testing.T) {
 			mock:  mockTrigger{detailCalled: true, source: dryrunSource(model.SourceStatusActive)},
 			err:   dryrun.ErrDryrunNotAllowed,
 		},
+		"source_error": {
+			input: dryrun.TriggerInput{SourceID: testSourceID, TargetID: testTargetID},
+			mock:  mockTrigger{detailCalled: true, detailErr: datasource.ErrNotFound},
+			err:   dryrun.ErrSourceNotFound,
+		},
 		"target_required": {
 			input: dryrun.TriggerInput{SourceID: testSourceID},
 			mock:  mockTrigger{detailCalled: true, source: dryrunSource(model.SourceStatusReady)},
 			err:   dryrun.ErrTargetRequired,
+		},
+		"target_error": {
+			input: dryrun.TriggerInput{SourceID: testSourceID, TargetID: testTargetID},
+			mock:  mockTrigger{detailCalled: true, source: dryrunSource(model.SourceStatusReady), targetCalled: true, targetErr: datasource.ErrTargetNotFound},
+			err:   dryrun.ErrTargetNotFound,
 		},
 		"already_running": {
 			input: dryrun.TriggerInput{SourceID: testSourceID, TargetID: testTargetID},
 			mock:  mockTrigger{detailCalled: true, source: dryrunSource(model.SourceStatusReady), targetCalled: true, target: dryrunTarget(), latestCalled: true, latest: dryrunResult(model.DryrunStatusRunning)},
 			err:   dryrun.ErrDryrunAlreadyRunning,
 		},
+		"latest_error": {
+			input: dryrun.TriggerInput{SourceID: testSourceID, TargetID: testTargetID},
+			mock:  mockTrigger{detailCalled: true, source: dryrunSource(model.SourceStatusReady), targetCalled: true, target: dryrunTarget(), latestCalled: true, latestErr: dryrunRepo.ErrFailedToGet},
+			err:   dryrun.ErrGetFailed,
+		},
+		"passive_target_forbidden": {
+			input: dryrun.TriggerInput{SourceID: testSourceID, TargetID: testTargetID},
+			mock: mockTrigger{detailCalled: true, source: func() model.DataSource {
+				source := dryrunSource(model.SourceStatusReady)
+				source.SourceCategory = model.SourceCategoryPassive
+				source.SourceType = model.SourceTypeWebhook
+				return source
+			}()},
+			err: dryrun.ErrTargetForbidden,
+		},
+		"unsupported_mapping": {
+			input: dryrun.TriggerInput{SourceID: testSourceID, TargetID: testTargetID},
+			mock: mockTrigger{detailCalled: true, source: func() model.DataSource {
+				source := dryrunSource(model.SourceStatusReady)
+				source.SourceType = model.SourceTypeYouTube
+				return source
+			}(), targetCalled: true, target: dryrunTarget(), latestCalled: true, latestErr: dryrunRepo.ErrNotFound},
+			err: dryrun.ErrUnsupportedMapping,
+		},
+		"create_error": {
+			input: dryrun.TriggerInput{SourceID: testSourceID, TargetID: testTargetID},
+			mock:  mockTrigger{detailCalled: true, source: dryrunSource(model.SourceStatusReady), targetCalled: true, target: dryrunTarget(), latestCalled: true, latestErr: dryrunRepo.ErrNotFound, createCalled: true, createErr: dryrunRepo.ErrFailedToInsert},
+			err:   dryrun.ErrCreateFailed,
+		},
+		"mark_running_error": {
+			input: dryrun.TriggerInput{SourceID: testSourceID, TargetID: testTargetID},
+			mock:  mockTrigger{detailCalled: true, source: dryrunSource(model.SourceStatusReady), targetCalled: true, target: dryrunTarget(), latestCalled: true, latestErr: dryrunRepo.ErrNotFound, createCalled: true, createResult: dryrunResult(model.DryrunStatusRunning), markCalled: true, markErr: datasource.ErrUpdateFailed},
+			err:   dryrun.ErrUpdateFailed,
+		},
 		"dispatch_failed": {
 			input: dryrun.TriggerInput{SourceID: testSourceID, TargetID: testTargetID},
 			mock:  mockTrigger{detailCalled: true, source: dryrunSource(model.SourceStatusReady), targetCalled: true, target: dryrunTarget(), latestCalled: true, latestErr: dryrunRepo.ErrNotFound, createCalled: true, createResult: dryrunResult(model.DryrunStatusRunning), markCalled: true, markResult: datasource.MarkDryrunRunningOutput{DataSource: dryrunSource(model.SourceStatusPending)}, publishCalled: true, publishErr: dryrun.ErrDispatchFailed, completeFailCalled: true},
 			err:   dryrun.ErrDispatchFailed,
+		},
+		"dispatch_failed_and_fail_update_error": {
+			input: dryrun.TriggerInput{SourceID: testSourceID, TargetID: testTargetID},
+			mock:  mockTrigger{detailCalled: true, source: dryrunSource(model.SourceStatusReady), targetCalled: true, target: dryrunTarget(), latestCalled: true, latestErr: dryrunRepo.ErrNotFound, createCalled: true, createResult: dryrunResult(model.DryrunStatusRunning), markCalled: true, markResult: datasource.MarkDryrunRunningOutput{DataSource: dryrunSource(model.SourceStatusPending)}, publishCalled: true, publishErr: dryrun.ErrDispatchFailed, completeFailCalled: true, completeFailErr: dryrunRepo.ErrFailedToUpdate},
+			err:   dryrun.ErrUpdateFailed,
 		},
 	}
 
@@ -141,10 +197,10 @@ func TestTrigger(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			uc, r, dsUC, pub := newDryrunUC(t)
 			if tc.mock.detailCalled {
-				dsUC.EXPECT().Detail(context.Background(), testSourceID).Return(datasource.DetailOutput{DataSource: tc.mock.source}, nil)
+				dsUC.EXPECT().Detail(context.Background(), testSourceID).Return(datasource.DetailOutput{DataSource: tc.mock.source}, tc.mock.detailErr)
 			}
 			if tc.mock.targetCalled {
-				dsUC.EXPECT().DetailTarget(context.Background(), datasource.DetailTargetInput{DataSourceID: testSourceID, ID: testTargetID}).Return(datasource.DetailTargetOutput{Target: tc.mock.target}, nil)
+				dsUC.EXPECT().DetailTarget(context.Background(), datasource.DetailTargetInput{DataSourceID: testSourceID, ID: testTargetID}).Return(datasource.DetailTargetOutput{Target: tc.mock.target}, tc.mock.targetErr)
 			}
 			if tc.mock.latestCalled {
 				r.EXPECT().GetLatest(context.Background(), dryrunRepo.GetLatestOptions{SourceID: testSourceID, TargetID: testTargetID}).Return(tc.mock.latest, tc.mock.latestErr)
@@ -157,7 +213,7 @@ func TestTrigger(t *testing.T) {
 			if tc.mock.markCalled {
 				dsUC.EXPECT().MarkDryrunRunning(context.Background(), mock.MatchedBy(func(input datasource.MarkDryrunRunningInput) bool {
 					return input.ID == testSourceID && input.DryrunLastResultID == "result-1"
-				})).Return(tc.mock.markResult, nil)
+				})).Return(tc.mock.markResult, tc.mock.markErr)
 			}
 			if tc.mock.publishCalled {
 				pub.EXPECT().PublishDispatch(context.Background(), mock.MatchedBy(func(input dryrun.PublishDispatchInput) bool {
@@ -167,7 +223,7 @@ func TestTrigger(t *testing.T) {
 			if tc.mock.completeFailCalled {
 				r.EXPECT().CompleteResult(context.Background(), mock.MatchedBy(func(opt dryrunRepo.CompleteResultOptions) bool {
 					return opt.ID == "result-1" && opt.Status == string(model.DryrunStatusFailed)
-				})).Return(dryrunResult(model.DryrunStatusFailed), dryrunSource(model.SourceStatusPending), nil)
+				})).Return(dryrunResult(model.DryrunStatusFailed), dryrunSource(model.SourceStatusPending), tc.mock.completeFailErr)
 			}
 
 			output, err := uc.Trigger(context.Background(), tc.input)
@@ -262,6 +318,8 @@ func TestHandleCompletion(t *testing.T) {
 		getCalled      bool
 		getOutput      model.DryrunResult
 		getErr         error
+		activateCalled bool
+		activateErr    error
 		completeCalled bool
 		completeInput  dryrunRepo.CompleteResultOptions
 		completeErr    error
@@ -286,25 +344,57 @@ func TestHandleCompletion(t *testing.T) {
 			mock:  mockCompletion{getCalled: true, getErr: dryrunRepo.ErrNotFound},
 			err:   dryrun.ErrCompletionTaskNotFound,
 		},
+		"repo_error": {
+			input: dryrun.HandleCompletionInput{TaskID: "task-1", Status: "error"},
+			mock:  mockCompletion{getCalled: true, getErr: dryrunRepo.ErrFailedToGet},
+			err:   dryrun.ErrGetFailed,
+		},
 		"error_status": {
 			input: dryrun.HandleCompletionInput{TaskID: "task-1", Status: "error", Error: "boom", CompletedAt: completedAt},
 			mock:  mockCompletion{getCalled: true, getOutput: dryrunResult(model.DryrunStatusRunning), completeCalled: true, completeInput: dryrunRepo.CompleteResultOptions{ID: "result-1", Status: string(model.DryrunStatusFailed), SampleCount: 0, CompletedAt: mustParseTimePtr(completedAt), ErrorMessage: "boom"}},
+		},
+		"error_status_default_message": {
+			input: dryrun.HandleCompletionInput{TaskID: "task-1", Status: "error", CompletedAt: completedAt},
+			mock:  mockCompletion{getCalled: true, getOutput: dryrunResult(model.DryrunStatusRunning), completeCalled: true, completeInput: dryrunRepo.CompleteResultOptions{ID: "result-1", Status: string(model.DryrunStatusFailed), SampleCount: 0, CompletedAt: mustParseTimePtr(completedAt), ErrorMessage: "crawler returned error completion without error message"}},
+		},
+		"error_status_update_error": {
+			input: dryrun.HandleCompletionInput{TaskID: "task-1", Status: "error", Error: "boom", CompletedAt: completedAt},
+			mock:  mockCompletion{getCalled: true, getOutput: dryrunResult(model.DryrunStatusRunning), completeCalled: true, completeInput: dryrunRepo.CompleteResultOptions{ID: "result-1", Status: string(model.DryrunStatusFailed), SampleCount: 0, CompletedAt: mustParseTimePtr(completedAt), ErrorMessage: "boom"}, completeErr: dryrunRepo.ErrFailedToUpdate},
+			err:   dryrun.ErrUpdateFailed,
 		},
 		"duplicate_terminal": {
 			input: dryrun.HandleCompletionInput{TaskID: "task-1", Status: "error"},
 			mock:  mockCompletion{getCalled: true, getOutput: model.DryrunResult{ID: "result-1", SourceID: testSourceID, ProjectID: testProjectID, JobID: "task-1", Status: model.DryrunStatusSuccess}},
 		},
+		"duplicate_terminal_activate_error": {
+			input: dryrun.HandleCompletionInput{TaskID: "task-1", Status: "error"},
+			mock:  mockCompletion{getCalled: true, getOutput: dryrunResult(model.DryrunStatusSuccess), activateCalled: true, activateErr: datasource.ErrUpdateFailed},
+			err:   dryrun.ErrUpdateFailed,
+		},
 		"download_failed": {
 			input: dryrun.HandleCompletionInput{TaskID: "task-1", Status: "success", StorageBucket: "local", StoragePath: "/missing", CompletedAt: completedAt},
 			mock:  mockCompletion{getCalled: true, getOutput: dryrunResult(model.DryrunStatusRunning), completeCalled: true, completeInput: dryrunRepo.CompleteResultOptions{ID: "result-1", Status: string(model.DryrunStatusFailed), SampleCount: 0, CompletedAt: mustParseTimePtr(completedAt), ErrorMessage: "download dryrun artifact: open /missing: no such file or directory"}},
+		},
+		"download_failed_update_error": {
+			input: dryrun.HandleCompletionInput{TaskID: "task-1", Status: "success", StorageBucket: "local", StoragePath: "/missing", CompletedAt: completedAt},
+			mock:  mockCompletion{getCalled: true, getOutput: dryrunResult(model.DryrunStatusRunning), completeCalled: true, completeInput: dryrunRepo.CompleteResultOptions{ID: "result-1", Status: string(model.DryrunStatusFailed), SampleCount: 0, CompletedAt: mustParseTimePtr(completedAt), ErrorMessage: "download dryrun artifact: open /missing: no such file or directory"}, completeErr: dryrunRepo.ErrFailedToUpdate},
+			err:   dryrun.ErrUpdateFailed,
+		},
+		"success_update_error": {
+			input: dryrun.HandleCompletionInput{TaskID: "task-1", Status: "success", StorageBucket: "local", StoragePath: tmp.Name(), CompletedAt: completedAt},
+			mock:  mockCompletion{getCalled: true, getOutput: dryrunResult(model.DryrunStatusRunning), completeCalled: true, completeInput: dryrunRepo.CompleteResultOptions{ID: "result-1", Status: string(model.DryrunStatusSuccess), SampleCount: 2, CompletedAt: mustParseTimePtr(completedAt), TotalFound: intPtr(3), SampleData: []byte(`[{"id":1},{"id":2}]`), ActivateTarget: true}, completeErr: dryrunRepo.ErrFailedToUpdate},
+			err:   dryrun.ErrUpdateFailed,
 		},
 	}
 
 	for name, tc := range tcs {
 		t.Run(name, func(t *testing.T) {
-			uc, r, _, _ := newDryrunUC(t)
+			uc, r, dsUC, _ := newDryrunUC(t)
 			if tc.mock.getCalled {
 				r.EXPECT().GetByJobID(context.Background(), "task-1").Return(tc.mock.getOutput, tc.mock.getErr)
+			}
+			if tc.mock.activateCalled {
+				dsUC.EXPECT().ActivateTarget(context.Background(), datasource.ActivateTargetInput{DataSourceID: testSourceID, ID: testTargetID}).Return(datasource.ActivateTargetOutput{}, tc.mock.activateErr)
 			}
 			if tc.mock.completeCalled {
 				r.EXPECT().CompleteResult(context.Background(), mock.MatchedBy(func(opt dryrunRepo.CompleteResultOptions) bool {
@@ -340,10 +430,26 @@ func TestDryrunFlowHelpers(t *testing.T) {
 			uc, _, _, _ := newDryrunUC(t)
 
 			require.Equal(t, map[string]interface{}{"parse_ids": []string{"1", "2"}, "limit": 5, dryrun.ParamKeyRuntimeKind: string(dryrun.RuntimeKindDryrun)}, uc.buildPostDetailParams([]string{"1", "2"}, 5))
+			require.Nil(t, uc.parseCompletedAt(" "))
 			require.Equal(t, intPtr(10), uc.normalizeTotalFoundFromObject(map[string]interface{}{"total_posts": float64(10)}, nil))
 			require.Equal(t, intPtr(7), uc.normalizeTotalFoundFromObject(map[string]interface{}{"item_count": int64(7)}, nil))
+			require.Equal(t, intPtr(8), uc.normalizeTotalFound(8, nil))
+			require.Equal(t, 1, uc.parseInt(1))
 			require.Equal(t, 2, uc.parseInt(json.Number("2")))
+			require.Nil(t, uc.marshalJSON(nil))
 			require.Equal(t, []string{"1", "2"}, mustParseFacebookIDs(t, uc, []byte(`{"parse_ids":["1"," 2 ",""]}`)))
+			_, err := uc.parseFacebookParseIDs(nil)
+			require.ErrorIs(t, err, dryrun.ErrUnsupportedMapping)
+			_, err = uc.parseFacebookParseIDs([]byte(`{`))
+			require.ErrorIs(t, err, dryrun.ErrUnsupportedMapping)
+			_, err = uc.parseFacebookParseIDs([]byte(`{"parse_ids":[1]}`))
+			require.ErrorIs(t, err, dryrun.ErrUnsupportedMapping)
+			_, err = uc.parseFacebookParseIDs([]byte(`{"parse_ids":[" "]}`))
+			require.ErrorIs(t, err, dryrun.ErrUnsupportedMapping)
+			sampleData, sampleCount, _, warnings := uc.buildSamplePayload(json.RawMessage(`{`), 5, 0, nil)
+			require.Nil(t, sampleData)
+			require.Zero(t, sampleCount)
+			require.NotEmpty(t, warnings)
 			uc.publisher = nil
 			require.ErrorIs(t, uc.publishDispatch(context.Background(), dryrun.PublishDispatchInput{}), dryrun.ErrDispatchFailed)
 			got, err := uc.readAllAndClose(io.NopCloser(strings.NewReader("abc")))
@@ -405,6 +511,42 @@ func TestBuildDispatchSpec(t *testing.T) {
 			}(), target: &model.CrawlTarget{ID: testTargetID, TargetType: model.TargetTypePostURL, PlatformMeta: []byte(`{}`)}},
 			err: dryrun.ErrUnsupportedMapping,
 		},
+		"tiktok_nil_target": {
+			input: struct {
+				source model.DataSource
+				target *model.CrawlTarget
+			}{source: dryrunSource(model.SourceStatusReady)},
+			err: dryrun.ErrUnsupportedMapping,
+		},
+		"tiktok_empty_keyword": {
+			input: struct {
+				source model.DataSource
+				target *model.CrawlTarget
+			}{source: dryrunSource(model.SourceStatusReady), target: &model.CrawlTarget{ID: testTargetID, TargetType: model.TargetTypeKeyword, Values: []string{" "}}},
+			err: dryrun.ErrUnsupportedMapping,
+		},
+		"facebook_nil_target": {
+			input: struct {
+				source model.DataSource
+				target *model.CrawlTarget
+			}{source: func() model.DataSource {
+				s := dryrunSource(model.SourceStatusReady)
+				s.SourceType = model.SourceTypeFacebook
+				return s
+			}()},
+			err: dryrun.ErrUnsupportedMapping,
+		},
+		"facebook_wrong_target": {
+			input: struct {
+				source model.DataSource
+				target *model.CrawlTarget
+			}{source: func() model.DataSource {
+				s := dryrunSource(model.SourceStatusReady)
+				s.SourceType = model.SourceTypeFacebook
+				return s
+			}(), target: &model.CrawlTarget{ID: testTargetID, TargetType: model.TargetTypeKeyword, Values: []string{"a"}}},
+			err: dryrun.ErrUnsupportedMapping,
+		},
 	}
 
 	for name, tc := range tcs {
@@ -434,6 +576,10 @@ func TestBuildSuccessUpdate(t *testing.T) {
 	}{
 		"invalid_json":                       {input: []byte(`{`), output: model.DryrunStatusWarning},
 		"empty_result":                       {input: []byte(`{"result":[]}`), output: model.DryrunStatusSuccess},
+		"empty_collection_object":            {input: []byte(`{"result":{"items":[]}}`), output: model.DryrunStatusWarning},
+		"item_count_collection":              {input: []byte(`{"result":{"items":[{"id":1}],"item_count":9}}`), output: model.DryrunStatusSuccess},
+		"artifact_item_count":                {input: []byte(`{"result":null,"item_count":4}`), output: model.DryrunStatusWarning},
+		"scalar_result":                      {input: []byte(`{"result":"ok"}`), output: model.DryrunStatusWarning},
 		"object_fallback_with_warning_param": {input: []byte(`{"params":{"dryrun_warning_code":"x","dryrun_warning_message":"y"},"result":{"id":1}}`), output: model.DryrunStatusWarning},
 	}
 
@@ -441,9 +587,8 @@ func TestBuildSuccessUpdate(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			uc, _, _, _ := newDryrunUC(t)
 
-			opt, status, err := uc.buildSuccessUpdate(tc.input, nil)
+			opt, status := uc.buildSuccessUpdate(tc.input, nil)
 
-			require.ErrorIs(t, err, tc.err)
 			require.Equal(t, tc.output, status)
 			if tc.output == model.DryrunStatusWarning {
 				require.NotEmpty(t, opt.Warnings)

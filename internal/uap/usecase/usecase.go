@@ -91,11 +91,7 @@ func (uc *implUseCase) ParseAndStoreRawBatch(ctx context.Context, input uap.Pars
 		parts = append(parts, part)
 	}
 
-	metadata, err := uc.mergeRawMetadata(input.RawMetadata, parts, len(records), publishStats)
-	if err != nil {
-		_ = uc.failRawBatch(ctx, input, fmt.Sprintf("merge parsed raw metadata: %v", err), "", parts, len(records), publishStats)
-		return err
-	}
+	metadata := uc.mergeRawMetadata(input.RawMetadata, parts, len(records), publishStats)
 
 	if err := uc.repo.MarkRawBatchParsed(ctx, repo.MarkRawBatchParsedOptions{
 		RawBatchID:         input.RawBatchID,

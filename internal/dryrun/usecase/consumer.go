@@ -74,11 +74,7 @@ func (uc *implUseCase) HandleCompletion(ctx context.Context, input dryrun.Handle
 		return nil
 	}
 
-	updateOpt, finalStatus, err := uc.buildSuccessUpdate(rawBytes, input.ItemCount)
-	if err != nil {
-		uc.l.Errorf(ctx, "dryrun.usecase.HandleCompletion.buildSuccessUpdate: result_id=%s err=%v", result.ID, err)
-		return dryrun.ErrUpdateFailed
-	}
+	updateOpt, finalStatus := uc.buildSuccessUpdate(rawBytes, input.ItemCount)
 	updateOpt.ID = result.ID
 	updateOpt.CompletedAt = uc.parseCompletedAt(input.CompletedAt)
 

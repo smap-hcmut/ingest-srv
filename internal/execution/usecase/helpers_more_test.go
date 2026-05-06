@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 
 	"ingest-srv/internal/execution"
 	repo "ingest-srv/internal/execution/repository"
@@ -56,6 +57,36 @@ func TestBuildDispatchSpecsMore(t *testing.T) {
 				return source
 			}(), target: executionTarget()},
 			output: 1,
+		},
+		"facebook empty keyword": {
+			input: struct {
+				source model.DataSource
+				target model.CrawlTarget
+			}{source: func() model.DataSource {
+				source := executionSource()
+				source.SourceType = model.SourceTypeFacebook
+				return source
+			}(), target: func() model.CrawlTarget {
+				target := executionTarget()
+				target.Values = []string{" "}
+				return target
+			}()},
+			err: execution.ErrDispatchNotAllowed,
+		},
+		"youtube empty keyword": {
+			input: struct {
+				source model.DataSource
+				target model.CrawlTarget
+			}{source: func() model.DataSource {
+				source := executionSource()
+				source.SourceType = model.SourceTypeYouTube
+				return source
+			}(), target: func() model.CrawlTarget {
+				target := executionTarget()
+				target.Values = []string{" "}
+				return target
+			}()},
+			err: execution.ErrDispatchNotAllowed,
 		},
 		"empty keyword": {
 			input: struct {
@@ -163,10 +194,32 @@ func TestExecutionHelperEdges(t *testing.T) {
 	})
 
 	t.Run("facebook parse ids", func(t *testing.T) {
-		_, err := uc.parseFacebookParseIDs(json.RawMessage(`{"parse_ids":[1]}`))
+		_, err := uc.parseFacebookParseIDs(nil)
+		require.ErrorIs(t, err, execution.ErrPlatformMetaParseIDs)
+		_, err = uc.parseFacebookParseIDs(json.RawMessage(`{`))
+		require.ErrorIs(t, err, execution.ErrPlatformMetaParseIDs)
+		_, err = uc.parseFacebookParseIDs(json.RawMessage(`{"parse_ids":[]}`))
+		require.ErrorIs(t, err, execution.ErrPlatformMetaParseIDs)
+		_, err = uc.parseFacebookParseIDs(json.RawMessage(`{"parse_ids":[1]}`))
 		require.ErrorIs(t, err, execution.ErrPlatformMetaParseIDs)
 		_, err = uc.parseFacebookParseIDs(json.RawMessage(`{"parse_ids":[" "]}`))
 		require.ErrorIs(t, err, execution.ErrPlatformMetaParseIDs)
+	})
+
+	t.Run("misc helpers", func(t *testing.T) {
+		require.Equal(t, execution.ErrDataSourceNotFound, uc.mapRepositoryError(repo.ErrDataSourceNotFound))
+		require.Equal(t, execution.ErrTargetNotFound, uc.mapRepositoryError(repo.ErrTargetNotFound))
+		require.Equal(t, execution.ErrDispatchFailed, uc.mapRepositoryError(errors.New("db")))
+		require.Nil(t, uc.cloneParams(nil))
+		require.Nil(t, uc.cloneParams(map[string]interface{}{}))
+		mode := model.CrawlModeSleep
+		duration, err := uc.computeEffectiveInterval(model.DataSource{CrawlMode: &mode}, model.CrawlTarget{CrawlIntervalMinutes: 999999})
+		require.NoError(t, err)
+		require.Equal(t, time.Duration(execution.DefaultMaxIntervalMinute)*time.Minute, duration)
+		badMode := model.CrawlMode("BAD")
+		_, err = uc.computeEffectiveInterval(model.DataSource{CrawlMode: &badMode}, model.CrawlTarget{CrawlIntervalMinutes: 10})
+		require.Error(t, err)
+		require.Equal(t, "dispatch fan-out encountered 2 failure(s): a", uc.summarizeDispatchFailures([]string{" ", "a"}, 2))
 	})
 }
 
@@ -209,11 +262,15 @@ func TestVerifyMinIOObject(t *testing.T) {
 			output: &sharedMinio.FileInfo{Size: 10},
 		},
 		"exists stat error": {
-			minio: fakeMinIO{exists: true, err: errMinIO},
+			minio: fakeMinIO{exists: true, statErr: errMinIO},
 			err:   true,
 		},
 		"missing": {
 			minio: fakeMinIO{exists: false},
+			err:   true,
+		},
+		"exists error": {
+			minio: fakeMinIO{exists: false, existsErr: errMinIO},
 			err:   true,
 		},
 	}
@@ -277,4 +334,5 @@ func TestNewSetsDefaults(t *testing.T) {
 	require.True(t, ok)
 	require.NotNil(t, impl.now)
 	require.NotNil(t, impl.sleep)
+	require.False(t, impl.now().IsZero())
 }
