@@ -29,8 +29,8 @@ test:
 	@echo "Running tests..."
 	@go test -mod=vendor -coverprofile=coverage.out -failfast -timeout 5m ./internal/...
 	@grep -v 'mock_' coverage.out > c.out
-	@go tool cover -func=c.out
-	@echo "Coverage report generated in c.out"
+	@go tool cover -func=c.out | grep '^total:'
+	@echo "Coverage summary generated"
 	@rm -f *.out
 
 build-docker-compose:
