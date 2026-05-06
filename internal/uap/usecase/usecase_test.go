@@ -137,11 +137,11 @@ func TestPublishPayloadUsesCurrentUAPRecord(t *testing.T) {
 
 	uc.publishRecord(context.Background(), record, input, stats)
 
-	if stats.AttemptedCount != 0 || stats.SuccessCount != 0 || stats.FailedCount != 0 {
+	if stats.AttemptedCount != 1 || stats.SuccessCount != 1 || stats.FailedCount != 0 {
 		t.Fatalf("unexpected publish stats: %#v", stats)
 	}
-	if spy.lastInput.Record.Identity.UAPID != "" {
-		t.Fatalf("expected no publish call while publishRecord is disabled, got %#v", spy.lastInput.Record)
+	if spy.lastInput.Record.Identity.UAPID != record.Identity.UAPID {
+		t.Fatalf("expected publish call with current UAP record, got %#v", spy.lastInput.Record)
 	}
 }
 

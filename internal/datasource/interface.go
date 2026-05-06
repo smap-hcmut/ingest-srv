@@ -34,6 +34,7 @@ type ProjectOrchestrationUseCase interface {
 	Activate(ctx context.Context, projectID string) (ProjectLifecycleOutput, error)
 	Pause(ctx context.Context, projectID string) (ProjectLifecycleOutput, error)
 	Resume(ctx context.Context, projectID string) (ProjectLifecycleOutput, error)
+	UpdateProjectCrawlMode(ctx context.Context, input UpdateProjectCrawlModeInput) (ProjectLifecycleOutput, error)
 }
 
 type DryrunUseCase interface {

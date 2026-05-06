@@ -108,6 +108,20 @@ func (h *handler) processActivationReadinessReq(c *gin.Context) (activationReadi
 	return req, nil
 }
 
+func (h *handler) processUpdateProjectCrawlModeReq(c *gin.Context) (updateProjectCrawlModeReq, error) {
+	var req updateProjectCrawlModeReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.l.Warnf(c.Request.Context(), "datasource.delivery.processUpdateProjectCrawlModeReq.ShouldBindJSON: %v", err)
+		return req, errWrongBody
+	}
+	req.ProjectID = c.Param("project_id")
+	if err := req.validate(); err != nil {
+		h.l.Warnf(c.Request.Context(), "datasource.delivery.processUpdateProjectCrawlModeReq.validate: %v", err)
+		return req, err
+	}
+	return req, nil
+}
+
 // --- CrawlTarget Request Processors ---
 
 // processCreateTargetGroupReq binds JSON + path param for creating a grouped target.
