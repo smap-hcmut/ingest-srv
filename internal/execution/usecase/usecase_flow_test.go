@@ -649,6 +649,7 @@ func TestDispatchDueTargets(t *testing.T) {
 		claimErr   error
 		afterCtx   repo.DispatchContext
 		afterErr   error
+		createErr  error
 		publishErr error
 	}
 
@@ -723,6 +724,11 @@ func TestDispatchDueTargets(t *testing.T) {
 			}()},
 			output: execution.DispatchDueTargetsOutput{DueCount: 1, ClaimedCount: 1, SkippedRaceCount: 1},
 		},
+		"create_job_conflict_skipped": {
+			input:  execution.DispatchDueTargetsInput{Now: now, Limit: 1},
+			mock:   mockDue{dueTargets: []repo.DueTarget{baseDue}, claim: true, afterCtx: baseCtx, createErr: repo.ErrDispatchConflict},
+			output: execution.DispatchDueTargetsOutput{DueCount: 1, ClaimedCount: 1, SkippedRaceCount: 1},
+		},
 		"dispatch_failed": {
 			input:  execution.DispatchDueTargetsInput{Now: now, Limit: 1},
 			mock:   mockDue{dueTargets: []repo.DueTarget{baseDue}, claim: true, afterCtx: baseCtx, publishErr: errors.New("publish")},
@@ -754,15 +760,17 @@ func TestDispatchDueTargets(t *testing.T) {
 						r.EXPECT().ReleaseClaimTarget(context.Background(), repo.ReleaseClaimTargetOptions{SourceID: testSourceID, TargetID: testTargetID}).Return(nil)
 					}
 					if tc.mock.afterErr == nil && tc.mock.afterCtx.Target.IsActive {
-						r.EXPECT().CreateScheduledJob(context.Background(), mock.AnythingOfType("repository.CreateScheduledJobOptions")).Return(model.ScheduledJob{ID: "job-1"}, nil)
-						project.EXPECT().Detail(context.Background(), testProjectID).Return(microservice.ProjectDetail{ID: testProjectID, Status: microservice.ProjectStatusActive, DomainTypeCode: "domain"}, nil)
-						r.EXPECT().CreateExternalTask(context.Background(), mock.AnythingOfType("repository.CreateExternalTaskOptions")).Return(model.ExternalTask{ID: "external-1"}, nil)
-						pub.EXPECT().PublishDispatch(context.Background(), mock.AnythingOfType("execution.PublishDispatchInput")).Return(tc.mock.publishErr)
-						if tc.mock.publishErr != nil {
-							r.EXPECT().MarkExternalTaskFailed(context.Background(), mock.AnythingOfType("repository.MarkExternalTaskFailedOptions")).Return(nil)
-							r.EXPECT().FinalizeScheduledJob(context.Background(), mock.AnythingOfType("repository.FinalizeScheduledJobOptions")).Return(nil)
-						} else {
-							r.EXPECT().MarkExternalTaskPublished(context.Background(), mock.AnythingOfType("repository.MarkExternalTaskPublishedOptions")).Return(nil)
+						r.EXPECT().CreateScheduledJob(context.Background(), mock.AnythingOfType("repository.CreateScheduledJobOptions")).Return(model.ScheduledJob{ID: "job-1"}, tc.mock.createErr)
+						if tc.mock.createErr == nil {
+							project.EXPECT().Detail(context.Background(), testProjectID).Return(microservice.ProjectDetail{ID: testProjectID, Status: microservice.ProjectStatusActive, DomainTypeCode: "domain"}, nil)
+							r.EXPECT().CreateExternalTask(context.Background(), mock.AnythingOfType("repository.CreateExternalTaskOptions")).Return(model.ExternalTask{ID: "external-1"}, nil)
+							pub.EXPECT().PublishDispatch(context.Background(), mock.AnythingOfType("execution.PublishDispatchInput")).Return(tc.mock.publishErr)
+							if tc.mock.publishErr != nil {
+								r.EXPECT().MarkExternalTaskFailed(context.Background(), mock.AnythingOfType("repository.MarkExternalTaskFailedOptions")).Return(nil)
+								r.EXPECT().FinalizeScheduledJob(context.Background(), mock.AnythingOfType("repository.FinalizeScheduledJobOptions")).Return(nil)
+							} else {
+								r.EXPECT().MarkExternalTaskPublished(context.Background(), mock.AnythingOfType("repository.MarkExternalTaskPublishedOptions")).Return(nil)
+							}
 						}
 					}
 				}

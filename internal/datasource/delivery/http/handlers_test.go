@@ -561,6 +561,66 @@ func testProjectLifecycleHandler(t *testing.T, command string, call func(*handle
 	}
 }
 
+func TestUpdateProjectCrawlMode(t *testing.T) {
+	type mockUpdate struct {
+		isCalled bool
+		input    datasource.UpdateProjectCrawlModeInput
+		output   datasource.ProjectLifecycleOutput
+		err      error
+	}
+	type mockData struct {
+		update mockUpdate
+	}
+
+	tcs := map[string]struct {
+		input  string
+		mock   mockData
+		output int
+		err    error
+	}{
+		"success": {
+			input: `{"crawl_mode":"CRISIS","trigger_type":"CRISIS_EVENT","reason":" reason ","event_ref":" event-1 "}`,
+			mock: mockData{update: mockUpdate{
+				isCalled: true,
+				input:    datasource.UpdateProjectCrawlModeInput{ProjectID: testProjectID, CrawlMode: string(model.CrawlModeCrisis), TriggerType: string(model.TriggerTypeCrisisEvent), Reason: "reason", EventRef: "event-1"},
+				output:   datasource.ProjectLifecycleOutput{ProjectID: testProjectID, AffectedDataSourceCount: 2},
+			}},
+			output: http.StatusOK,
+		},
+		"wrong_body": {
+			input:  `{`,
+			output: http.StatusBadRequest,
+		},
+		"invalid_mode": {
+			input:  `{"crawl_mode":"BAD","trigger_type":"CRISIS_EVENT"}`,
+			output: http.StatusBadRequest,
+		},
+		"uc_error": {
+			input: `{"crawl_mode":"CRISIS","trigger_type":"CRISIS_EVENT"}`,
+			mock: mockData{update: mockUpdate{
+				isCalled: true,
+				input:    datasource.UpdateProjectCrawlModeInput{ProjectID: testProjectID, CrawlMode: string(model.CrawlModeCrisis), TriggerType: string(model.TriggerTypeCrisisEvent)},
+				err:      datasource.ErrUpdateFailed,
+			}},
+			output: http.StatusInternalServerError,
+		},
+	}
+
+	for name, tc := range tcs {
+		t.Run(name, func(t *testing.T) {
+			h, uc := newTestHandler(t)
+			if tc.mock.update.isCalled {
+				uc.EXPECT().UpdateProjectCrawlMode(context.Background(), tc.mock.update.input).Return(tc.mock.update.output, tc.mock.update.err)
+			}
+			c, w := newTestContext(http.MethodPost, "/internal/projects/"+testProjectID+"/crawl-mode", tc.input, gin.Params{{Key: "project_id", Value: testProjectID}})
+
+			h.UpdateProjectCrawlMode(c)
+
+			require.Equal(t, tc.output, w.Code)
+		})
+	}
+}
+
 func TestCreateKeywordTarget(t *testing.T) {
 	testCreateTargetHandler(t, "keywords", `{"values":[" vinfast ","vinfast",""],"label":"label","platform_meta":{"platform":"tiktok"},"priority":1,"crawl_interval_minutes":10}`, datasource.CreateTargetGroupInput{DataSourceID: testSourceID, Values: []string{"vinfast"}, Label: "label", PlatformMeta: []byte(`{"platform":"tiktok"}`), Priority: 1, CrawlIntervalMinutes: 10}, func(h *handler, c *gin.Context) { h.CreateKeywordTarget(c) }, func(uc *datasource.MockUseCase, input datasource.CreateTargetGroupInput, output datasource.CreateTargetOutput, err error) {
 		uc.EXPECT().CreateKeywordTarget(context.Background(), input).Return(output, err)

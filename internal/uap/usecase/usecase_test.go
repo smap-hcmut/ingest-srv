@@ -138,11 +138,7 @@ func TestPublishPayloadUsesCurrentUAPRecord(t *testing.T) {
 		t.Fatalf("unexpected publish stats: %#v", stats)
 	}
 	if spy.lastInput.Record.Identity.UAPID != record.Identity.UAPID {
-<<<<<<< HEAD
-		t.Fatalf("expected publish call with current record, got %#v", spy.lastInput.Record)
-=======
 		t.Fatalf("expected publish call with current UAP record, got %#v", spy.lastInput.Record)
->>>>>>> master
 	}
 }
 

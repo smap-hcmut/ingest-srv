@@ -55,7 +55,7 @@ func TestRegisterInternalRoutes(t *testing.T) {
 		output int
 		err    error
 	}{
-		"success": {input: "/internal", output: 5},
+		"success": {input: "/internal", output: 6},
 	}
 
 	for name, tc := range tcs {
@@ -73,6 +73,7 @@ func TestRegisterInternalRoutes(t *testing.T) {
 			requireRoute(t, routes, http.MethodPost, "/internal/projects/:project_id/activate")
 			requireRoute(t, routes, http.MethodPost, "/internal/projects/:project_id/pause")
 			requireRoute(t, routes, http.MethodPost, "/internal/projects/:project_id/resume")
+			requireRoute(t, routes, http.MethodPost, "/internal/projects/:project_id/crawl-mode")
 		})
 	}
 }

@@ -1224,6 +1224,148 @@ func TestDeleteTarget(t *testing.T) {
 	}
 }
 
+func TestUpdateProjectCrawlMode(t *testing.T) {
+	modeNormal := model.CrawlModeNormal
+	modeCrisis := model.CrawlModeCrisis
+	interval := 10
+	eligible := testSource(model.SourceStatusActive)
+	eligible.CrawlMode = &modeNormal
+	eligible.CrawlIntervalMinutes = &interval
+	passive := eligible
+	passive.ID = "passive"
+	passive.SourceCategory = model.SourceCategoryPassive
+	archived := eligible
+	archived.ID = "archived"
+	archived.Status = model.SourceStatusArchived
+	noMode := eligible
+	noMode.ID = "no-mode"
+	noMode.CrawlMode = nil
+	sameMode := eligible
+	sameMode.ID = "same-mode"
+	sameMode.CrawlMode = &modeCrisis
+
+	type mockData struct {
+		listSources     []model.DataSource
+		listErr         error
+		updateCalled    bool
+		updateErr       error
+		changeCalled    bool
+		changeErr       error
+		expectedOptions repo.UpdateDataSourceOptions
+		expectedChange  repo.CreateCrawlModeChangeOptions
+	}
+
+	tcs := map[string]struct {
+		input  datasource.UpdateProjectCrawlModeInput
+		mock   mockData
+		output datasource.ProjectLifecycleOutput
+		err    error
+	}{
+		"success_skips_ineligible_and_updates_one": {
+			input: datasource.UpdateProjectCrawlModeInput{ProjectID: " " + testProjectID + " ", CrawlMode: " CRISIS ", TriggerType: " CRISIS_EVENT ", Reason: " reason ", EventRef: " event-1 "},
+			mock: mockData{
+				listSources:  []model.DataSource{passive, archived, noMode, sameMode, eligible},
+				updateCalled: true,
+				changeCalled: true,
+				expectedOptions: repo.UpdateDataSourceOptions{
+					ID:        testSourceID,
+					CrawlMode: string(model.CrawlModeCrisis),
+				},
+				expectedChange: repo.CreateCrawlModeChangeOptions{
+					SourceID:            testSourceID,
+					ProjectID:           testProjectID,
+					TriggerType:         string(model.TriggerTypeCrisisEvent),
+					FromMode:            string(model.CrawlModeNormal),
+					ToMode:              string(model.CrawlModeCrisis),
+					FromIntervalMinutes: interval,
+					ToIntervalMinutes:   interval,
+					Reason:              "reason",
+					EventRef:            "event-1",
+				},
+			},
+			output: datasource.ProjectLifecycleOutput{ProjectID: testProjectID, AffectedDataSourceCount: 1},
+		},
+		"project_id_required": {
+			input: datasource.UpdateProjectCrawlModeInput{CrawlMode: string(model.CrawlModeCrisis), TriggerType: string(model.TriggerTypeCrisisEvent)},
+			err:   datasource.ErrProjectIDRequired,
+		},
+		"invalid_mode": {
+			input: datasource.UpdateProjectCrawlModeInput{ProjectID: testProjectID, CrawlMode: "BAD", TriggerType: string(model.TriggerTypeCrisisEvent)},
+			err:   datasource.ErrInvalidCrawlMode,
+		},
+		"invalid_trigger_type": {
+			input: datasource.UpdateProjectCrawlModeInput{ProjectID: testProjectID, CrawlMode: string(model.CrawlModeCrisis), TriggerType: "BAD"},
+			err:   datasource.ErrCrawlModeNotAllowed,
+		},
+		"list_error": {
+			input: datasource.UpdateProjectCrawlModeInput{ProjectID: testProjectID, CrawlMode: string(model.CrawlModeCrisis), TriggerType: string(model.TriggerTypeCrisisEvent)},
+			mock:  mockData{listErr: errors.New("list")},
+			err:   datasource.ErrListFailed,
+		},
+		"update_error": {
+			input: datasource.UpdateProjectCrawlModeInput{ProjectID: testProjectID, CrawlMode: string(model.CrawlModeCrisis), TriggerType: string(model.TriggerTypeCrisisEvent)},
+			mock: mockData{
+				listSources:  []model.DataSource{eligible},
+				updateCalled: true,
+				updateErr:    errors.New("update"),
+				expectedOptions: repo.UpdateDataSourceOptions{
+					ID:        testSourceID,
+					CrawlMode: string(model.CrawlModeCrisis),
+				},
+			},
+			err: datasource.ErrUpdateFailed,
+		},
+		"change_error": {
+			input: datasource.UpdateProjectCrawlModeInput{ProjectID: testProjectID, CrawlMode: string(model.CrawlModeCrisis), TriggerType: string(model.TriggerTypeCrisisEvent)},
+			mock: mockData{
+				listSources:  []model.DataSource{eligible},
+				updateCalled: true,
+				changeCalled: true,
+				changeErr:    errors.New("change"),
+				expectedOptions: repo.UpdateDataSourceOptions{
+					ID:        testSourceID,
+					CrawlMode: string(model.CrawlModeCrisis),
+				},
+				expectedChange: repo.CreateCrawlModeChangeOptions{
+					SourceID:            testSourceID,
+					ProjectID:           testProjectID,
+					TriggerType:         string(model.TriggerTypeCrisisEvent),
+					FromMode:            string(model.CrawlModeNormal),
+					ToMode:              string(model.CrawlModeCrisis),
+					FromIntervalMinutes: interval,
+					ToIntervalMinutes:   interval,
+				},
+			},
+			err: datasource.ErrUpdateFailed,
+		},
+		"no_affected": {
+			input: datasource.UpdateProjectCrawlModeInput{ProjectID: testProjectID, CrawlMode: string(model.CrawlModeCrisis), TriggerType: string(model.TriggerTypeCrisisEvent)},
+			mock:  mockData{listSources: []model.DataSource{passive, archived, noMode, sameMode}},
+			err:   datasource.ErrCrawlModeNotAllowed,
+		},
+	}
+
+	for name, tc := range tcs {
+		t.Run(name, func(t *testing.T) {
+			uc, r, _ := newDatasourceUC(t)
+			if tc.mock.listSources != nil || tc.mock.listErr != nil {
+				r.EXPECT().ListDataSources(context.Background(), repo.ListDataSourcesOptions{ProjectID: testProjectID}).Return(tc.mock.listSources, tc.mock.listErr)
+			}
+			if tc.mock.updateCalled {
+				r.EXPECT().UpdateDataSource(context.Background(), tc.mock.expectedOptions).Return(eligible, tc.mock.updateErr)
+			}
+			if tc.mock.changeCalled {
+				r.EXPECT().CreateCrawlModeChange(context.Background(), tc.mock.expectedChange).Return(model.CrawlModeChange{}, tc.mock.changeErr)
+			}
+
+			output, err := uc.UpdateProjectCrawlMode(context.Background(), tc.input)
+
+			require.ErrorIs(t, err, tc.err)
+			require.Equal(t, tc.output, output)
+		})
+	}
+}
+
 func TestGetActivationReadiness(t *testing.T) {
 	type mockData struct {
 		sources   []model.DataSource

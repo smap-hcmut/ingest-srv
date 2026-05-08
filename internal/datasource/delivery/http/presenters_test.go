@@ -168,6 +168,49 @@ func TestProjectLifecycleReqValidate(t *testing.T) {
 	}
 }
 
+func TestUpdateProjectCrawlModeReqValidate(t *testing.T) {
+	tcs := map[string]struct {
+		input  updateProjectCrawlModeReq
+		mock   struct{}
+		output error
+		err    error
+	}{
+		"success":              {input: updateProjectCrawlModeReq{ProjectID: testProjectID, CrawlMode: string(model.CrawlModeCrisis), TriggerType: string(model.TriggerTypeCrisisEvent)}, output: nil},
+		"project_id_required":  {input: updateProjectCrawlModeReq{CrawlMode: string(model.CrawlModeCrisis), TriggerType: string(model.TriggerTypeCrisisEvent)}, output: errProjectIDRequired},
+		"wrong_project_id":     {input: updateProjectCrawlModeReq{ProjectID: "bad", CrawlMode: string(model.CrawlModeCrisis), TriggerType: string(model.TriggerTypeCrisisEvent)}, output: errWrongBody},
+		"invalid_crawl_mode":   {input: updateProjectCrawlModeReq{ProjectID: testProjectID, CrawlMode: "BAD", TriggerType: string(model.TriggerTypeCrisisEvent)}, output: errInvalidCrawlMode},
+		"invalid_trigger_type": {input: updateProjectCrawlModeReq{ProjectID: testProjectID, CrawlMode: string(model.CrawlModeCrisis), TriggerType: "BAD"}, output: errCrawlModeNotAllowed},
+	}
+
+	for name, tc := range tcs {
+		t.Run(name, func(t *testing.T) {
+			err := tc.input.validate()
+
+			require.ErrorIs(t, err, tc.output)
+		})
+	}
+}
+
+func TestUpdateProjectCrawlModeReqToInput(t *testing.T) {
+	tcs := map[string]struct {
+		input  updateProjectCrawlModeReq
+		mock   struct{}
+		output datasource.UpdateProjectCrawlModeInput
+		err    error
+	}{
+		"success": {
+			input:  updateProjectCrawlModeReq{ProjectID: " " + testProjectID + " ", CrawlMode: " CRISIS ", TriggerType: " CRISIS_EVENT ", Reason: " reason ", EventRef: " event-1 "},
+			output: datasource.UpdateProjectCrawlModeInput{ProjectID: testProjectID, CrawlMode: string(model.CrawlModeCrisis), TriggerType: string(model.TriggerTypeCrisisEvent), Reason: "reason", EventRef: "event-1"},
+		},
+	}
+
+	for name, tc := range tcs {
+		t.Run(name, func(t *testing.T) {
+			require.Equal(t, tc.output, tc.input.toInput())
+		})
+	}
+}
+
 func TestActivationReadinessReqValidate(t *testing.T) {
 	tcs := map[string]struct {
 		input  activationReadinessReq
