@@ -241,3 +241,80 @@ func (uc *implUseCase) Resume(ctx context.Context, projectID string) (datasource
 		AffectedDataSourceCount: int(affected),
 	}, nil
 }
+
+// UpdateProjectCrawlMode switches crawl_mode for all eligible crawl datasources in a project.
+func (uc *implUseCase) UpdateProjectCrawlMode(ctx context.Context, input datasource.UpdateProjectCrawlModeInput) (datasource.ProjectLifecycleOutput, error) {
+	if err := uc.validUpdateProjectCrawlModeInput(input); err != nil {
+		uc.l.Warnf(ctx, "datasource.usecase.UpdateProjectCrawlMode.validUpdateProjectCrawlModeInput: %v", err)
+		return datasource.ProjectLifecycleOutput{}, err
+	}
+
+	projectID := strings.TrimSpace(input.ProjectID)
+	mode := strings.TrimSpace(input.CrawlMode)
+	triggerType := strings.TrimSpace(input.TriggerType)
+	reason := strings.TrimSpace(input.Reason)
+	eventRef := strings.TrimSpace(input.EventRef)
+
+	sources, err := uc.repo.ListDataSources(ctx, repo.ListDataSourcesOptions{ProjectID: projectID})
+	if err != nil {
+		uc.l.Errorf(ctx, "datasource.usecase.UpdateProjectCrawlMode.repo.ListDataSources: project_id=%s err=%v", projectID, err)
+		return datasource.ProjectLifecycleOutput{}, datasource.ErrListFailed
+	}
+
+	affected := 0
+	for _, source := range sources {
+		if source.SourceCategory != model.SourceCategoryCrawl {
+			continue
+		}
+
+		switch source.Status {
+		case model.SourceStatusReady, model.SourceStatusActive, model.SourceStatusPaused:
+		default:
+			continue
+		}
+
+		if source.CrawlMode == nil || source.CrawlIntervalMinutes == nil || *source.CrawlIntervalMinutes <= 0 {
+			continue
+		}
+
+		if string(*source.CrawlMode) == mode {
+			continue
+		}
+
+		_, updateErr := uc.repo.UpdateDataSource(ctx, repo.UpdateDataSourceOptions{
+			ID:        source.ID,
+			CrawlMode: mode,
+		})
+		if updateErr != nil {
+			uc.l.Errorf(ctx, "datasource.usecase.UpdateProjectCrawlMode.repo.UpdateDataSource: source_id=%s err=%v", source.ID, updateErr)
+			return datasource.ProjectLifecycleOutput{}, datasource.ErrUpdateFailed
+		}
+
+		if _, changeErr := uc.repo.CreateCrawlModeChange(ctx, repo.CreateCrawlModeChangeOptions{
+			SourceID:            source.ID,
+			ProjectID:           source.ProjectID,
+			TriggerType:         triggerType,
+			FromMode:            string(*source.CrawlMode),
+			ToMode:              mode,
+			FromIntervalMinutes: *source.CrawlIntervalMinutes,
+			ToIntervalMinutes:   *source.CrawlIntervalMinutes,
+			Reason:              reason,
+			EventRef:            eventRef,
+			TriggeredBy:         "",
+		}); changeErr != nil {
+			uc.l.Errorf(ctx, "datasource.usecase.UpdateProjectCrawlMode.repo.CreateCrawlModeChange: source_id=%s err=%v", source.ID, changeErr)
+			return datasource.ProjectLifecycleOutput{}, datasource.ErrUpdateFailed
+		}
+
+		affected++
+	}
+
+	if affected == 0 {
+		return datasource.ProjectLifecycleOutput{}, datasource.ErrCrawlModeNotAllowed
+	}
+
+	return datasource.ProjectLifecycleOutput{
+		ProjectID:               projectID,
+		AffectedDataSourceCount: affected,
+	}, nil
+}

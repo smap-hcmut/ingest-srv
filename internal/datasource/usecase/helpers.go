@@ -364,6 +364,22 @@ func (uc *implUseCase) validActivationReadinessInput(input datasource.Activation
 	}
 }
 
+func (uc *implUseCase) validUpdateProjectCrawlModeInput(input datasource.UpdateProjectCrawlModeInput) error {
+	if strings.TrimSpace(input.ProjectID) == "" {
+		return datasource.ErrProjectIDRequired
+	}
+
+	if err := uc.validateCrawlMode(strings.TrimSpace(input.CrawlMode)); err != nil {
+		return err
+	}
+
+	if err := uc.validateTriggerType(strings.TrimSpace(input.TriggerType)); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (uc *implUseCase) isStatusAllowedForCommand(status model.SourceStatus, command datasource.ActivationReadinessCommand) bool {
 	switch command {
 	case datasource.ActivationReadinessCommandResume:

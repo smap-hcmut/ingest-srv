@@ -338,6 +338,37 @@ func (h *handler) Resume(c *gin.Context) {
 	response.OK(c, h.newProjectLifecycleResp(o))
 }
 
+// @Summary Update crawl mode for project datasources
+// @Description Internal API to switch crawl mode for all eligible crawl datasources in a project
+// @Tags DataSource
+// @Accept json
+// @Produce json
+// @Param project_id path string true "Project ID"
+// @Param body body updateProjectCrawlModeReq true "Project crawl mode update request"
+// @Success 200 {object} projectLifecycleResp
+// @Failure 400 {object} response.Resp
+// @Failure 500 {object} response.Resp
+// @Router /internal/projects/{project_id}/crawl-mode [post]
+func (h *handler) UpdateProjectCrawlMode(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	req, err := h.processUpdateProjectCrawlModeReq(c)
+	if err != nil {
+		h.l.Warnf(ctx, "datasource.delivery.UpdateProjectCrawlMode.processUpdateProjectCrawlModeReq: %v", err)
+		response.Error(c, err, h.discord)
+		return
+	}
+
+	o, err := h.uc.UpdateProjectCrawlMode(ctx, req.toInput())
+	if err != nil {
+		h.l.Errorf(ctx, "datasource.delivery.UpdateProjectCrawlMode.uc.UpdateProjectCrawlMode: project_id=%s err=%v", req.ProjectID, err)
+		response.Error(c, h.mapError(err), h.discord)
+		return
+	}
+
+	response.OK(c, h.newProjectLifecycleResp(o))
+}
+
 // --- CrawlTarget Handlers ---
 
 // @Summary Create grouped keyword target

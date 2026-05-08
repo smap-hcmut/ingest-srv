@@ -200,6 +200,40 @@ func (r projectLifecycleReq) toProjectID() string {
 	return strings.TrimSpace(r.ProjectID)
 }
 
+type updateProjectCrawlModeReq struct {
+	ProjectID   string `json:"-"`
+	CrawlMode   string `json:"crawl_mode" binding:"required" example:"CRISIS" enums:"SLEEP,NORMAL,CRISIS"`
+	TriggerType string `json:"trigger_type" binding:"required" example:"CRISIS_EVENT" enums:"MANUAL,SCHEDULED,PROJECT_EVENT,CRISIS_EVENT,WEBHOOK_PUSH"`
+	Reason      string `json:"reason,omitempty" example:"apply crisis mode from project runtime"`
+	EventRef    string `json:"event_ref,omitempty" example:"incident-20260506-001"`
+}
+
+func (r updateProjectCrawlModeReq) validate() error {
+	if strings.TrimSpace(r.ProjectID) == "" {
+		return errProjectIDRequired
+	}
+	if !isValidUUID(strings.TrimSpace(r.ProjectID)) {
+		return errWrongBody
+	}
+	if !isValidCrawlMode(strings.TrimSpace(r.CrawlMode)) {
+		return errInvalidCrawlMode
+	}
+	if !isValidTriggerType(strings.TrimSpace(r.TriggerType)) {
+		return errCrawlModeNotAllowed
+	}
+	return nil
+}
+
+func (r updateProjectCrawlModeReq) toInput() datasource.UpdateProjectCrawlModeInput {
+	return datasource.UpdateProjectCrawlModeInput{
+		ProjectID:   strings.TrimSpace(r.ProjectID),
+		CrawlMode:   strings.TrimSpace(r.CrawlMode),
+		TriggerType: strings.TrimSpace(r.TriggerType),
+		Reason:      strings.TrimSpace(r.Reason),
+		EventRef:    strings.TrimSpace(r.EventRef),
+	}
+}
+
 type activationReadinessReq struct {
 	ProjectID string `form:"-"`
 	Command   string `form:"command" example:"activate" enums:"activate,resume"`

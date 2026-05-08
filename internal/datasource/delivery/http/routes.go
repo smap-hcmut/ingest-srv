@@ -48,5 +48,6 @@ func (h *handler) RegisterInternalRoutes(r *gin.RouterGroup, mw *middleware.Midd
 		projects.POST("/:project_id/activate", h.Activate)
 		projects.POST("/:project_id/pause", h.Pause)
 		projects.POST("/:project_id/resume", h.Resume)
+		projects.POST("/:project_id/crawl-mode", h.UpdateProjectCrawlMode)
 	}
 }

@@ -137,6 +137,15 @@ type ProjectLifecycleOutput struct {
 	AffectedDataSourceCount int
 }
 
+// UpdateProjectCrawlModeInput changes crawl_mode for all eligible crawl datasources in a project.
+type UpdateProjectCrawlModeInput struct {
+	ProjectID   string
+	CrawlMode   string
+	TriggerType string
+	Reason      string
+	EventRef    string
+}
+
 // ActivateOutput is the output after activating a datasource.
 type ActivateOutput struct {
 	DataSource model.DataSource
