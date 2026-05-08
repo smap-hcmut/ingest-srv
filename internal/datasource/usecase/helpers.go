@@ -400,12 +400,18 @@ func (uc *implUseCase) listProjectLifecycleSources(ctx context.Context, projectI
 }
 
 func (uc *implUseCase) ensureProjectSourcesEligible(ctx context.Context, projectID string, sources []model.DataSource, command datasource.ActivationReadinessCommand, notAllowedErr error, action string) error {
+	hasEligibleSource := false
 	for _, source := range sources {
 		if uc.isStatusAllowedForCommand(source.Status, command) {
+			hasEligibleSource = true
 			continue
 		}
 
-		uc.l.Warnf(ctx, "datasource.usecase.%s: project_id=%s source_id=%s status=%s not eligible", action, projectID, source.ID, source.Status)
+		uc.l.Warnf(ctx, "datasource.usecase.%s: project_id=%s source_id=%s status=%s skipped", action, projectID, source.ID, source.Status)
+	}
+
+	if !hasEligibleSource {
+		uc.l.Warnf(ctx, "datasource.usecase.%s: project_id=%s no eligible datasource", action, projectID)
 		return notAllowedErr
 	}
 
@@ -508,6 +514,8 @@ func (uc *implUseCase) ensureRuntimePrerequisites(ctx context.Context, source mo
 		for _, target := range targets {
 			if target.IsActive {
 				activeTargetCount++
+			} else {
+				continue
 			}
 
 			// Skip dryrun validation for source/target combos that have no dryrun worker.

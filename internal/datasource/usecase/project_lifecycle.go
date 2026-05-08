@@ -32,8 +32,8 @@ func (uc *implUseCase) GetActivationReadiness(ctx context.Context, input datasou
 		HasDatasource:   len(sources) > 0,
 		Errors:          make([]datasource.ActivationReadinessError, 0),
 	}
-	hasDatasourceWithoutActiveTarget := false
-	hasInvalidLifecycleStatus := false
+	eligibleDatasourceCount := 0
+	hasBlockingEligibleSourceError := false
 
 	if !out.HasDatasource {
 		out.Errors = append(out.Errors, datasource.ActivationReadinessError{
@@ -44,14 +44,15 @@ func (uc *implUseCase) GetActivationReadiness(ctx context.Context, input datasou
 
 	for _, source := range sources {
 		if !uc.isStatusAllowedForCommand(source.Status, command) {
-			hasInvalidLifecycleStatus = true
 			out.Errors = append(out.Errors, datasource.ActivationReadinessError{
 				Code:         datasource.ActivationReadinessCodeDatasourceStatus,
 				Message:      datasource.ActivationReadinessMessageDatasourceStatus,
 				DataSourceID: source.ID,
 			})
+			continue
 		}
 
+		sourceEligible := true
 		if source.SourceCategory == model.SourceCategoryPassive {
 			// TODO(passive-onboarding): this is only a temporary readiness gate.
 			// Real FILE_UPLOAD/WEBHOOK onboarding flow is not implemented yet, so
@@ -65,6 +66,10 @@ func (uc *implUseCase) GetActivationReadiness(ctx context.Context, input datasou
 					Message:      datasource.ActivationReadinessMessagePassiveUnconfirmed,
 					DataSourceID: source.ID,
 				})
+				sourceEligible = false
+			}
+			if sourceEligible {
+				eligibleDatasourceCount++
 			}
 			continue
 		}
@@ -85,6 +90,8 @@ func (uc *implUseCase) GetActivationReadiness(ctx context.Context, input datasou
 		for _, target := range targets {
 			if target.IsActive {
 				activeTargetCount++
+			} else {
+				continue
 			}
 
 			// Skip dryrun validation for source/target combos that have no dryrun worker.
@@ -106,6 +113,7 @@ func (uc *implUseCase) GetActivationReadiness(ctx context.Context, input datasou
 					DataSourceID: source.ID,
 					TargetID:     target.ID,
 				})
+				sourceEligible = false
 				continue
 			}
 
@@ -117,25 +125,29 @@ func (uc *implUseCase) GetActivationReadiness(ctx context.Context, input datasou
 					DataSourceID: source.ID,
 					TargetID:     target.ID,
 				})
+				sourceEligible = false
 			}
 		}
 
 		if activeTargetCount == 0 {
-			hasDatasourceWithoutActiveTarget = true
 			out.Errors = append(out.Errors, datasource.ActivationReadinessError{
 				Code:         datasource.ActivationReadinessCodeActiveTargetRequired,
 				Message:      datasource.ActivationReadinessMessageActiveTargetRequired,
 				DataSourceID: source.ID,
 			})
+			sourceEligible = false
+		}
+
+		if sourceEligible {
+			eligibleDatasourceCount++
+		} else {
+			hasBlockingEligibleSourceError = true
 		}
 	}
 
 	canProceed := out.HasDatasource &&
-		out.PassiveUnconfirmedCount == 0 &&
-		out.MissingTargetDryrunCount == 0 &&
-		out.FailedTargetDryrunCount == 0 &&
-		!hasDatasourceWithoutActiveTarget &&
-		!hasInvalidLifecycleStatus
+		eligibleDatasourceCount > 0 &&
+		!hasBlockingEligibleSourceError
 	out.CanProceed = canProceed
 
 	return out, nil

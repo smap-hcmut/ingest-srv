@@ -2,8 +2,9 @@ package consumer
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"log"
+	"time"
 
 	dryrunRabbit "ingest-srv/internal/dryrun/delivery/rabbitmq"
 
@@ -12,26 +13,67 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
+const (
+	consumerReconnectInitialBackoff = 1 * time.Second
+	consumerReconnectMaxBackoff     = 30 * time.Second
+)
+
+var errConsumerDeliveryChannelClosed = errors.New("rabbitmq delivery channel closed")
+
 func (c Consumer) Consume(ctx context.Context) error {
 	return c.consume(ctx, dryrunRabbit.IngestDryrunCompletionsQueue, dryrunRabbit.IngestDryrunCompletionsConsumerName, c.handleCompletionWorker)
 }
 
-func catchPanic() {
+func catchPanicAsError(err *error) {
 	if r := recover(); r != nil {
-		log.Printf("Recovered from panic in goroutine: %v", r)
+		*err = fmt.Errorf("panic in rabbitmq consumer: %v", r)
 	}
 }
 
 type workerFunc func(msg amqp.Delivery)
 
 func (c Consumer) consume(ctx context.Context, queue rabbitmq.QueueArgs, consumerName string, worker workerFunc) error {
-	defer catchPanic()
-
 	if c.conn == nil {
 		return fmt.Errorf("rabbitmq client is required")
 	}
 	if c.dryrunUC == nil {
 		return fmt.Errorf("dryrun consumer usecase is required")
+	}
+
+	backoff := consumerReconnectInitialBackoff
+	for {
+		if ctx.Err() != nil {
+			return nil
+		}
+
+		err := c.consumeOnce(ctx, queue, consumerName, worker)
+		if ctx.Err() != nil {
+			return nil
+		}
+		if err != nil {
+			c.l.Warnf(context.Background(), "dryrun.rabbitmq.consumer.reconnect: queue=%s consumer=%s err=%v retry_in=%s", queue.Name, consumerName, err, backoff)
+		} else {
+			c.l.Warnf(context.Background(), "dryrun.rabbitmq.consumer.reconnect: queue=%s consumer=%s stopped unexpectedly retry_in=%s", queue.Name, consumerName, backoff)
+		}
+
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-time.After(backoff):
+		}
+
+		backoff *= 2
+		if backoff > consumerReconnectMaxBackoff {
+			backoff = consumerReconnectMaxBackoff
+		}
+	}
+}
+
+func (c Consumer) consumeOnce(ctx context.Context, queue rabbitmq.QueueArgs, consumerName string, worker workerFunc) (err error) {
+	defer catchPanicAsError(&err)
+
+	if !c.conn.IsReady() {
+		return fmt.Errorf("rabbitmq connection is not ready")
 	}
 
 	ch, err := c.conn.Channel()
@@ -66,9 +108,19 @@ func (c Consumer) consume(ctx context.Context, queue rabbitmq.QueueArgs, consume
 		case msg, ok := <-msgs:
 			if !ok {
 				c.l.Warnf(context.Background(), "Consumer channel closed for queue %s", q.Name)
-				return nil
+				return errConsumerDeliveryChannelClosed
 			}
-			worker(msg)
+			if err := callWorkerSafely(worker, msg); err != nil {
+				c.l.Errorf(context.Background(), "dryrun.rabbitmq.consumer.worker_panic: queue=%s err=%v", q.Name, err)
+				_ = msg.Nack(false, true)
+				continue
+			}
 		}
 	}
+}
+
+func callWorkerSafely(worker workerFunc, msg amqp.Delivery) (err error) {
+	defer catchPanicAsError(&err)
+	worker(msg)
+	return nil
 }

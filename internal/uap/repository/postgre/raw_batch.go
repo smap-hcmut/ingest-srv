@@ -4,9 +4,9 @@ import (
 	"context"
 	"strings"
 
-	repo "ingest-srv/internal/uap/repository"
 	"ingest-srv/internal/model"
 	"ingest-srv/internal/sqlboiler"
+	repo "ingest-srv/internal/uap/repository"
 
 	"github.com/aarondl/null/v8"
 	"github.com/aarondl/sqlboiler/v4/boil"
@@ -56,10 +56,21 @@ func (r *implRepository) MarkRawBatchParsed(ctx context.Context, opt repo.MarkRa
 
 	row.Status = sqlboiler.BatchStatus(model.BatchStatusParsed)
 	row.ParsedAt = null.TimeFrom(opt.ParsedAt)
-	row.PublishStatus = sqlboiler.PublishStatus(model.PublishStatusPending)
+	publishStatus := opt.PublishStatus
+	if publishStatus == "" {
+		publishStatus = model.PublishStatusPending
+	}
+	row.PublishStatus = sqlboiler.PublishStatus(publishStatus)
 	row.PublishRecordCount = opt.PublishRecordCount
 	row.ErrorMessage = null.String{}
-	row.PublishError = null.String{}
+	if strings.TrimSpace(opt.PublishError) == "" {
+		row.PublishError = null.String{}
+	} else {
+		row.PublishError = null.StringFrom(strings.TrimSpace(opt.PublishError))
+	}
+	if publishStatus == model.PublishStatusSuccess {
+		row.UapPublishedAt = null.TimeFrom(opt.ParsedAt)
+	}
 	if len(opt.RawMetadata) > 0 {
 		row.RawMetadata = null.JSONFrom(opt.RawMetadata)
 	}
@@ -69,6 +80,7 @@ func (r *implRepository) MarkRawBatchParsed(ctx context.Context, opt repo.MarkRa
 		sqlboiler.RawBatchColumns.ParsedAt,
 		sqlboiler.RawBatchColumns.PublishStatus,
 		sqlboiler.RawBatchColumns.PublishRecordCount,
+		sqlboiler.RawBatchColumns.UapPublishedAt,
 		sqlboiler.RawBatchColumns.ErrorMessage,
 		sqlboiler.RawBatchColumns.PublishError,
 		sqlboiler.RawBatchColumns.RawMetadata,

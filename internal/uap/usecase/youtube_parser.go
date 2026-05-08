@@ -1,6 +1,7 @@
 package usecase
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"time"
@@ -15,29 +16,88 @@ func (uc *implUseCase) flattenYouTubeFullFlow(rawBytes []byte, input uap.ParseAn
 	}
 
 	crawlKeyword := uc.extractCrawlKeyword(input.RequestPayload)
+	prefilterEnabled := uc.shouldApplyYouTubeBusinessPrefilter(input, crawlKeyword)
 	records := make([]uap.UAPRecord, 0)
+	skippedVideos := 0
+	skippedComments := 0
+	appendRecord := func(record uap.UAPRecord) {
+		records = append(records, record)
+		if onRecord != nil {
+			onRecord(record)
+		}
+	}
+
 	for _, bundle := range flattenInput.Videos {
 		postRecord, rootID := uc.mapYouTubePost(bundle, input)
 		if rootID == "" {
 			continue
 		}
 		postRecord.CrawlKeyword = crawlKeyword
-		records = append(records, postRecord)
-		if onRecord != nil {
-			onRecord(postRecord)
+
+		if !prefilterEnabled {
+			appendRecord(postRecord)
 		}
 
+		postDecision := youtubeBusinessPrefilterDecision{Keep: true}
+		if prefilterEnabled {
+			postDecision = uc.evaluateYouTubeBusinessPrefilter(postRecord, uap.UAPRecord{})
+		}
+
+		keptComments := make([]uap.UAPRecord, 0, len(bundle.Comments.Comments))
 		for _, comment := range bundle.Comments.Comments {
-			commentRecord := uc.mapYouTubeComment(comment, input, rootID)
+			commentRecord := uc.mapYouTubeComment(comment, bundle, input, rootID)
 			if strings.TrimSpace(commentRecord.Identity.OriginID) == "" {
 				continue
 			}
 			commentRecord.CrawlKeyword = crawlKeyword
-			records = append(records, commentRecord)
-			if onRecord != nil {
-				onRecord(commentRecord)
+
+			if !prefilterEnabled {
+				appendRecord(commentRecord)
+				continue
 			}
+
+			commentDecision := uc.evaluateYouTubeBusinessPrefilter(commentRecord, postRecord)
+			if !commentDecision.Keep {
+				skippedComments++
+				continue
+			}
+			uc.annotateYouTubeBusinessPrefilter(&commentRecord, commentDecision)
+			keptComments = append(keptComments, commentRecord)
 		}
+
+		if !prefilterEnabled {
+			continue
+		}
+
+		if !postDecision.Keep && len(keptComments) == 0 {
+			skippedVideos++
+			continue
+		}
+
+		if !postDecision.Keep && !uc.isYouTubeBusinessBoilerplate(postRecord) {
+			postDecision.Reasons = append(postDecision.Reasons, "kept_as_parent_context")
+			uc.annotateYouTubeBusinessPrefilter(&postRecord, postDecision)
+			appendRecord(postRecord)
+		} else if !postDecision.Keep {
+			skippedVideos++
+		} else {
+			uc.annotateYouTubeBusinessPrefilter(&postRecord, postDecision)
+			appendRecord(postRecord)
+		}
+		for _, commentRecord := range keptComments {
+			appendRecord(commentRecord)
+		}
+	}
+
+	if prefilterEnabled {
+		uc.l.Infof(
+			context.Background(),
+			"uap.usecase.flattenYouTubeFullFlow.businessPrefilter: raw_batch_id=%s kept_records=%d skipped_videos=%d skipped_comments=%d",
+			input.RawBatchID,
+			len(records),
+			skippedVideos,
+			skippedComments,
+		)
 	}
 
 	return records, nil
@@ -214,7 +274,7 @@ func (uc *implUseCase) mapYouTubePost(bundle uap.YouTubeVideoBundleInput, input 
 	}, rootID
 }
 
-func (uc *implUseCase) mapYouTubeComment(comment uap.YouTubeCommentInput, input uap.ParseAndStoreRawBatchInput, rootID string) uap.UAPRecord {
+func (uc *implUseCase) mapYouTubeComment(comment uap.YouTubeCommentInput, bundle uap.YouTubeVideoBundleInput, input uap.ParseAndStoreRawBatchInput, rootID string) uap.UAPRecord {
 	commentID := strings.TrimSpace(comment.CommentID)
 	if commentID == "" {
 		return uap.UAPRecord{}
@@ -222,6 +282,11 @@ func (uc *implUseCase) mapYouTubeComment(comment uap.YouTubeCommentInput, input 
 
 	parentID := rootID
 	profileURL := uc.buildYouTubeChannelURL(comment.AuthorChannelID)
+	parentTitle := uc.firstNonEmpty(bundle.Detail.Title, bundle.Video.Title)
+	parentChannelName := uc.firstNonEmpty(bundle.Detail.AuthorName, bundle.Video.ChannelName)
+	parentURL := strings.TrimSpace(bundle.Video.URL)
+	parentDescription := uc.firstNonEmpty(bundle.Video.DescriptionSnippet, bundle.Detail.Description)
+	parentKeywords := uc.normalizeStringSlice(bundle.Detail.Keywords)
 
 	return uap.UAPRecord{
 		Identity: uap.UAPIdentity{
@@ -261,7 +326,13 @@ func (uc *implUseCase) mapYouTubeComment(comment uap.YouTubeCommentInput, input 
 		DomainTypeCode: input.DomainTypeCode,
 		PlatformMeta: map[string]interface{}{
 			"youtube": map[string]interface{}{
-				"published_time_text": comment.PublishedTimeText,
+				"published_time_text":        comment.PublishedTimeText,
+				"parent_video_id":            strings.TrimSpace(bundle.Video.VideoID),
+				"parent_title":               parentTitle,
+				"parent_channel_name":        parentChannelName,
+				"parent_url":                 parentURL,
+				"parent_description_snippet": parentDescription,
+				"parent_keywords":            parentKeywords,
 			},
 		},
 	}

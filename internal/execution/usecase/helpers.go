@@ -40,6 +40,34 @@ func (uc *implUseCase) validateScheduledDispatchContext(ctx repo.DispatchContext
 	if ctx.Source.Status != model.SourceStatusActive {
 		return execution.ErrDispatchNotAllowed
 	}
+	if err := uc.resolveScheduledDispatchProjectState(ctx); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (uc *implUseCase) resolveScheduledDispatchProjectState(dispatchCtx repo.DispatchContext) error {
+	if strings.TrimSpace(dispatchCtx.Source.ProjectID) == "" {
+		return execution.ErrDispatchNotAllowed
+	}
+
+	projectID := strings.TrimSpace(dispatchCtx.Source.ProjectID)
+	projectDetail, err := uc.project.Detail(context.Background(), projectID)
+	if err != nil {
+		uc.l.Errorf(context.Background(), "execution.usecase.validateScheduledDispatchContext.project.Detail: source_id=%s project_id=%s err=%v", dispatchCtx.Source.ID, projectID, err)
+		return execution.ErrDispatchNotAllowed
+	}
+
+	if projectDetail.Status != microservice.ProjectStatusActive {
+		uc.l.Warnf(context.Background(), "execution.usecase.validateScheduledDispatchContext.resolveScheduledDispatchProjectState: project_id=%s status=%s not allowed for scheduled dispatch", projectID, projectDetail.Status)
+		return execution.ErrDispatchNotAllowed
+	}
+
+	if _, err := uc.resolveProjectDomainTypeCode(context.Background(), projectID); err != nil {
+		uc.l.Errorf(context.Background(), "execution.usecase.validateScheduledDispatchContext.resolveProjectDomainTypeCode: source_id=%s project_id=%s err=%v", dispatchCtx.Source.ID, dispatchCtx.Source.ProjectID, err)
+		return execution.ErrDispatchNotAllowed
+	}
+
 	return nil
 }
 

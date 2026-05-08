@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"fmt"
+	"ingest-srv/internal/model"
 	"ingest-srv/internal/uap"
 	repo "ingest-srv/internal/uap/repository"
 	"strings"
@@ -97,10 +98,32 @@ func (uc *implUseCase) ParseAndStoreRawBatch(ctx context.Context, input uap.Pars
 		return err
 	}
 
+	publishStatus := model.PublishStatusSuccess
+	publishError := ""
+	publishRecordCount := publishStats.SuccessCount
+	if len(records) > 0 && uc.publisher == nil {
+		publishStatus = model.PublishStatusFailed
+		publishError = "kafka publisher is disabled"
+	} else if publishStats.FailedCount > 0 {
+		publishStatus = model.PublishStatusFailed
+		publishError = publishStats.LastError
+		if strings.TrimSpace(publishError) == "" {
+			publishError = fmt.Sprintf("failed to publish %d/%d UAP records", publishStats.FailedCount, publishStats.AttemptedCount)
+		}
+	} else if publishStats.SuccessCount < len(records) {
+		publishStatus = model.PublishStatusFailed
+		publishError = fmt.Sprintf("published %d/%d UAP records", publishStats.SuccessCount, len(records))
+	}
+	if len(records) == 0 {
+		uc.l.Warnf(ctx, "uap.usecase.ParseAndStoreRawBatch.noRecords: raw_batch_id=%s platform=%s action=%s storage_path=%s", input.RawBatchID, input.Platform, input.Action, input.StoragePath)
+	}
+
 	if err := uc.repo.MarkRawBatchParsed(ctx, repo.MarkRawBatchParsedOptions{
 		RawBatchID:         input.RawBatchID,
 		ParsedAt:           uc.now(),
-		PublishRecordCount: len(records),
+		PublishRecordCount: publishRecordCount,
+		PublishStatus:      publishStatus,
+		PublishError:       publishError,
 		RawMetadata:        metadata,
 	}); err != nil {
 		_ = uc.failRawBatch(ctx, input, fmt.Sprintf("mark raw batch parsed: %v", err), "", parts, len(records), publishStats)
