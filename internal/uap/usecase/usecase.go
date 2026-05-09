@@ -67,12 +67,15 @@ func (uc *implUseCase) ParseAndStoreRawBatch(ctx context.Context, input uap.Pars
 	}
 
 	records, err := parser(rawBytes, input, func(record uap.UAPRecord) {
-		uc.publishRecord(ctx, record, input, publishStats)
+		uc.publishRecord(ctx, uc.withIngestAttribution(record, input), input, publishStats)
 	})
 	if err != nil {
 		errMessage := fmt.Sprintf("parse raw batch: %v", err)
 		_ = uc.failRawBatch(ctx, input, errMessage, "", nil, 0, publishStats)
 		return err
+	}
+	for index := range records {
+		records[index] = uc.withIngestAttribution(records[index], input)
 	}
 
 	outputBucket := strings.TrimSpace(uc.outputBucket)

@@ -10,6 +10,7 @@ type ParseAndStoreRawBatchInput struct {
 	ProjectID      string
 	DomainTypeCode string
 	SourceID       string
+	TargetID       string
 	ExternalTaskID string
 	TaskID         string
 	Platform       string

@@ -133,7 +133,7 @@ func (uc *implUseCase) buildDispatchSpecs(source model.DataSource, target model.
 					"page_id":       page.PageID,
 					"profile_url":   page.URL,
 					"count":         execution.FacebookPageFullFlowCount,
-					"comment_count": execution.FacebookFullFlowCommentCount,
+					"comment_count": execution.FacebookPageFullFlowCommentCount,
 					"comment_sort":  execution.FacebookFullFlowCommentSort,
 				},
 			})

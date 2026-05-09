@@ -90,10 +90,11 @@ const (
 	TikTokFullFlowThreshold    = 0.3
 	TikTokFullFlowCommentCount = 100
 
-	FacebookFullFlowLimit        = 50
-	FacebookFullFlowCommentCount = 100
-	FacebookFullFlowCommentSort  = "hot"
-	FacebookPageFullFlowCount    = 20
+	FacebookFullFlowLimit            = 50
+	FacebookFullFlowCommentCount     = 100
+	FacebookFullFlowCommentSort      = "hot"
+	FacebookPageFullFlowCount        = 3
+	FacebookPageFullFlowCommentCount = 10
 
 	YouTubeFullFlowLimit        = 50
 	YouTubeFullFlowCommentCount = 100

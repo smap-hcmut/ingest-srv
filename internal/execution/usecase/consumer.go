@@ -114,6 +114,7 @@ func (uc *implUseCase) HandleCompletion(ctx context.Context, input execution.Han
 				ProjectID:      rawBatch.ProjectID,
 				DomainTypeCode: rawBatch.DomainTypeCode,
 				SourceID:       rawBatch.SourceID,
+				TargetID:       completionCtx.ExternalTask.TargetID,
 				ExternalTaskID: completionCtx.ExternalTask.ID,
 				TaskID:         completionCtx.ExternalTask.TaskID,
 				Platform:       completionCtx.ExternalTask.Platform,
