@@ -16,6 +16,8 @@ var (
 	errUnsupportedMapping = &pkgErrors.HTTPError{Code: 4, Message: "Unsupported dispatch mapping", StatusCode: http.StatusBadRequest}
 	errParseIDsRequired   = &pkgErrors.HTTPError{Code: 5, Message: "facebook post target requires platform_meta.parse_ids", StatusCode: http.StatusBadRequest}
 	errWrongPath          = &pkgErrors.HTTPError{Code: 6, Message: "Wrong request path", StatusCode: http.StatusBadRequest}
+	errFacebookPageID     = &pkgErrors.HTTPError{Code: 7, Message: "Facebook profile target requires numeric page_id", StatusCode: http.StatusBadRequest}
+	errTikTokProfile      = &pkgErrors.HTTPError{Code: 8, Message: "TikTok profile target requires username or sec_uid", StatusCode: http.StatusBadRequest}
 	errDispatchFailed     = &pkgErrors.HTTPError{Code: 99, Message: "Failed to dispatch execution task", StatusCode: http.StatusInternalServerError}
 )
 
@@ -31,6 +33,10 @@ func (h *handler) mapError(err error) error {
 		return errUnsupportedMapping
 	case errors.Is(err, execution.ErrPlatformMetaParseIDs):
 		return errParseIDsRequired
+	case errors.Is(err, execution.ErrFacebookPageIDRequired):
+		return errFacebookPageID
+	case errors.Is(err, execution.ErrTikTokProfileRequired):
+		return errTikTokProfile
 	default:
 		return errDispatchFailed
 	}

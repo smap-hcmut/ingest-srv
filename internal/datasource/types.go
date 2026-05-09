@@ -135,6 +135,7 @@ type ActivationReadinessOutput struct {
 type ProjectLifecycleOutput struct {
 	ProjectID               string
 	AffectedDataSourceCount int
+	NoopReason              string
 }
 
 // UpdateProjectCrawlModeInput changes crawl_mode for all eligible crawl datasources in a project.

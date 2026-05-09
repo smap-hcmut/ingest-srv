@@ -72,8 +72,10 @@ type QueueName string
 type ActionName string
 
 const (
-	ActionNamePostDetail ActionName = "post_detail"
-	ActionNameFullFlow   ActionName = "full_flow"
+	ActionNamePostDetail   ActionName = "post_detail"
+	ActionNameFullFlow     ActionName = "full_flow"
+	ActionNamePageFullFlow ActionName = "page_full_flow"
+	ActionNameUserFullFlow ActionName = "user_full_flow"
 )
 
 const (
@@ -91,9 +93,12 @@ const (
 	FacebookFullFlowLimit        = 50
 	FacebookFullFlowCommentCount = 100
 	FacebookFullFlowCommentSort  = "hot"
+	FacebookPageFullFlowCount    = 20
 
 	YouTubeFullFlowLimit        = 50
 	YouTubeFullFlowCommentCount = 100
+
+	TikTokUserFullFlowCount = 50
 )
 
 // DispatchSpec is the normalized runtime dispatch shape built by the usecase.

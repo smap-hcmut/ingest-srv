@@ -259,10 +259,12 @@ const (
 )
 
 const (
-	PlatformTikTok   = "tiktok"
-	PlatformYouTube  = "youtube"
-	PlatformFacebook = "facebook"
-	TaskTypeFullFlow = "full_flow"
+	PlatformTikTok       = "tiktok"
+	PlatformYouTube      = "youtube"
+	PlatformFacebook     = "facebook"
+	TaskTypeFullFlow     = "full_flow"
+	TaskTypePageFullFlow = "page_full_flow"
+	TaskTypeUserFullFlow = "user_full_flow"
 )
 
 const (

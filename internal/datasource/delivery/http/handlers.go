@@ -162,6 +162,93 @@ func (h *handler) Archive(c *gin.Context) {
 	response.OK(c, nil)
 }
 
+// @Summary Activate a data source
+// @Description Transition a READY data source into ACTIVE status
+// @Tags DataSource
+// @Produce json
+// @Param id path string true "Data Source ID"
+// @Success 200 {object} dataSourceLifecycleResp
+// @Failure 400 {object} response.Resp
+// @Failure 500 {object} response.Resp
+// @Router /datasources/{id}/activate [post]
+func (h *handler) ActivateDataSource(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	req, err := h.processArchiveReq(c)
+	if err != nil {
+		h.l.Warnf(ctx, "datasource.delivery.ActivateDataSource.processArchiveReq: %v", err)
+		response.Error(c, err, h.discord)
+		return
+	}
+
+	o, err := h.uc.ActivateDataSource(ctx, req.toInput())
+	if err != nil {
+		h.l.Errorf(ctx, "datasource.delivery.ActivateDataSource.uc.ActivateDataSource: id=%s err=%v", req.ID, err)
+		response.Error(c, h.mapError(err), h.discord)
+		return
+	}
+
+	response.OK(c, h.newActivateDataSourceResp(o))
+}
+
+// @Summary Pause a data source
+// @Description Transition an ACTIVE data source into PAUSED status
+// @Tags DataSource
+// @Produce json
+// @Param id path string true "Data Source ID"
+// @Success 200 {object} dataSourceLifecycleResp
+// @Failure 400 {object} response.Resp
+// @Failure 500 {object} response.Resp
+// @Router /datasources/{id}/pause [post]
+func (h *handler) PauseDataSource(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	req, err := h.processArchiveReq(c)
+	if err != nil {
+		h.l.Warnf(ctx, "datasource.delivery.PauseDataSource.processArchiveReq: %v", err)
+		response.Error(c, err, h.discord)
+		return
+	}
+
+	o, err := h.uc.PauseDataSource(ctx, req.toInput())
+	if err != nil {
+		h.l.Errorf(ctx, "datasource.delivery.PauseDataSource.uc.PauseDataSource: id=%s err=%v", req.ID, err)
+		response.Error(c, h.mapError(err), h.discord)
+		return
+	}
+
+	response.OK(c, h.newPauseDataSourceResp(o))
+}
+
+// @Summary Resume a data source
+// @Description Transition a PAUSED data source into ACTIVE status
+// @Tags DataSource
+// @Produce json
+// @Param id path string true "Data Source ID"
+// @Success 200 {object} dataSourceLifecycleResp
+// @Failure 400 {object} response.Resp
+// @Failure 500 {object} response.Resp
+// @Router /datasources/{id}/resume [post]
+func (h *handler) ResumeDataSource(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	req, err := h.processArchiveReq(c)
+	if err != nil {
+		h.l.Warnf(ctx, "datasource.delivery.ResumeDataSource.processArchiveReq: %v", err)
+		response.Error(c, err, h.discord)
+		return
+	}
+
+	o, err := h.uc.ResumeDataSource(ctx, req.toInput())
+	if err != nil {
+		h.l.Errorf(ctx, "datasource.delivery.ResumeDataSource.uc.ResumeDataSource: id=%s err=%v", req.ID, err)
+		response.Error(c, h.mapError(err), h.discord)
+		return
+	}
+
+	response.OK(c, h.newResumeDataSourceResp(o))
+}
+
 // @Summary Delete a data source
 // @Description Soft-delete a data source after it has been archived
 // @Tags DataSource

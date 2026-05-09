@@ -274,6 +274,8 @@ func (uc *implUseCase) UpdateProjectCrawlMode(ctx context.Context, input datasou
 	}
 
 	affected := 0
+	eligible := 0
+	alreadyTarget := 0
 	for _, source := range sources {
 		if source.SourceCategory != model.SourceCategoryCrawl {
 			continue
@@ -289,7 +291,9 @@ func (uc *implUseCase) UpdateProjectCrawlMode(ctx context.Context, input datasou
 			continue
 		}
 
+		eligible++
 		if string(*source.CrawlMode) == mode {
+			alreadyTarget++
 			continue
 		}
 
@@ -321,12 +325,21 @@ func (uc *implUseCase) UpdateProjectCrawlMode(ctx context.Context, input datasou
 		affected++
 	}
 
+	noopReason := ""
 	if affected == 0 {
-		return datasource.ProjectLifecycleOutput{}, datasource.ErrCrawlModeNotAllowed
+		switch {
+		case eligible == 0:
+			noopReason = "no eligible crawl datasource"
+		case alreadyTarget == eligible:
+			noopReason = "all eligible crawl datasources already target mode"
+		default:
+			noopReason = "no crawl mode changes required"
+		}
 	}
 
 	return datasource.ProjectLifecycleOutput{
 		ProjectID:               projectID,
 		AffectedDataSourceCount: affected,
+		NoopReason:              noopReason,
 	}, nil
 }

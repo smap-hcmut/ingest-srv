@@ -316,6 +316,10 @@ type updateResp struct {
 	DataSource dataSourceResp `json:"data_source"`
 }
 
+type dataSourceLifecycleResp struct {
+	DataSource dataSourceResp `json:"data_source"`
+}
+
 type updateCrawlModeReq struct {
 	ID          string `json:"-"`
 	CrawlMode   string `json:"crawl_mode" binding:"required" example:"NORMAL" enums:"SLEEP,NORMAL,CRISIS"`
@@ -373,6 +377,7 @@ type activationReadinessResp struct {
 type projectLifecycleResp struct {
 	ProjectID               string `json:"project_id" example:"550e8400-e29b-41d4-a716-446655440000"`
 	AffectedDataSourceCount int    `json:"affected_datasource_count" example:"2"`
+	NoopReason              string `json:"noop_reason,omitempty" example:"all eligible crawl datasources already target mode"`
 }
 
 // --- Response Mappers ---
@@ -398,6 +403,18 @@ func (h *handler) newListResp(o datasource.ListOutput) listResp {
 
 func (h *handler) newUpdateResp(o datasource.UpdateOutput) updateResp {
 	return updateResp{DataSource: toDataSourceResp(o.DataSource)}
+}
+
+func (h *handler) newActivateDataSourceResp(o datasource.ActivateOutput) dataSourceLifecycleResp {
+	return dataSourceLifecycleResp{DataSource: toDataSourceResp(o.DataSource)}
+}
+
+func (h *handler) newPauseDataSourceResp(o datasource.PauseOutput) dataSourceLifecycleResp {
+	return dataSourceLifecycleResp{DataSource: toDataSourceResp(o.DataSource)}
+}
+
+func (h *handler) newResumeDataSourceResp(o datasource.ResumeOutput) dataSourceLifecycleResp {
+	return dataSourceLifecycleResp{DataSource: toDataSourceResp(o.DataSource)}
 }
 
 func (h *handler) newUpdateCrawlModeResp(o datasource.UpdateCrawlModeOutput) updateCrawlModeResp {
@@ -432,6 +449,7 @@ func (h *handler) newProjectLifecycleResp(o datasource.ProjectLifecycleOutput) p
 	return projectLifecycleResp{
 		ProjectID:               o.ProjectID,
 		AffectedDataSourceCount: o.AffectedDataSourceCount,
+		NoopReason:              o.NoopReason,
 	}
 }
 

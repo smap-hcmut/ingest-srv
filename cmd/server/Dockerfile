@@ -47,7 +47,7 @@ COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 ENV TZ=Asia/Ho_Chi_Minh
 
-COPY --from=builder --chown=nonroot:nonroot /app/ingest-srv .
+COPY --from=builder --chown=65532:65532 /app/ingest-srv .
 
 USER nonroot:nonroot
 

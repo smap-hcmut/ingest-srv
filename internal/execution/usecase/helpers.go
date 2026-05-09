@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
@@ -16,6 +18,8 @@ import (
 	"github.com/smap-hcmut/shared-libs/go/constants"
 	"github.com/smap-hcmut/shared-libs/go/minio"
 )
+
+var numericFacebookIDPattern = regexp.MustCompile(`^\d{5,}$`)
 
 func (uc *implUseCase) validateDispatchContext(ctx repo.DispatchContext) error {
 	if ctx.Source.SourceCategory != model.SourceCategoryCrawl {
@@ -112,6 +116,51 @@ func (uc *implUseCase) buildDispatchSpecs(source model.DataSource, target model.
 					"comment_count": execution.FacebookFullFlowCommentCount,
 					"comment_sort":  execution.FacebookFullFlowCommentSort,
 				},
+			})
+		}
+		return specs, nil
+	case source.SourceType == model.SourceTypeFacebook && target.TargetType == model.TargetTypeProfile:
+		pageSpecs, err := uc.resolveFacebookPageTargets(target)
+		if err != nil {
+			return nil, err
+		}
+		specs := make([]execution.DispatchSpec, 0, len(pageSpecs))
+		for _, page := range pageSpecs {
+			specs = append(specs, execution.DispatchSpec{
+				Queue:  execution.QueueName(constants.QueueFacebookTasks),
+				Action: execution.ActionNamePageFullFlow,
+				Params: map[string]interface{}{
+					"page_id":       page.PageID,
+					"profile_url":   page.URL,
+					"count":         execution.FacebookPageFullFlowCount,
+					"comment_count": execution.FacebookFullFlowCommentCount,
+					"comment_sort":  execution.FacebookFullFlowCommentSort,
+				},
+			})
+		}
+		return specs, nil
+	case source.SourceType == model.SourceTypeTikTok && target.TargetType == model.TargetTypeProfile:
+		profiles, err := uc.resolveTikTokProfileTargets(target)
+		if err != nil {
+			return nil, err
+		}
+		specs := make([]execution.DispatchSpec, 0, len(profiles))
+		for _, profile := range profiles {
+			params := map[string]interface{}{
+				"profile_url":   profile.URL,
+				"count":         execution.TikTokUserFullFlowCount,
+				"threshold":     execution.TikTokFullFlowThreshold,
+				"comment_count": execution.TikTokFullFlowCommentCount,
+			}
+			if profile.SecUID != "" {
+				params["sec_uid"] = profile.SecUID
+			} else {
+				params["username"] = profile.Username
+			}
+			specs = append(specs, execution.DispatchSpec{
+				Queue:  execution.QueueName(constants.QueueTikTokTasks),
+				Action: execution.ActionNameUserFullFlow,
+				Params: params,
 			})
 		}
 		return specs, nil
@@ -264,6 +313,172 @@ func (uc *implUseCase) parseFacebookParseIDs(platformMeta json.RawMessage) ([]st
 	}
 
 	return parseIDs, nil
+}
+
+type facebookPageTarget struct {
+	PageID string
+	URL    string
+}
+
+type tikTokProfileTarget struct {
+	Username string
+	SecUID   string
+	URL      string
+}
+
+func (uc *implUseCase) resolveFacebookPageTargets(target model.CrawlTarget) ([]facebookPageTarget, error) {
+	meta := uc.parsePlatformMetaMap(target.PlatformMeta)
+	pageIDs := uc.stringSliceMeta(meta, "page_ids")
+	fallbackPageID := uc.stringMeta(meta, "page_id")
+
+	pages := make([]facebookPageTarget, 0, len(target.Values))
+	for idx, rawURL := range target.Values {
+		candidate := ""
+		if idx < len(pageIDs) {
+			candidate = pageIDs[idx]
+		}
+		if candidate == "" {
+			candidate = fallbackPageID
+		}
+		if candidate == "" {
+			candidate = uc.extractFacebookPageIDFromURL(rawURL)
+		}
+		candidate = strings.TrimSpace(candidate)
+		if !numericFacebookIDPattern.MatchString(candidate) {
+			uc.l.Warnf(context.Background(), "execution.usecase.resolveFacebookPageTargets: target_id=%s invalid_page_id=%s url=%s", target.ID, candidate, rawURL)
+			return nil, execution.ErrFacebookPageIDRequired
+		}
+		pages = append(pages, facebookPageTarget{
+			PageID: candidate,
+			URL:    strings.TrimSpace(rawURL),
+		})
+	}
+
+	if len(pages) == 0 {
+		return nil, execution.ErrFacebookPageIDRequired
+	}
+	return pages, nil
+}
+
+func (uc *implUseCase) resolveTikTokProfileTargets(target model.CrawlTarget) ([]tikTokProfileTarget, error) {
+	meta := uc.parsePlatformMetaMap(target.PlatformMeta)
+	usernames := uc.stringSliceMeta(meta, "usernames")
+	secUIDs := uc.stringSliceMeta(meta, "sec_uids")
+	fallbackUsername := strings.TrimPrefix(uc.stringMeta(meta, "username"), "@")
+	fallbackSecUID := uc.stringMeta(meta, "sec_uid")
+
+	profiles := make([]tikTokProfileTarget, 0, len(target.Values))
+	for idx, rawURL := range target.Values {
+		username := ""
+		secUID := ""
+		if idx < len(usernames) {
+			username = strings.TrimPrefix(strings.TrimSpace(usernames[idx]), "@")
+		}
+		if idx < len(secUIDs) {
+			secUID = strings.TrimSpace(secUIDs[idx])
+		}
+		if username == "" {
+			username = fallbackUsername
+		}
+		if secUID == "" {
+			secUID = fallbackSecUID
+		}
+		if username == "" && secUID == "" {
+			username = uc.extractTikTokUsernameFromURL(rawURL)
+		}
+		if username == "" && secUID == "" {
+			uc.l.Warnf(context.Background(), "execution.usecase.resolveTikTokProfileTargets: target_id=%s url=%s missing username/sec_uid", target.ID, rawURL)
+			return nil, execution.ErrTikTokProfileRequired
+		}
+		profiles = append(profiles, tikTokProfileTarget{
+			Username: strings.TrimSpace(username),
+			SecUID:   strings.TrimSpace(secUID),
+			URL:      strings.TrimSpace(rawURL),
+		})
+	}
+
+	if len(profiles) == 0 {
+		return nil, execution.ErrTikTokProfileRequired
+	}
+	return profiles, nil
+}
+
+func (uc *implUseCase) extractFacebookPageIDFromURL(rawURL string) string {
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil {
+		return ""
+	}
+	if id := strings.TrimSpace(parsed.Query().Get("id")); numericFacebookIDPattern.MatchString(id) {
+		return id
+	}
+	for _, segment := range strings.Split(parsed.Path, "/") {
+		segment = strings.TrimSpace(segment)
+		if numericFacebookIDPattern.MatchString(segment) {
+			return segment
+		}
+	}
+	return ""
+}
+
+func (uc *implUseCase) extractTikTokUsernameFromURL(rawURL string) string {
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil {
+		return ""
+	}
+	for _, segment := range strings.Split(parsed.Path, "/") {
+		segment = strings.TrimSpace(segment)
+		if strings.HasPrefix(segment, "@") && len(segment) > 1 {
+			return strings.TrimPrefix(segment, "@")
+		}
+	}
+	return ""
+}
+
+func (uc *implUseCase) parsePlatformMetaMap(platformMeta json.RawMessage) map[string]interface{} {
+	if len(platformMeta) == 0 {
+		return nil
+	}
+	var payload map[string]interface{}
+	if err := json.Unmarshal(platformMeta, &payload); err != nil {
+		return nil
+	}
+	return payload
+}
+
+func (uc *implUseCase) stringMeta(payload map[string]interface{}, key string) string {
+	if payload == nil {
+		return ""
+	}
+	value, _ := payload[key].(string)
+	return strings.TrimSpace(value)
+}
+
+func (uc *implUseCase) stringSliceMeta(payload map[string]interface{}, key string) []string {
+	if payload == nil {
+		return nil
+	}
+
+	rawItems, ok := payload[key].([]interface{})
+	if !ok {
+		if rawStrings, ok := payload[key].([]string); ok {
+			return rawStrings
+		}
+		return nil
+	}
+
+	values := make([]string, 0, len(rawItems))
+	for _, item := range rawItems {
+		value, ok := item.(string)
+		if !ok {
+			continue
+		}
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		values = append(values, value)
+	}
+	return values
 }
 
 func (uc *implUseCase) buildJobPayload(specs []execution.DispatchSpec, input execution.DispatchTargetInput) json.RawMessage {
