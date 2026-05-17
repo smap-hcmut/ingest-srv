@@ -80,6 +80,8 @@ func (r *implRepository) GetTarget(ctx context.Context, opt repository.GetTarget
 func (r *implRepository) ListTargets(ctx context.Context, opt repository.ListTargetsOptions) ([]model.CrawlTarget, error) {
 	mods := []qm.QueryMod{
 		sqlboiler.CrawlTargetWhere.DataSourceID.EQ(opt.DataSourceID),
+		qm.Where("COALESCE(platform_meta #>> '{smap,visibility}', '') <> 'flushed'"),
+		qm.Where("COALESCE(platform_meta #>> '{smap,deleted_at}', '') = ''"),
 		qm.OrderBy(sqlboiler.CrawlTargetColumns.Priority + " DESC, " + sqlboiler.CrawlTargetColumns.CreatedAt + " ASC"),
 	}
 

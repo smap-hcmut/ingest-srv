@@ -705,7 +705,7 @@ func (h *handler) DeactivateTarget(c *gin.Context) {
 }
 
 // @Summary Delete a crawl target
-// @Description Hard-delete a crawl target by ID
+// @Description Flush a crawl target by ID without hard-deleting history
 // @Tags CrawlTarget
 // @Produce json
 // @Param id path string true "Data Source ID"

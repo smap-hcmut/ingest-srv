@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"strings"
+	"time"
 
 	"ingest-srv/internal/datasource"
 	repo "ingest-srv/internal/datasource/repository"
@@ -308,7 +309,7 @@ func (uc *implUseCase) DeactivateTarget(ctx context.Context, input datasource.De
 	return datasource.DeactivateTargetOutput{Target: updated}, nil
 }
 
-// DeleteTarget hard-deletes a crawl target by ID with datasource ownership check.
+// DeleteTarget flushes a crawl target without hard-deleting its audit history.
 func (uc *implUseCase) DeleteTarget(ctx context.Context, input datasource.DeleteTargetInput) error {
 	if err := uc.validDeleteTargetInput(input); err != nil {
 		uc.l.Warnf(ctx, "datasource.usecase.DeleteTarget.validDeleteTargetInput: %v", err)
@@ -331,18 +332,19 @@ func (uc *implUseCase) DeleteTarget(ctx context.Context, input datasource.Delete
 		return err
 	}
 
-	if err := uc.ensureCanRemoveActiveTarget(ctx, input.DataSourceID, current.IsActive, datasource.ErrTargetDeleteNotAllowed); err != nil {
-		if err == datasource.ErrNotFound || err == datasource.ErrTargetDeleteNotAllowed {
-			return err
-		}
+	if err := uc.hideTargetFromAnalytics(ctx, input.DataSourceID, current.ID); err != nil {
+		uc.l.Errorf(ctx, "datasource.usecase.DeleteTarget.hideTargetFromAnalytics: id=%s err=%v", input.ID, err)
 		return datasource.ErrTargetDeleteFailed
 	}
 
-	if err := uc.repo.DeleteTarget(ctx, repo.DeleteTargetOptions{
+	disabled := false
+	if _, err := uc.repo.UpdateTarget(ctx, repo.UpdateTargetOptions{
 		DataSourceID: strings.TrimSpace(input.DataSourceID),
 		ID:           strings.TrimSpace(input.ID),
+		IsActive:     &disabled,
+		PlatformMeta: targetFlushedPlatformMeta(current, time.Now()),
 	}); err != nil {
-		uc.l.Errorf(ctx, "datasource.usecase.DeleteTarget.repo.DeleteTarget: id=%s err=%v", input.ID, err)
+		uc.l.Errorf(ctx, "datasource.usecase.DeleteTarget.repo.UpdateTarget: id=%s err=%v", input.ID, err)
 		if err == repo.ErrTargetNotFound {
 			return datasource.ErrTargetNotFound
 		}

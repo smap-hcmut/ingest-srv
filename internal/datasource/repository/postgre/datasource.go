@@ -332,6 +332,8 @@ func (r *implRepository) CountActiveTargets(ctx context.Context, dataSourceID st
 	total, err := sqlboiler.CrawlTargets(
 		sqlboiler.CrawlTargetWhere.DataSourceID.EQ(dataSourceID),
 		sqlboiler.CrawlTargetWhere.IsActive.EQ(true),
+		qm.Where("COALESCE(platform_meta #>> '{smap,visibility}', '') <> 'flushed'"),
+		qm.Where("COALESCE(platform_meta #>> '{smap,deleted_at}', '') = ''"),
 	).Count(ctx, r.db)
 	if err != nil {
 		r.l.Errorf(ctx, "datasource.repository.CountActiveTargets.Count: %v", err)
