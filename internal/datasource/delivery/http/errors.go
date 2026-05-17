@@ -55,6 +55,7 @@ var (
 	errTargetDeactivateNotAllowed = &pkgErrors.HTTPError{Code: 112, Message: "Crawl target cannot be deactivated in its current state", StatusCode: http.StatusBadRequest}
 	errTargetDeleteNotAllowed     = &pkgErrors.HTTPError{Code: 113, Message: "Crawl target cannot be deleted in its current state", StatusCode: http.StatusBadRequest}
 	errTargetDryrunRunning        = &pkgErrors.HTTPError{Code: 114, Message: "Crawl target has a running dryrun task", StatusCode: http.StatusBadRequest}
+	errTargetValuesImmutable      = &pkgErrors.HTTPError{Code: 115, Message: "Crawl target values are immutable; create a new target or flush the old one", StatusCode: http.StatusBadRequest}
 )
 
 func (h *handler) mapError(err error) error {
@@ -115,6 +116,8 @@ func (h *handler) mapError(err error) error {
 		return errTargetValuesRequired
 	case errors.Is(err, datasource.ErrTargetValuesMustBeURLs):
 		return errTargetValuesMustBeURLs
+	case errors.Is(err, datasource.ErrTargetValuesImmutable):
+		return errTargetValuesImmutable
 	case errors.Is(err, datasource.ErrInvalidTargetType):
 		return errInvalidTargetType
 	case errors.Is(err, datasource.ErrSourceNotCrawl):

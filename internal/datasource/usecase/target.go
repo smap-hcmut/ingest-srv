@@ -142,7 +142,9 @@ func (uc *implUseCase) UpdateTarget(ctx context.Context, input datasource.Update
 		if err != nil {
 			return datasource.UpdateTargetOutput{}, err
 		}
-		valuesForComparison = values
+		if !uc.areStringSlicesEqual(current.Values, values) {
+			return datasource.UpdateTargetOutput{}, datasource.ErrTargetValuesImmutable
+		}
 	}
 	materialChanged := uc.hasMaterialTargetChange(current, valuesForComparison, input)
 
@@ -153,9 +155,6 @@ func (uc *implUseCase) UpdateTarget(ctx context.Context, input datasource.Update
 		PlatformMeta:         input.PlatformMeta,
 		Priority:             input.Priority,
 		CrawlIntervalMinutes: input.CrawlIntervalMinutes,
-	}
-	if input.Values != nil {
-		opt.Values = model.TypesJSONFromStringSlice(values)
 	}
 	if materialChanged && current.IsActive {
 		disabled := false

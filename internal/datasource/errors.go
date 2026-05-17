@@ -34,6 +34,7 @@ var (
 	ErrTargetNotFound             = errors.New("crawl target not found")
 	ErrTargetValuesRequired       = errors.New("crawl target values are required")
 	ErrTargetValuesMustBeURLs     = errors.New("crawl target values must be valid URLs")
+	ErrTargetValuesImmutable      = errors.New("crawl target values are immutable; create a new target or flush the old one")
 	ErrInvalidTargetType          = errors.New("invalid target_type; must be KEYWORD, PROFILE, or POST_URL")
 	ErrSourceNotCrawl             = errors.New("crawl targets can only be added to CRAWL sources")
 	ErrTargetCreateFailed         = errors.New("failed to create crawl target")
