@@ -96,10 +96,10 @@ func (srv HTTPServer) readyCheck(c *gin.Context) {
 		"rabbitmq": gin.H{"ready": rabbitReady, "error": rabbitErr},
 	}
 
-	if !postgresReady || !redisReady {
+	if !postgresReady || !redisReady || !minioReady || !kafkaReady || !rabbitReady {
 		c.JSON(503, gin.H{
 			"status":       "not ready",
-			"message":      "Core dependencies not ready",
+			"message":      "Runtime dependencies not ready",
 			"service":      serviceName,
 			"dependencies": deps,
 		})

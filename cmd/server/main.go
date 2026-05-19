@@ -48,7 +48,7 @@ func main() {
 	cfg, err := config.Load()
 	if err != nil {
 		fmt.Println("Failed to load config:", err)
-		return
+		os.Exit(1)
 	}
 
 	logger := log.NewZapLogger(log.ZapConfig{
@@ -78,12 +78,10 @@ func main() {
 
 	postgresDB, err := configPostgre.Connect(ctx, cfg.Postgres)
 	if err != nil {
-		logger.Errorf(ctx, "PostgreSQL connect failed, service continues with degraded readiness: %v", err)
-		postgresDB = nil
-	} else {
-		defer configPostgre.Disconnect(ctx, postgresDB)
-		logger.Info(ctx, "PostgreSQL client initialized")
+		logger.Fatalf(ctx, "PostgreSQL connect failed; ingest cannot run without database: %v", err)
 	}
+	defer configPostgre.Disconnect(ctx, postgresDB)
+	logger.Info(ctx, "PostgreSQL client initialized")
 
 	redisClient, err := redis.New(redis.RedisConfig{
 		Host:     cfg.Redis.Host,
@@ -92,21 +90,17 @@ func main() {
 		DB:       cfg.Redis.DB,
 	})
 	if err != nil {
-		logger.Errorf(ctx, "Redis connect failed, service continues with degraded readiness: %v", err)
-		redisClient = nil
-	} else {
-		defer redisClient.Close()
-		logger.Info(ctx, "Redis client initialized")
+		logger.Fatalf(ctx, "Redis connect failed; ingest cannot run without cache/session state: %v", err)
 	}
+	defer redisClient.Close()
+	logger.Info(ctx, "Redis client initialized")
 
 	minioClient, err := configMinio.Connect(ctx, &cfg.MinIO)
 	if err != nil {
-		logger.Errorf(ctx, "MinIO connect failed, service continues in degraded mode: %v", err)
-		minioClient = nil
-	} else {
-		defer configMinio.Disconnect()
-		logger.Info(ctx, "MinIO client initialized")
+		logger.Fatalf(ctx, "MinIO connect failed; ingest cannot run without crawl artifact storage: %v", err)
 	}
+	defer configMinio.Disconnect()
+	logger.Info(ctx, "MinIO client initialized")
 
 	// Use UAPTopic for the Kafka producer: the consumer publishes to UAPTopic,
 	// while the API only uses the producer for health checks (topic irrelevant).
@@ -114,28 +108,20 @@ func main() {
 	kafkaCfg.Topic = cfg.Kafka.UAPTopic
 	kafkaProducer, err := configKafka.ConnectProducer(kafkaCfg)
 	if err != nil {
-		logger.Errorf(ctx, "Kafka producer connect failed, service continues in degraded mode: %v", err)
-		kafkaProducer = nil
-	} else {
-		defer configKafka.DisconnectProducer()
-		logger.Infof(ctx, "Kafka producer initialized (topic: %s)", cfg.Kafka.UAPTopic)
+		logger.Fatalf(ctx, "Kafka producer connect failed; ingest cannot publish normalized output: %v", err)
 	}
+	defer configKafka.DisconnectProducer()
+	logger.Infof(ctx, "Kafka producer initialized (topic: %s)", cfg.Kafka.UAPTopic)
 
 	rabbitConn, err := configRabbit.Connect(cfg.RabbitMQ)
 	if err != nil {
-		logger.Errorf(ctx, "RabbitMQ connect failed, service continues in degraded mode: %v", err)
-		rabbitConn = nil
-	} else {
-		defer configRabbit.Disconnect()
-		logger.Info(ctx, "RabbitMQ connection initialized")
+		logger.Fatalf(ctx, "RabbitMQ connect failed; ingest scheduler and completion consumers cannot run: %v", err)
 	}
+	defer configRabbit.Disconnect()
+	logger.Info(ctx, "RabbitMQ connection initialized")
 
 	// ── Consumer goroutine ──────────────────────────────────────────────────
 	go func() {
-		if postgresDB == nil || minioClient == nil || rabbitConn == nil {
-			logger.Errorf(ctx, "Consumer requires postgres, minio, and rabbitmq — skipping")
-			return
-		}
 		logger.Info(ctx, "Starting consumer...")
 		consumerSrv := consumer.NewServer(logger, consumer.ServerConfig{
 			Conn:         rabbitConn,
@@ -153,10 +139,6 @@ func main() {
 
 	// ── Scheduler goroutine ─────────────────────────────────────────────────
 	go func() {
-		if postgresDB == nil || rabbitConn == nil {
-			logger.Errorf(ctx, "Scheduler requires postgres and rabbitmq — skipping")
-			return
-		}
 		schedulerSrv, err := scheduler.New(logger, scheduler.Config{
 			DB:           postgresDB,
 			AMQPConn:     rabbitConn,
