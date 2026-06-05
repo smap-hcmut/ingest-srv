@@ -119,7 +119,7 @@ func (uc *implUseCase) buildKeywordSampleParams(keyword string, sampleLimit int)
 		"keyword":                  keyword,
 		"limit":                    sampleLimit,
 		"threshold":                0.5,
-		"comment_count":            50,
+		"comment_count":            8,
 		dryrun.ParamKeyRuntimeKind: string(dryrun.RuntimeKindDryrun),
 	}
 }
