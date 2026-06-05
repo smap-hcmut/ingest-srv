@@ -86,20 +86,20 @@ const (
 	CrisisModeMultiplier     = 0.2
 	SleepModeMultiplier      = 5.0
 
-	TikTokFullFlowLimit        = 50
+	TikTokFullFlowLimit        = 12
 	TikTokFullFlowThreshold    = 0.3
-	TikTokFullFlowCommentCount = 100
+	TikTokFullFlowCommentCount = 30
 
-	FacebookFullFlowLimit            = 50
-	FacebookFullFlowCommentCount     = 100
+	FacebookFullFlowLimit            = 12
+	FacebookFullFlowCommentCount     = 30
 	FacebookFullFlowCommentSort      = "hot"
-	FacebookPageFullFlowCount        = 3
-	FacebookPageFullFlowCommentCount = 10
+	FacebookPageFullFlowCount        = 2
+	FacebookPageFullFlowCommentCount = 8
 
-	YouTubeFullFlowLimit        = 50
-	YouTubeFullFlowCommentCount = 100
+	YouTubeFullFlowLimit        = 12
+	YouTubeFullFlowCommentCount = 30
 
-	TikTokUserFullFlowCount = 50
+	TikTokUserFullFlowCount = 12
 )
 
 // DispatchSpec is the normalized runtime dispatch shape built by the usecase.
