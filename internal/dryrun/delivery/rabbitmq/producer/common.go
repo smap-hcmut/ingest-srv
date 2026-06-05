@@ -1,12 +1,17 @@
 package producer
 
 import (
+	"fmt"
+
 	dryrunRabbit "ingest-srv/internal/dryrun/delivery/rabbitmq"
 
 	"github.com/smap-hcmut/shared-libs/go/rabbitmq"
 )
 
 func (p *implProducer) Run() error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	var err error
 
 	p.tikTokTasksWriter, err = p.getWriterWithQueue(
@@ -42,20 +47,26 @@ func (p *implProducer) Run() error {
 }
 
 func (p *implProducer) Close() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	if p.tikTokTasksWriter != nil {
 		_ = p.tikTokTasksWriter.Close()
+		p.tikTokTasksWriter = nil
 	}
 	if p.facebookTasksWriter != nil {
 		_ = p.facebookTasksWriter.Close()
+		p.facebookTasksWriter = nil
 	}
 	if p.youtubeTasksWriter != nil {
 		_ = p.youtubeTasksWriter.Close()
+		p.youtubeTasksWriter = nil
 	}
 }
 
 func (p *implProducer) getWriterWithQueue(exchange rabbitmq.ExchangeArgs, queue rabbitmq.QueueArgs, routingKey string) (rabbitmq.IChannel, error) {
 	if p.conn == nil {
-		return nil, nil
+		return nil, fmt.Errorf("rabbitmq connection is not initialized")
 	}
 
 	ch, err := p.conn.Channel()
@@ -63,24 +74,31 @@ func (p *implProducer) getWriterWithQueue(exchange rabbitmq.ExchangeArgs, queue 
 		return nil, err
 	}
 
-	if _, err := ch.QueueDeclare(queue); err != nil {
-		_ = ch.Close()
-		return nil, err
-	}
-
-	if err := ch.ExchangeDeclare(exchange); err != nil {
-		_ = ch.Close()
-		return nil, err
-	}
-
-	if err := ch.QueueBind(rabbitmq.QueueBindArgs{
-		Queue:      queue.Name,
-		Exchange:   exchange.Name,
-		RoutingKey: routingKey,
-	}); err != nil {
+	if err := p.declarePublishTopology(ch, exchange, queue, routingKey); err != nil {
 		_ = ch.Close()
 		return nil, err
 	}
 
 	return ch, nil
+}
+
+func (p *implProducer) declarePublishTopology(ch rabbitmq.IChannel, exchange rabbitmq.ExchangeArgs, queue rabbitmq.QueueArgs, routingKey string) error {
+	if ch == nil {
+		return fmt.Errorf("rabbitmq channel is not initialized")
+	}
+	if err := ch.ExchangeDeclare(exchange); err != nil {
+		return err
+	}
+	if _, err := ch.QueueDeclare(queue); err != nil {
+		return err
+	}
+	if err := ch.QueueBind(rabbitmq.QueueBindArgs{
+		Queue:      queue.Name,
+		Exchange:   exchange.Name,
+		RoutingKey: routingKey,
+	}); err != nil {
+		return err
+	}
+
+	return nil
 }

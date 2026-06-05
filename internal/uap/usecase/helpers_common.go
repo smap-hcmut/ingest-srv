@@ -592,10 +592,6 @@ func (uc *implUseCase) intPtrIfPositive(v int) *int {
 	return &v
 }
 
-func (uc *implUseCase) float64Ptr(v float64) *float64 {
-	return &v
-}
-
 func (uc *implUseCase) readAllAndClose(reader io.ReadCloser) ([]byte, error) {
 	defer reader.Close()
 	return io.ReadAll(reader)

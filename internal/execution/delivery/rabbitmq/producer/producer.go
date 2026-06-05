@@ -18,25 +18,44 @@ func (p *implProducer) PublishDispatch(ctx context.Context, input execution.Publ
 		return err
 	}
 
-	writer, exchange, routingKey, err := p.getPublishRouteByQueue(input.Queue)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	writer, exchange, routingKey, err := p.ensurePublishRouteLocked(ctx, input.Queue)
 	if err != nil {
 		return err
 	}
 
-	return writer.Publish(ctx, rabbitmq.PublishArgs{
-		Exchange:   exchange,
+	publishArgs := rabbitmq.PublishArgs{
+		Exchange:   exchange.Name,
 		RoutingKey: routingKey,
 		Msg: amqp.Publishing{
 			ContentType:  rabbitmq.ContentTypeJSON,
 			DeliveryMode: amqp.Persistent,
 			Body:         body,
 		},
-	})
+	}
+
+	if err := writer.Publish(ctx, publishArgs); err != nil {
+		p.l.Warnf(ctx, "execution.rabbitmq.PublishDispatch.publish_failed_rebuild: queue=%s err=%v", input.Queue, err)
+		_ = writer.Close()
+		p.clearWriterLocked(input.Queue)
+
+		writer, exchange, routingKey, rebuildErr := p.ensurePublishRouteLocked(ctx, input.Queue)
+		if rebuildErr != nil {
+			return fmt.Errorf("publish dispatch failed: %w; rebuild route: %v", err, rebuildErr)
+		}
+		publishArgs.Exchange = exchange.Name
+		publishArgs.RoutingKey = routingKey
+		return writer.Publish(ctx, publishArgs)
+	}
+
+	return nil
 }
 
 func (p *implProducer) getWriterWithQueue(exchange rabbitmq.ExchangeArgs, queue rabbitmq.QueueArgs, routingKey string) (rabbitmq.IChannel, error) {
 	if p.conn == nil {
-		return nil, nil
+		return nil, fmt.Errorf("rabbitmq connection is not initialized")
 	}
 
 	ch, err := p.conn.Channel()
@@ -44,21 +63,7 @@ func (p *implProducer) getWriterWithQueue(exchange rabbitmq.ExchangeArgs, queue 
 		return nil, err
 	}
 
-	if _, err := ch.QueueDeclare(queue); err != nil {
-		_ = ch.Close()
-		return nil, err
-	}
-
-	if err := ch.ExchangeDeclare(exchange); err != nil {
-		_ = ch.Close()
-		return nil, err
-	}
-
-	if err := ch.QueueBind(rabbitmq.QueueBindArgs{
-		Queue:      queue.Name,
-		Exchange:   exchange.Name,
-		RoutingKey: routingKey,
-	}); err != nil {
+	if err := p.declarePublishTopology(ch, exchange, queue, routingKey); err != nil {
 		_ = ch.Close()
 		return nil, err
 	}
@@ -66,24 +71,81 @@ func (p *implProducer) getWriterWithQueue(exchange rabbitmq.ExchangeArgs, queue 
 	return ch, nil
 }
 
-func (p *implProducer) getPublishRouteByQueue(queueName execution.QueueName) (rabbitmq.IChannel, string, string, error) {
+func (p *implProducer) declarePublishTopology(ch rabbitmq.IChannel, exchange rabbitmq.ExchangeArgs, queue rabbitmq.QueueArgs, routingKey string) error {
+	if ch == nil {
+		return fmt.Errorf("rabbitmq channel is not initialized")
+	}
+	if err := ch.ExchangeDeclare(exchange); err != nil {
+		return err
+	}
+	if _, err := ch.QueueDeclare(queue); err != nil {
+		return err
+	}
+	if err := ch.QueueBind(rabbitmq.QueueBindArgs{
+		Queue:      queue.Name,
+		Exchange:   exchange.Name,
+		RoutingKey: routingKey,
+	}); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (p *implProducer) ensurePublishRouteLocked(ctx context.Context, queueName execution.QueueName) (rabbitmq.IChannel, rabbitmq.ExchangeArgs, string, error) {
+	writer, exchange, queue, routingKey, err := p.getPublishRouteConfigByQueue(queueName)
+	if err != nil {
+		return nil, rabbitmq.ExchangeArgs{}, "", err
+	}
+	if writer != nil {
+		if err := p.declarePublishTopology(writer, exchange, queue, routingKey); err == nil {
+			return writer, exchange, routingKey, nil
+		} else {
+			p.l.Warnf(ctx, "execution.rabbitmq.ensurePublishRoute.rebuild: queue=%s err=%v", queueName, err)
+			_ = writer.Close()
+			p.clearWriterLocked(queueName)
+		}
+	}
+
+	writer, err = p.getWriterWithQueue(exchange, queue, routingKey)
+	if err != nil {
+		return nil, rabbitmq.ExchangeArgs{}, "", err
+	}
+	p.setWriterLocked(queueName, writer)
+	return writer, exchange, routingKey, nil
+}
+
+func (p *implProducer) getPublishRouteConfigByQueue(queueName execution.QueueName) (rabbitmq.IChannel, rabbitmq.ExchangeArgs, rabbitmq.QueueArgs, string, error) {
 	switch queueName {
 	case execution.QueueName(constants.QueueTikTokTasks):
-		if p.tikTokTasksWriter == nil {
-			return nil, "", "", fmt.Errorf("rabbitmq writer is not initialized for queue %s", queueName)
-		}
-		return p.tikTokTasksWriter, constants.ExchangeTikTokTasks, executionRabbit.TikTokTasksRoutingKey, nil
+		return p.tikTokTasksWriter, executionRabbit.TikTokTasksExchange, executionRabbit.TikTokTasksQueue, executionRabbit.TikTokTasksRoutingKey, nil
 	case execution.QueueName(constants.QueueFacebookTasks):
-		if p.facebookTasksWriter == nil {
-			return nil, "", "", fmt.Errorf("rabbitmq writer is not initialized for queue %s", queueName)
-		}
-		return p.facebookTasksWriter, constants.ExchangeFacebookTasks, executionRabbit.FacebookTasksRoutingKey, nil
+		return p.facebookTasksWriter, executionRabbit.FacebookTasksExchange, executionRabbit.FacebookTasksQueue, executionRabbit.FacebookTasksRoutingKey, nil
 	case execution.QueueName(constants.QueueYouTubeTasks):
-		if p.youtubeTasksWriter == nil {
-			return nil, "", "", fmt.Errorf("rabbitmq writer is not initialized for queue %s", queueName)
-		}
-		return p.youtubeTasksWriter, constants.ExchangeYouTubeTasks, executionRabbit.YoutubeTasksRoutingKey, nil
+		return p.youtubeTasksWriter, executionRabbit.YoutubeTasksExchange, executionRabbit.YoutubeTasksQueue, executionRabbit.YoutubeTasksRoutingKey, nil
 	default:
-		return nil, "", "", fmt.Errorf("unsupported queue %s", queueName)
+		return nil, rabbitmq.ExchangeArgs{}, rabbitmq.QueueArgs{}, "", fmt.Errorf("unsupported queue %s", queueName)
+	}
+}
+
+func (p *implProducer) setWriterLocked(queueName execution.QueueName, writer rabbitmq.IChannel) {
+	switch queueName {
+	case execution.QueueName(constants.QueueTikTokTasks):
+		p.tikTokTasksWriter = writer
+	case execution.QueueName(constants.QueueFacebookTasks):
+		p.facebookTasksWriter = writer
+	case execution.QueueName(constants.QueueYouTubeTasks):
+		p.youtubeTasksWriter = writer
+	}
+}
+
+func (p *implProducer) clearWriterLocked(queueName execution.QueueName) {
+	switch queueName {
+	case execution.QueueName(constants.QueueTikTokTasks):
+		p.tikTokTasksWriter = nil
+	case execution.QueueName(constants.QueueFacebookTasks):
+		p.facebookTasksWriter = nil
+	case execution.QueueName(constants.QueueYouTubeTasks):
+		p.youtubeTasksWriter = nil
 	}
 }

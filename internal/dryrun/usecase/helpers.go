@@ -203,19 +203,6 @@ func (uc *implUseCase) markDatasourceRunning(ctx context.Context, sourceID, resu
 	return output.DataSource, nil
 }
 
-func (uc *implUseCase) applyDatasourceResult(ctx context.Context, sourceID, resultID string, status model.DryrunStatus) (model.DataSource, error) {
-	output, err := uc.dsUC.ApplyDryrunResult(ctx, datasource.ApplyDryrunResultInput{
-		ID:                 strings.TrimSpace(sourceID),
-		DryrunLastResultID: strings.TrimSpace(resultID),
-		DryrunStatus:       string(status),
-	})
-	if err != nil {
-		uc.l.Errorf(ctx, "dryrun.usecase.applyDatasourceResult.dsUC.ApplyDryrunResult: source_id=%s result_id=%s status=%s err=%v", sourceID, resultID, status, err)
-		return model.DataSource{}, dryrun.ErrUpdateFailed
-	}
-	return output.DataSource, nil
-}
-
 func (uc *implUseCase) failDispatch(ctx context.Context, running model.DryrunResult, errorMessage string) (model.DryrunResult, model.DataSource, error) {
 	failedResult, updatedSource, err := uc.repo.CompleteResult(ctx, dryrunRepo.CompleteResultOptions{
 		ID:           running.ID,

@@ -83,14 +83,6 @@ func MarshalUAPRecord(input uap.UAPRecord) ([]byte, error) {
 	return json.Marshal(toPayload(input))
 }
 
-func UnmarshalUAPRecord(raw []byte) (uap.UAPRecord, error) {
-	var payload uapRecordPayload
-	if err := json.Unmarshal(raw, &payload); err != nil {
-		return uap.UAPRecord{}, err
-	}
-	return fromPayload(payload), nil
-}
-
 func toPayload(input uap.UAPRecord) uapRecordPayload {
 	media := make([]uapMediaPayload, 0, len(input.Media))
 	for _, item := range input.Media {
@@ -147,72 +139,6 @@ func toPayload(input uap.UAPRecord) uapRecordPayload {
 		},
 		Media: media,
 		Temporal: uapTemporalPayload{
-			PostedAt:   input.Temporal.PostedAt,
-			UpdatedAt:  input.Temporal.UpdatedAt,
-			IngestedAt: input.Temporal.IngestedAt,
-		},
-		DomainTypeCode: input.DomainTypeCode,
-		CrawlKeyword:   input.CrawlKeyword,
-		PlatformMeta:   input.PlatformMeta,
-	}
-}
-
-func fromPayload(input uapRecordPayload) uap.UAPRecord {
-	media := make([]uap.UAPMedia, 0, len(input.Media))
-	for _, item := range input.Media {
-		media = append(media, uap.UAPMedia{
-			Type:        item.Type,
-			URL:         item.URL,
-			DownloadURL: item.DownloadURL,
-			Duration:    item.Duration,
-			Thumbnail:   item.Thumbnail,
-			Width:       item.Width,
-			Height:      item.Height,
-		})
-	}
-
-	return uap.UAPRecord{
-		Identity: uap.UAPIdentity{
-			UAPID:     input.Identity.UAPID,
-			OriginID:  input.Identity.OriginID,
-			UAPType:   uap.UAPType(input.Identity.UAPType),
-			Platform:  input.Identity.Platform,
-			URL:       input.Identity.URL,
-			TaskID:    input.Identity.TaskID,
-			ProjectID: input.Identity.ProjectID,
-		},
-		Hierarchy: uap.UAPHierarchy{
-			ParentID: input.Hierarchy.ParentID,
-			RootID:   input.Hierarchy.RootID,
-			Depth:    input.Hierarchy.Depth,
-		},
-		Content: uap.UAPContent{
-			Text:     input.Content.Text,
-			Title:    input.Content.Title,
-			Subtitle: input.Content.Subtitle,
-			Hashtags: input.Content.Hashtags,
-			Keywords: input.Content.Keywords,
-			Language: input.Content.Language,
-			Links:    input.Content.Links,
-		},
-		Author: uap.UAPAuthor{
-			ID:         input.Author.ID,
-			Username:   input.Author.Username,
-			Nickname:   input.Author.Nickname,
-			Avatar:     input.Author.Avatar,
-			ProfileURL: input.Author.ProfileURL,
-			IsVerified: input.Author.IsVerified,
-		},
-		Engagement: uap.UAPEngagement{
-			Likes:         input.Engagement.Likes,
-			CommentsCount: input.Engagement.CommentsCount,
-			Shares:        input.Engagement.Shares,
-			Views:         input.Engagement.Views,
-			Saves:         input.Engagement.Saves,
-			ReplyCount:    input.Engagement.ReplyCount,
-		},
-		Media: media,
-		Temporal: uap.UAPTemporal{
 			PostedAt:   input.Temporal.PostedAt,
 			UpdatedAt:  input.Temporal.UpdatedAt,
 			IngestedAt: input.Temporal.IngestedAt,

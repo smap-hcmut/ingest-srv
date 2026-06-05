@@ -51,29 +51,6 @@ func ConnectProducer(cfg config.KafkaConfig) (kafka.IProducer, error) {
 	return producerInstance, err
 }
 
-// GetProducer returns the singleton Kafka producer instance.
-// Panics if producer is not initialized. Call ConnectProducer() first.
-func GetProducer() kafka.IProducer {
-	producerMu.RLock()
-	defer producerMu.RUnlock()
-
-	if producerInstance == nil {
-		panic("Kafka producer not initialized. Call ConnectProducer() first")
-	}
-	return producerInstance
-}
-
-// ProducerHealthCheck checks if Kafka producer is initialized and healthy.
-func ProducerHealthCheck() error {
-	producerMu.RLock()
-	defer producerMu.RUnlock()
-
-	if producerInstance == nil {
-		return fmt.Errorf("Kafka producer not initialized")
-	}
-	return producerInstance.HealthCheck()
-}
-
 // DisconnectProducer closes the Kafka producer and resets the singleton.
 func DisconnectProducer() error {
 	producerMu.Lock()

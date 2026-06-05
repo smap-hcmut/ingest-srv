@@ -10,10 +10,7 @@ import (
 	projectsrv "ingest-srv/pkg/microservice/project"
 	"os"
 	"os/signal"
-	"runtime/debug"
 	"syscall"
-
-	"github.com/smap-hcmut/shared-libs/go/cron"
 )
 
 func (s Scheduler) Start() error {
@@ -60,19 +57,4 @@ func (s Scheduler) registerJobs() error {
 	}
 
 	return nil
-}
-
-func (s Scheduler) jobWrapper(f cron.HandleFunc) {
-	defer func() {
-		if err := recover(); err != nil {
-			ctx := context.Background()
-			errMsg := fmt.Sprintf("scheduler panic: %v\n%s", err, string(debug.Stack()))
-			s.l.Errorf(ctx, errMsg)
-			if s.discordApp != nil {
-				_ = s.discordApp.ReportBug(ctx, errMsg)
-			}
-		}
-	}()
-
-	f()
 }

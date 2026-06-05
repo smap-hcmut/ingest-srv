@@ -40,10 +40,7 @@ func (uc *implUseCase) DispatchDueTargets(ctx context.Context, input execution.D
 	}
 
 	for _, dueTarget := range dueTargets {
-		dispatchCtx := repo.DispatchContext{
-			Source: dueTarget.Source,
-			Target: dueTarget.Target,
-		}
+		dispatchCtx := repo.DispatchContext(dueTarget)
 
 		if err := uc.validateScheduledDispatchContext(dispatchCtx); err != nil {
 			output.FailedCount++
@@ -193,6 +190,18 @@ func (uc *implUseCase) DispatchDueTargets(ctx context.Context, input execution.D
 				dueTarget.Target.ID,
 				dispatchErr,
 			)
+			if releaseErr := uc.repo.ReleaseClaimTarget(ctx, repo.ReleaseClaimTargetOptions{
+				SourceID: dueTarget.Source.ID,
+				TargetID: dueTarget.Target.ID,
+			}); releaseErr != nil {
+				uc.l.Errorf(
+					ctx,
+					"execution.usecase.DispatchDueTargets.ReleaseClaimTarget.afterDispatchFailure: source_id=%s target_id=%s err=%v",
+					dueTarget.Source.ID,
+					dueTarget.Target.ID,
+					releaseErr,
+				)
+			}
 			continue
 		}
 

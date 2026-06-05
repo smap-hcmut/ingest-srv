@@ -2,6 +2,7 @@ package producer
 
 import (
 	"context"
+	"sync"
 
 	"ingest-srv/internal/dryrun"
 
@@ -18,6 +19,7 @@ type Producer interface {
 type implProducer struct {
 	l                   log.Logger
 	conn                rabbitmq.IRabbitMQ
+	mu                  sync.Mutex
 	tikTokTasksWriter   rabbitmq.IChannel
 	facebookTasksWriter rabbitmq.IChannel
 	youtubeTasksWriter  rabbitmq.IChannel

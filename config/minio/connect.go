@@ -61,29 +61,6 @@ func Connect(ctx context.Context, cfg *config.MinIOConfig) (minio.MinIO, error) 
 	return instance, err
 }
 
-// GetClient returns the singleton MinIO client instance.
-func GetClient() minio.MinIO {
-	mu.RLock()
-	defer mu.RUnlock()
-
-	if instance == nil {
-		panic("MinIO client not initialized. Call Connect() first")
-	}
-	return instance
-}
-
-// HealthCheck checks if MinIO connection is healthy
-func HealthCheck(ctx context.Context) error {
-	mu.RLock()
-	defer mu.RUnlock()
-
-	if instance == nil {
-		return fmt.Errorf("MinIO client not initialized")
-	}
-
-	return instance.HealthCheck(ctx)
-}
-
 // Disconnect closes the MinIO client and resets the singleton.
 func Disconnect() error {
 	mu.Lock()

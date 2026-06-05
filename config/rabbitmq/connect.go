@@ -44,31 +44,6 @@ func Connect(cfg config.RabbitMQConfig) (rabbitmq.IRabbitMQ, error) {
 	return instance, err
 }
 
-// GetClient returns the singleton RabbitMQ instance.
-func GetClient() rabbitmq.IRabbitMQ {
-	mu.RLock()
-	defer mu.RUnlock()
-
-	if instance == nil {
-		panic("RabbitMQ client not initialized. Call Connect() first")
-	}
-	return instance
-}
-
-// HealthCheck checks if RabbitMQ connection is ready.
-func HealthCheck() error {
-	mu.RLock()
-	defer mu.RUnlock()
-
-	if instance == nil {
-		return fmt.Errorf("RabbitMQ client not initialized")
-	}
-	if !instance.IsReady() {
-		return fmt.Errorf("RabbitMQ connection is not ready")
-	}
-	return nil
-}
-
 // Disconnect closes RabbitMQ connection and resets singleton.
 func Disconnect() {
 	mu.Lock()
