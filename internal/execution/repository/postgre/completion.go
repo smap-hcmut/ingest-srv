@@ -49,12 +49,16 @@ func (r *implRepository) HasRawBatch(ctx context.Context, sourceID, batchID stri
 }
 
 func (r *implRepository) CompleteTaskSuccess(ctx context.Context, opt repository.CompleteTaskSuccessOptions) (model.RawBatch, error) {
-	tx, err := r.db.BeginTx(ctx, nil)
+	txCtx, cancel := context.WithTimeout(ctx, txTimeout)
+	defer cancel()
+
+	tx, err := r.db.BeginTx(txCtx, nil)
 	if err != nil {
 		r.l.Errorf(ctx, "execution.repository.CompleteTaskSuccess.BeginTx: %v", err)
 		return model.RawBatch{}, repository.ErrCompleteTask
 	}
 	defer rollbackTx(tx)
+	ctx = txCtx
 
 	row := &sqlboiler.RawBatch{
 		ID:             uuid.NewString(),
@@ -112,12 +116,16 @@ func (r *implRepository) CompleteTaskSuccess(ctx context.Context, opt repository
 }
 
 func (r *implRepository) CompleteTaskError(ctx context.Context, opt repository.CompleteTaskErrorOptions) error {
-	tx, err := r.db.BeginTx(ctx, nil)
+	txCtx, cancel := context.WithTimeout(ctx, txTimeout)
+	defer cancel()
+
+	tx, err := r.db.BeginTx(txCtx, nil)
 	if err != nil {
 		r.l.Errorf(ctx, "execution.repository.CompleteTaskError.BeginTx: %v", err)
 		return repository.ErrCompleteTask
 	}
 	defer rollbackTx(tx)
+	ctx = txCtx
 
 	if err := r.updateTaskFailure(ctx, tx, opt.CompletionContext.ExternalTask.ID, opt.ErrorMessage, opt.CompletedAt); err != nil {
 		return err

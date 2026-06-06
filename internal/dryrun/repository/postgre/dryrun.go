@@ -107,12 +107,18 @@ func (r *implRepository) UpdateResult(ctx context.Context, opt dryrunRepo.Update
 
 // CompleteResult finalizes one dryrun result and synchronizes datasource/target state in one transaction.
 func (r *implRepository) CompleteResult(ctx context.Context, opt dryrunRepo.CompleteResultOptions) (model.DryrunResult, model.DataSource, error) {
-	tx, err := r.db.BeginTx(ctx, nil)
+	// Bound the transaction so a hung statement cannot pin a backend or hold
+	// row locks indefinitely if Postgres misses a heartbeat.
+	txCtx, cancel := context.WithTimeout(ctx, txTimeout)
+	defer cancel()
+
+	tx, err := r.db.BeginTx(txCtx, nil)
 	if err != nil {
 		r.l.Errorf(ctx, "dryrun.repository.CompleteResult.BeginTx: %v", err)
 		return model.DryrunResult{}, model.DataSource{}, dryrunRepo.ErrFailedToUpdate
 	}
 	defer rollbackTx(tx)
+	ctx = txCtx
 
 	resultRow, err := sqlboiler.FindDryrunResult(ctx, tx, opt.ID)
 	if err != nil {

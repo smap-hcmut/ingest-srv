@@ -29,12 +29,16 @@ func (r *implRepository) CancelProjectRuntime(ctx context.Context, opt repositor
 		reason = "cancelled due to project lifecycle transition"
 	}
 
-	tx, err := r.db.BeginTx(ctx, nil)
+	txCtx, cancel := context.WithTimeout(ctx, txTimeout)
+	defer cancel()
+
+	tx, err := r.db.BeginTx(txCtx, nil)
 	if err != nil {
 		r.l.Errorf(ctx, "execution.repository.CancelProjectRuntime.BeginTx: %v", err)
 		return repository.ErrCancelRuntime
 	}
 	defer rollbackTx(tx)
+	ctx = txCtx
 
 	jobRows, err := sqlboiler.ScheduledJobs(
 		sqlboiler.ScheduledJobWhere.ProjectID.EQ(projectID),

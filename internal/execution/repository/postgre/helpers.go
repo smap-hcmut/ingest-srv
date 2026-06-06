@@ -235,6 +235,12 @@ func (r *implRepository) updateSourceFailure(ctx context.Context, exec boil.Cont
 	return nil
 }
 
+// txTimeout caps how long a single repository transaction may run before the
+// derived context is cancelled. Anything slower than 30s indicates a stuck
+// row-lock or runaway scan and should be aborted rather than left to pin a
+// backend forever.
+const txTimeout = 30 * time.Second
+
 func rollbackTx(tx *sql.Tx) {
 	if tx != nil {
 		_ = tx.Rollback()

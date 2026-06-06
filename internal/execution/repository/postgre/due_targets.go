@@ -16,29 +16,41 @@ import (
 	"github.com/aarondl/sqlboiler/v4/queries/qm"
 )
 
+// ListDueTargets returns due targets interleaved across projects using a
+// deficit-round-robin ranking (ROW_NUMBER OVER PARTITION BY project_id).
+// Previously the query sorted globally on (next_crawl_at, priority) which let
+// a single high-priority project monopolize every dispatch heartbeat — that
+// produced the 12.5x p50/p95 TTFD gap documented in
+// report/documents/docs/indexing-time-to-first-data-benchmark.md.
+//
+// Ranking ties inside one project keep the original sort (earliest
+// next_crawl_at first, then higher priority, then earliest created_at) so
+// per-project ordering does not regress.
 func (r *implRepository) ListDueTargets(ctx context.Context, now time.Time, limit int) ([]repo.DueTarget, error) {
 	if limit <= 0 {
 		limit = 1
 	}
 
+	ids, err := r.rankDueTargetIDs(ctx, now, limit)
+	if err != nil {
+		return nil, err
+	}
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
 	rows, err := sqlboiler.CrawlTargets(
-		qm.InnerJoin(fmt.Sprintf("%s ON %s.id = %s.data_source_id", sqlboiler.TableNames.DataSources, sqlboiler.TableNames.DataSources, sqlboiler.TableNames.CrawlTargets)),
-		qm.Where(fmt.Sprintf("%s.status = ?", sqlboiler.TableNames.DataSources), model.SourceStatusActive),
-		qm.Where(fmt.Sprintf("%s.source_category = ?", sqlboiler.TableNames.DataSources), model.SourceCategoryCrawl),
-		qm.Where(fmt.Sprintf("%s.is_active = ?", sqlboiler.TableNames.CrawlTargets), true),
-		qm.Where(fmt.Sprintf("(%s.next_crawl_at IS NULL OR %s.next_crawl_at <= ?)", sqlboiler.TableNames.CrawlTargets, sqlboiler.TableNames.CrawlTargets), now),
+		qm.WhereIn(fmt.Sprintf("%s.id IN ?", sqlboiler.TableNames.CrawlTargets), toAnySlice(ids)...),
 		qm.Load(sqlboiler.CrawlTargetRels.DataSource),
-		qm.OrderBy(fmt.Sprintf("%s.next_crawl_at ASC NULLS FIRST", sqlboiler.TableNames.CrawlTargets)),
-		qm.OrderBy(fmt.Sprintf("%s.priority DESC", sqlboiler.TableNames.CrawlTargets)),
-		qm.OrderBy(fmt.Sprintf("%s.created_at ASC", sqlboiler.TableNames.CrawlTargets)),
-		qm.Limit(limit),
 	).All(ctx, r.db)
 	if err != nil {
 		r.l.Errorf(ctx, "execution.repository.ListDueTargets.Query: %v", err)
 		return nil, repo.ErrListDueTargets
 	}
 
-	output := make([]repo.DueTarget, 0, len(rows))
+	// Preserve DRR order from rankDueTargetIDs even though qm.WhereIn returns
+	// rows in arbitrary order.
+	byID := make(map[string]repo.DueTarget, len(rows))
 	for _, row := range rows {
 		if row == nil || row.R == nil || row.R.GetDataSource() == nil {
 			continue
@@ -50,13 +62,81 @@ func (r *implRepository) ListDueTargets(ctx context.Context, now time.Time, limi
 			continue
 		}
 
-		output = append(output, repo.DueTarget{
+		byID[row.ID] = repo.DueTarget{
 			Source: *source,
 			Target: *target,
-		})
+		}
+	}
+
+	output := make([]repo.DueTarget, 0, len(ids))
+	for _, id := range ids {
+		if dt, ok := byID[id]; ok {
+			output = append(output, dt)
+		}
 	}
 
 	return output, nil
+}
+
+// rankDueTargetIDs runs the round-robin ranking entirely in Postgres and
+// returns the chosen IDs in dispatch order.
+func (r *implRepository) rankDueTargetIDs(ctx context.Context, now time.Time, limit int) ([]string, error) {
+	const query = `
+WITH due AS (
+    SELECT ct.id,
+           ds.project_id,
+           ROW_NUMBER() OVER (
+               PARTITION BY ds.project_id
+               ORDER BY ct.next_crawl_at ASC NULLS FIRST,
+                        ct.priority DESC,
+                        ct.created_at ASC
+           ) AS rn
+    FROM crawl_targets ct
+    INNER JOIN data_sources ds ON ds.id = ct.data_source_id
+    WHERE ds.status = $1
+      AND ds.source_category = $2
+      AND ct.is_active = TRUE
+      AND (ct.next_crawl_at IS NULL OR ct.next_crawl_at <= $3)
+)
+SELECT id
+FROM due
+ORDER BY rn ASC, project_id ASC
+LIMIT $4
+`
+	rows, err := r.db.QueryContext(ctx, query,
+		model.SourceStatusActive,
+		model.SourceCategoryCrawl,
+		now,
+		limit,
+	)
+	if err != nil {
+		r.l.Errorf(ctx, "execution.repository.ListDueTargets.Rank: %v", err)
+		return nil, repo.ErrListDueTargets
+	}
+	defer rows.Close()
+
+	ids := make([]string, 0, limit)
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			r.l.Errorf(ctx, "execution.repository.ListDueTargets.Scan: %v", err)
+			return nil, repo.ErrListDueTargets
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		r.l.Errorf(ctx, "execution.repository.ListDueTargets.RowsErr: %v", err)
+		return nil, repo.ErrListDueTargets
+	}
+	return ids, nil
+}
+
+func toAnySlice(s []string) []interface{} {
+	out := make([]interface{}, len(s))
+	for i, v := range s {
+		out[i] = v
+	}
+	return out
 }
 
 func (r *implRepository) ClaimTarget(ctx context.Context, opt repo.ClaimTargetOptions) (bool, error) {

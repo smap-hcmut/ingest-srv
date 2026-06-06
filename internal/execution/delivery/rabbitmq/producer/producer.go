@@ -75,6 +75,12 @@ func (p *implProducer) declarePublishTopology(ch rabbitmq.IChannel, exchange rab
 	if ch == nil {
 		return fmt.Errorf("rabbitmq channel is not initialized")
 	}
+	// Declare DLX topology first so the main queue's x-dead-letter-exchange
+	// reference resolves at queue-declare time. RabbitMQ requires the target
+	// exchange to exist; otherwise nack(requeue=false) drops silently.
+	if err := p.declareDLXTopology(ch, queue.Name, routingKey); err != nil {
+		return err
+	}
 	if err := ch.ExchangeDeclare(exchange); err != nil {
 		return err
 	}
@@ -90,6 +96,36 @@ func (p *implProducer) declarePublishTopology(ch rabbitmq.IChannel, exchange rab
 	}
 
 	return nil
+}
+
+// declareDLXTopology declares the shared dead-letter exchange and the matching
+// DLQ for the given task queue. Idempotent; safe to invoke on every publish
+// session bootstrap. Returns an error if the platform's DLQ is unknown.
+func (p *implProducer) declareDLXTopology(ch rabbitmq.IChannel, taskQueueName, routingKey string) error {
+	if err := ch.ExchangeDeclare(executionRabbit.DLXExchange); err != nil {
+		return err
+	}
+
+	var dlq rabbitmq.QueueArgs
+	switch taskQueueName {
+	case executionRabbit.TikTokTasksQueue.Name:
+		dlq = executionRabbit.TikTokTasksDLQQueue
+	case executionRabbit.FacebookTasksQueue.Name:
+		dlq = executionRabbit.FacebookTasksDLQQueue
+	case executionRabbit.YoutubeTasksQueue.Name:
+		dlq = executionRabbit.YouTubeTasksDLQQueue
+	default:
+		return nil
+	}
+
+	if _, err := ch.QueueDeclare(dlq); err != nil {
+		return err
+	}
+	return ch.QueueBind(rabbitmq.QueueBindArgs{
+		Queue:      dlq.Name,
+		Exchange:   executionRabbit.DLXExchange.Name,
+		RoutingKey: routingKey,
+	})
 }
 
 func (p *implProducer) ensurePublishRouteLocked(ctx context.Context, queueName execution.QueueName) (rabbitmq.IChannel, rabbitmq.ExchangeArgs, string, error) {
