@@ -10,7 +10,7 @@ var (
 	ErrTargetForbidden        = errors.New("target_id is not allowed for passive dryrun")
 	ErrDryrunNotAllowed       = errors.New("dryrun is not allowed in current source state")
 	ErrDryrunAlreadyRunning   = errors.New("dryrun is already running for target")
-	ErrUnsupportedMapping     = errors.New("unsupported dryrun mapping")
+	ErrUnsupportedMapping     = errors.New("unsupported dryrun mapping for source and target")
 	ErrInvalidSampleLimit     = errors.New("sample_limit must be greater than 0")
 	ErrInvalidCompletionInput = errors.New("invalid dryrun completion input")
 	ErrCompletionTaskNotFound = errors.New("dryrun completion task not found")

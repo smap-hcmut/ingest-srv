@@ -28,7 +28,7 @@ var (
 	errProjectArchived           = &pkgErrors.HTTPError{Code: 26, Message: "Project is archived", StatusCode: http.StatusBadRequest}
 	errSourceDryrunRunning       = &pkgErrors.HTTPError{Code: 27, Message: "Datasource has a running dryrun task", StatusCode: http.StatusBadRequest}
 	errListFailed                = &pkgErrors.HTTPError{Code: 12, Message: "Failed to list data sources", StatusCode: http.StatusInternalServerError}
-	errUpdateNotAllowed          = &pkgErrors.HTTPError{Code: 13, Message: "Cannot update config/mapping on an active source", StatusCode: http.StatusBadRequest}
+	errUpdateNotAllowed          = &pkgErrors.HTTPError{Code: 13, Message: "Cannot update config, mapping, or crawl schedule on an active source", StatusCode: http.StatusBadRequest}
 	errWrongBody                 = &pkgErrors.HTTPError{Code: 14, Message: "Wrong request body", StatusCode: http.StatusBadRequest}
 	errInvalidCrawlInterval      = &pkgErrors.HTTPError{Code: 15, Message: "Invalid crawl_interval_minutes; must be greater than 0", StatusCode: http.StatusBadRequest}
 	errInvalidTransition         = &pkgErrors.HTTPError{Code: 16, Message: "Invalid datasource lifecycle transition", StatusCode: http.StatusBadRequest}
@@ -49,7 +49,7 @@ var (
 	errTargetUpdateFailed         = &pkgErrors.HTTPError{Code: 106, Message: "Failed to update crawl target", StatusCode: http.StatusInternalServerError}
 	errTargetDeleteFailed         = &pkgErrors.HTTPError{Code: 107, Message: "Failed to delete crawl target", StatusCode: http.StatusInternalServerError}
 	errTargetListFailed           = &pkgErrors.HTTPError{Code: 108, Message: "Failed to list crawl targets", StatusCode: http.StatusInternalServerError}
-	errInvalidTargetInterval      = &pkgErrors.HTTPError{Code: 109, Message: "Invalid crawl_interval_minutes; must be greater than 0", StatusCode: http.StatusBadRequest}
+	errInvalidTargetInterval      = &pkgErrors.HTTPError{Code: 109, Message: "Invalid crawl_interval_minutes; must be omitted or greater than 0", StatusCode: http.StatusBadRequest}
 	errTargetValuesMustBeURLs     = &pkgErrors.HTTPError{Code: 110, Message: "Crawl target values must be valid URLs", StatusCode: http.StatusBadRequest}
 	errTargetActivateNotAllowed   = &pkgErrors.HTTPError{Code: 111, Message: "Crawl target cannot be activated in its current state", StatusCode: http.StatusBadRequest}
 	errTargetDeactivateNotAllowed = &pkgErrors.HTTPError{Code: 112, Message: "Crawl target cannot be deactivated in its current state", StatusCode: http.StatusBadRequest}
@@ -80,6 +80,8 @@ func (h *handler) mapError(err error) error {
 		return errInvalidCategory
 	case errors.Is(err, datasource.ErrInvalidCrawlMode):
 		return errInvalidCrawlMode
+	case errors.Is(err, datasource.ErrInvalidCrawlInterval):
+		return errInvalidCrawlInterval
 	case errors.Is(err, datasource.ErrCrawlConfigRequired):
 		return errCrawlConfigRequired
 	case errors.Is(err, datasource.ErrCreateFailed):

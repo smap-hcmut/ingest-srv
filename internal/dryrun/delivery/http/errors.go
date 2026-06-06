@@ -22,7 +22,7 @@ var (
 	errUpdateFailed         = &pkgErrors.HTTPError{Code: 10, Message: "Failed to update dryrun result", StatusCode: http.StatusInternalServerError}
 	errListFailed           = &pkgErrors.HTTPError{Code: 11, Message: "Failed to list dryrun history", StatusCode: http.StatusInternalServerError}
 	errWrongBody            = &pkgErrors.HTTPError{Code: 12, Message: "Wrong request body", StatusCode: http.StatusBadRequest}
-	errUnsupportedMapping   = &pkgErrors.HTTPError{Code: 13, Message: "Dryrun mapping is not supported yet", StatusCode: http.StatusBadRequest}
+	errUnsupportedMapping   = &pkgErrors.HTTPError{Code: 13, Message: "Dryrun mapping is not supported for this source and target", StatusCode: http.StatusBadRequest}
 	errDispatchFailed       = &pkgErrors.HTTPError{Code: 14, Message: "Failed to dispatch dryrun task", StatusCode: http.StatusInternalServerError}
 )
 

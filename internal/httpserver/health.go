@@ -23,6 +23,10 @@ func (srv HTTPServer) healthCheck(c *gin.Context) {
 	})
 }
 
+// readyCheck reports readiness for core ingest traffic and exposes optional dependency health.
+// PostgreSQL, MinIO, Kafka, and RabbitMQ are hard requirements for ingest use cases.
+// Redis is intentionally degraded-only so a cache/pub-sub outage does not remove the
+// API from Kubernetes endpoints while crawl dispatch and status reads can still work.
 func (srv HTTPServer) readyCheck(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -96,26 +100,39 @@ func (srv HTTPServer) readyCheck(c *gin.Context) {
 		"rabbitmq": gin.H{"ready": rabbitReady, "error": rabbitErr},
 	}
 
-	if !postgresReady || !redisReady || !minioReady || !kafkaReady || !rabbitReady {
+	if !postgresReady || !minioReady || !kafkaReady || !rabbitReady {
 		c.JSON(503, gin.H{
 			"status":       "not ready",
-			"message":      "Runtime dependencies not ready",
+			"message":      "Core runtime dependencies not ready",
 			"service":      serviceName,
 			"dependencies": deps,
 		})
 		return
 	}
 
+	status := "ready"
+	if !redisReady {
+		status = "degraded"
+	}
+
 	response.OK(c, gin.H{
-		"status":       "ready",
+		"status":       status,
 		"message":      healthMessage,
 		"version":      healthVersion,
 		"service":      serviceName,
 		"database":     "connected",
-		"redis":        "connected",
+		"redis":        dependencyStatus(redisReady),
 		"dependencies": deps,
 		"summary":      fmt.Sprintf("minio=%t kafka=%t rabbitmq=%t", minioReady, kafkaReady, rabbitReady),
 	})
+}
+
+// dependencyStatus renders dependency booleans into stable response strings.
+func dependencyStatus(ready bool) string {
+	if ready {
+		return "connected"
+	}
+	return "degraded"
 }
 
 func (srv HTTPServer) liveCheck(c *gin.Context) {

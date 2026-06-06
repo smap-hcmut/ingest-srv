@@ -191,7 +191,7 @@ func (uc *implUseCase) validCreateTargetGroupInput(input datasource.CreateTarget
 	if strings.TrimSpace(input.DataSourceID) == "" {
 		return datasource.ErrProjectIDRequired
 	}
-	if input.CrawlIntervalMinutes <= 0 {
+	if input.CrawlIntervalMinutes < 0 {
 		return datasource.ErrInvalidTargetInterval
 	}
 	return nil

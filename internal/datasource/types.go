@@ -54,12 +54,13 @@ type ListOutput struct {
 
 // UpdateInput is the input for updating a data source.
 type UpdateInput struct {
-	ID           string
-	Name         string
-	Description  string
-	Config       json.RawMessage
-	AccountRef   json.RawMessage
-	MappingRules json.RawMessage
+	ID                   string
+	Name                 string
+	Description          string
+	Config               json.RawMessage
+	AccountRef           json.RawMessage
+	MappingRules         json.RawMessage
+	CrawlIntervalMinutes *int
 }
 
 // UpdateOutput is the output after updating a data source.

@@ -54,11 +54,8 @@ func (uc *implUseCase) GetActivationReadiness(ctx context.Context, input datasou
 
 		sourceEligible := true
 		if source.SourceCategory == model.SourceCategoryPassive {
-			// TODO(passive-onboarding): this is only a temporary readiness gate.
-			// Real FILE_UPLOAD/WEBHOOK onboarding flow is not implemented yet, so
-			// we only read onboarding_status as a placeholder signal here.
-			// When passive onboarding is completed, move this branch to the real
-			// passive lifecycle contract and remove the placeholder assumption.
+			// Passive sources do not enter the crawl scheduler. Activation only
+			// requires confirmed onboarding when a passive source exists.
 			if source.OnboardingStatus != model.OnboardingStatusConfirmed {
 				out.PassiveUnconfirmedCount++
 				out.Errors = append(out.Errors, datasource.ActivationReadinessError{

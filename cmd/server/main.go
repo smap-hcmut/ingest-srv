@@ -90,10 +90,12 @@ func main() {
 		DB:       cfg.Redis.DB,
 	})
 	if err != nil {
-		logger.Fatalf(ctx, "Redis connect failed; ingest cannot run without cache/session state: %v", err)
+		logger.Warnf(ctx, "Redis connect failed; starting ingest in degraded mode without cache/session state: %v", err)
+		redisClient = nil
+	} else {
+		defer redisClient.Close()
+		logger.Info(ctx, "Redis client initialized")
 	}
-	defer redisClient.Close()
-	logger.Info(ctx, "Redis client initialized")
 
 	minioClient, err := configMinio.Connect(ctx, &cfg.MinIO)
 	if err != nil {

@@ -122,22 +122,24 @@ func (uc *implUseCase) Update(ctx context.Context, input datasource.UpdateInput)
 		return datasource.UpdateOutput{}, err
 	}
 
-	hasRuntimeChange := len(input.Config) > 0 || len(input.MappingRules) > 0
+	hasConfigOrMappingChange := len(input.Config) > 0 || len(input.MappingRules) > 0
+	hasRuntimeChange := hasConfigOrMappingChange || input.CrawlIntervalMinutes != nil
 	if hasRuntimeChange && current.Status == model.SourceStatusActive {
-		uc.l.Warnf(ctx, "datasource.usecase.Update: cannot update config/mapping on ACTIVE source id=%s", input.ID)
+		uc.l.Warnf(ctx, "datasource.usecase.Update: cannot update runtime fields on ACTIVE source id=%s", input.ID)
 		return datasource.UpdateOutput{}, datasource.ErrUpdateNotAllowed
 	}
 
 	opt := repo.UpdateDataSourceOptions{
-		ID:           strings.TrimSpace(input.ID),
-		Name:         strings.TrimSpace(input.Name),
-		Description:  input.Description,
-		Config:       input.Config,
-		AccountRef:   input.AccountRef,
-		MappingRules: input.MappingRules,
+		ID:                   strings.TrimSpace(input.ID),
+		Name:                 strings.TrimSpace(input.Name),
+		Description:          input.Description,
+		Config:               input.Config,
+		AccountRef:           input.AccountRef,
+		MappingRules:         input.MappingRules,
+		CrawlIntervalMinutes: input.CrawlIntervalMinutes,
 	}
 
-	if hasRuntimeChange {
+	if hasConfigOrMappingChange {
 		opt.DryrunStatus = string(model.DryrunStatusNotRequired)
 		opt.DryrunLastResultID = ""
 	}
@@ -250,10 +252,9 @@ func (uc *implUseCase) validCreateInput(input datasource.CreateInput) error {
 			return datasource.ErrCrawlConfigRequired
 		}
 	}
-	// TODO(passive-onboarding): passive source create currently stops at base
-	// datasource persistence only. Preview/confirm onboarding APIs for
-	// FILE_UPLOAD/WEBHOOK are not implemented yet, so we intentionally do not
-	// enforce onboarding-specific create contract here.
+	// Passive FILE_UPLOAD/WEBHOOK sources are accepted as base datasource
+	// records. The current project report does not require a mapping wizard, so
+	// create-time validation stays focused on crawl sources.
 	if strings.TrimSpace(input.CrawlMode) != "" {
 		if err := uc.validateCrawlMode(strings.TrimSpace(input.CrawlMode)); err != nil {
 			return err
@@ -292,6 +293,9 @@ func (uc *implUseCase) validListInput(input datasource.ListInput) error {
 func (uc *implUseCase) validUpdateInput(input datasource.UpdateInput) error {
 	if strings.TrimSpace(input.ID) == "" {
 		return datasource.ErrNotFound
+	}
+	if input.CrawlIntervalMinutes != nil && *input.CrawlIntervalMinutes <= 0 {
+		return datasource.ErrInvalidCrawlInterval
 	}
 	return nil
 }

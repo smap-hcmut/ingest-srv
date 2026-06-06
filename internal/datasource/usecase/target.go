@@ -25,6 +25,7 @@ func (uc *implUseCase) CreatePostTarget(ctx context.Context, input datasource.Cr
 	return uc.createTarget(ctx, input, model.TargetTypePostURL)
 }
 
+// createTarget creates a grouped crawl target and lets the database default the interval when it is omitted.
 func (uc *implUseCase) createTarget(ctx context.Context, input datasource.CreateTargetGroupInput, targetType model.TargetType) (datasource.CreateTargetOutput, error) {
 	if err := uc.validCreateTargetGroupInput(input); err != nil {
 		uc.l.Warnf(ctx, "datasource.usecase.createTarget.validCreateTargetGroupInput: %v", err)

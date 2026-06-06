@@ -124,6 +124,25 @@ func (uc *implUseCase) buildKeywordSampleParams(keyword string, sampleLimit int)
 	}
 }
 
+func (uc *implUseCase) buildFacebookKeywordSampleParams(keyword string, sampleLimit int) map[string]interface{} {
+	return map[string]interface{}{
+		"keyword":                  keyword,
+		"limit":                    sampleLimit,
+		"comment_count":            50,
+		"comment_sort":             "hot",
+		dryrun.ParamKeyRuntimeKind: string(dryrun.RuntimeKindDryrun),
+	}
+}
+
+func (uc *implUseCase) buildYouTubeKeywordSampleParams(keyword string, sampleLimit int) map[string]interface{} {
+	return map[string]interface{}{
+		"keyword":                  keyword,
+		"limit":                    sampleLimit,
+		"comment_count":            50,
+		dryrun.ParamKeyRuntimeKind: string(dryrun.RuntimeKindDryrun),
+	}
+}
+
 func (uc *implUseCase) buildPostDetailParams(parseIDs []string, sampleLimit int) map[string]interface{} {
 	return map[string]interface{}{
 		"parse_ids":                parseIDs,
@@ -134,33 +153,8 @@ func (uc *implUseCase) buildPostDetailParams(parseIDs []string, sampleLimit int)
 
 func (uc *implUseCase) buildDispatchSpec(source model.DataSource, target *model.CrawlTarget, sampleLimit int) (dryrun.DispatchSpec, json.RawMessage, error) {
 	switch {
-	case source.SourceType == model.SourceTypeTikTok && source.SourceCategory == model.SourceCategoryCrawl:
-		if target == nil || target.TargetType != model.TargetTypeKeyword {
-			return dryrun.DispatchSpec{}, nil, dryrun.ErrUnsupportedMapping
-		}
-		keywords := uc.extractKeywords(target.Values)
-		if len(keywords) == 0 {
-			return dryrun.DispatchSpec{}, nil, dryrun.ErrUnsupportedMapping
-		}
-
-		warnings := make([]map[string]string, 0)
-		if len(keywords) > 1 {
-			warnings = append(warnings, map[string]string{
-				"code":    string(dryrun.WarningCodeMultiValueKeyword),
-				"message": "dryrun uses the first keyword value of the target group",
-			})
-		}
-
-		spec := dryrun.DispatchSpec{
-			Queue:  dryrun.QueueNameTikTokTasks,
-			Action: dryrun.ActionNameFullFlow,
-			Params: uc.buildKeywordSampleParams(keywords[0], sampleLimit),
-		}
-		if len(warnings) > 0 {
-			spec.Params[dryrun.ParamKeyDryrunWarningCode] = warnings[0]["code"]
-			spec.Params[dryrun.ParamKeyDryrunWarningMessage] = warnings[0]["message"]
-		}
-		return spec, uc.marshalWarnings(warnings), nil
+	case source.SourceCategory == model.SourceCategoryCrawl && target != nil && target.TargetType == model.TargetTypeKeyword:
+		return uc.buildKeywordDispatchSpec(source.SourceType, *target, sampleLimit)
 	case source.SourceType == model.SourceTypeFacebook && source.SourceCategory == model.SourceCategoryCrawl:
 		if target == nil || target.TargetType != model.TargetTypePostURL {
 			return dryrun.DispatchSpec{}, nil, dryrun.ErrUnsupportedMapping
@@ -178,6 +172,51 @@ func (uc *implUseCase) buildDispatchSpec(source model.DataSource, target *model.
 	default:
 		return dryrun.DispatchSpec{}, nil, dryrun.ErrUnsupportedMapping
 	}
+}
+
+// buildKeywordDispatchSpec maps keyword dryruns to the full-flow crawler actions already used by scheduled dispatch.
+func (uc *implUseCase) buildKeywordDispatchSpec(sourceType model.SourceType, target model.CrawlTarget, sampleLimit int) (dryrun.DispatchSpec, json.RawMessage, error) {
+	keywords := uc.extractKeywords(target.Values)
+	if len(keywords) == 0 {
+		return dryrun.DispatchSpec{}, nil, dryrun.ErrUnsupportedMapping
+	}
+
+	var spec dryrun.DispatchSpec
+	switch sourceType {
+	case model.SourceTypeTikTok:
+		spec = dryrun.DispatchSpec{
+			Queue:  dryrun.QueueNameTikTokTasks,
+			Action: dryrun.ActionNameFullFlow,
+			Params: uc.buildKeywordSampleParams(keywords[0], sampleLimit),
+		}
+	case model.SourceTypeFacebook:
+		spec = dryrun.DispatchSpec{
+			Queue:  dryrun.QueueNameFacebookTasks,
+			Action: dryrun.ActionNameFullFlow,
+			Params: uc.buildFacebookKeywordSampleParams(keywords[0], sampleLimit),
+		}
+	case model.SourceTypeYouTube:
+		spec = dryrun.DispatchSpec{
+			Queue:  dryrun.QueueNameYouTubeTasks,
+			Action: dryrun.ActionNameFullFlow,
+			Params: uc.buildYouTubeKeywordSampleParams(keywords[0], sampleLimit),
+		}
+	default:
+		return dryrun.DispatchSpec{}, nil, dryrun.ErrUnsupportedMapping
+	}
+
+	warnings := make([]dryrun.Warning, 0)
+	if len(keywords) > 1 {
+		warnings = append(warnings, dryrun.Warning{
+			Code:    dryrun.WarningCodeMultiValueKeyword,
+			Message: "dryrun uses the first keyword value of the target group",
+		})
+	}
+	if len(warnings) > 0 {
+		spec.Params[dryrun.ParamKeyDryrunWarningCode] = string(warnings[0].Code)
+		spec.Params[dryrun.ParamKeyDryrunWarningMessage] = warnings[0].Message
+	}
+	return spec, uc.marshalWarnings(warnings), nil
 }
 
 func (uc *implUseCase) publishDispatch(ctx context.Context, input dryrun.PublishDispatchInput) error {
@@ -268,9 +307,9 @@ func (uc *implUseCase) readAllAndClose(reader io.ReadCloser) ([]byte, error) {
 func (uc *implUseCase) buildSuccessUpdate(rawBytes []byte, fallbackItemCount *int) (dryrunRepo.UpdateResultOptions, model.DryrunStatus, error) {
 	var artifact map[string]interface{}
 	if err := json.Unmarshal(rawBytes, &artifact); err != nil {
-		warnings := uc.marshalWarnings([]map[string]string{{
-			"code":    string(dryrun.WarningCodeInvalidArtifact),
-			"message": "dryrun artifact cannot be parsed as JSON",
+		warnings := uc.marshalWarnings([]dryrun.Warning{{
+			Code:    dryrun.WarningCodeInvalidArtifact,
+			Message: "dryrun artifact cannot be parsed as JSON",
 		}})
 		return dryrunRepo.UpdateResultOptions{
 			Status:      string(model.DryrunStatusWarning),
@@ -307,17 +346,17 @@ func (uc *implUseCase) buildSuccessUpdate(rawBytes []byte, fallbackItemCount *in
 
 func (uc *implUseCase) buildSamplePayload(resultRaw json.RawMessage, sampleLimit int, artifactItemCount int, fallbackItemCount *int) (json.RawMessage, int, *int, json.RawMessage) {
 	if len(resultRaw) == 0 || string(resultRaw) == "null" {
-		return nil, 0, uc.normalizeTotalFound(artifactItemCount, fallbackItemCount), uc.marshalWarnings([]map[string]string{{
-			"code":    string(dryrun.WarningCodeNoSampleData),
-			"message": "crawler returned success without sample result payload",
+		return nil, 0, uc.normalizeTotalFound(artifactItemCount, fallbackItemCount), uc.marshalWarnings([]dryrun.Warning{{
+			Code:    dryrun.WarningCodeNoSampleData,
+			Message: "crawler returned success without sample result payload",
 		}})
 	}
 
 	var payload interface{}
 	if err := json.Unmarshal(resultRaw, &payload); err != nil {
-		return nil, 0, uc.normalizeTotalFound(artifactItemCount, fallbackItemCount), uc.marshalWarnings([]map[string]string{{
-			"code":    string(dryrun.WarningCodeInvalidArtifact),
-			"message": "crawler result payload is not valid JSON",
+		return nil, 0, uc.normalizeTotalFound(artifactItemCount, fallbackItemCount), uc.marshalWarnings([]dryrun.Warning{{
+			Code:    dryrun.WarningCodeInvalidArtifact,
+			Message: "crawler result payload is not valid JSON",
 		}})
 	}
 
@@ -340,23 +379,23 @@ func (uc *implUseCase) buildSamplePayload(resultRaw json.RawMessage, sampleLimit
 					totalFound = uc.intPtr(rawTotal)
 				}
 				if len(sample) == 0 {
-					return nil, 0, totalFound, uc.marshalWarnings([]map[string]string{{
-						"code":    string(dryrun.WarningCodeNoSampleData),
-						"message": "crawler returned an empty collection",
+					return nil, 0, totalFound, uc.marshalWarnings([]dryrun.Warning{{
+						Code:    dryrun.WarningCodeNoSampleData,
+						Message: "crawler returned an empty collection",
 					}})
 				}
 				return uc.marshalJSON(sample), len(sample), totalFound, nil
 			}
 		}
 
-		return uc.marshalJSON([]interface{}{typed}), 1, uc.normalizeTotalFoundFromObject(typed, totalFound), uc.marshalWarnings([]map[string]string{{
-			"code":    string(dryrun.WarningCodeObjectSampleFallback),
-			"message": "crawler result payload is an object; dryrun stores the object as a single sample",
+		return uc.marshalJSON([]interface{}{typed}), 1, uc.normalizeTotalFoundFromObject(typed, totalFound), uc.marshalWarnings([]dryrun.Warning{{
+			Code:    dryrun.WarningCodeObjectSampleFallback,
+			Message: "crawler result payload is an object; dryrun stores the object as a single sample",
 		}})
 	default:
-		return uc.marshalJSON([]interface{}{typed}), 1, uc.normalizeTotalFound(artifactItemCount, fallbackItemCount), uc.marshalWarnings([]map[string]string{{
-			"code":    string(dryrun.WarningCodeObjectSampleFallback),
-			"message": "crawler result payload is scalar; dryrun stores it as a single sample",
+		return uc.marshalJSON([]interface{}{typed}), 1, uc.normalizeTotalFound(artifactItemCount, fallbackItemCount), uc.marshalWarnings([]dryrun.Warning{{
+			Code:    dryrun.WarningCodeObjectSampleFallback,
+			Message: "crawler result payload is scalar; dryrun stores it as a single sample",
 		}})
 	}
 }
@@ -382,7 +421,7 @@ func (uc *implUseCase) marshalJSON(input interface{}) json.RawMessage {
 	return data
 }
 
-func (uc *implUseCase) marshalWarnings(warnings []map[string]string) json.RawMessage {
+func (uc *implUseCase) marshalWarnings(warnings []dryrun.Warning) json.RawMessage {
 	if len(warnings) == 0 {
 		return nil
 	}
@@ -396,13 +435,13 @@ func (uc *implUseCase) appendWarningFromParams(params map[string]interface{}, wa
 		return warnings
 	}
 
-	items := make([]map[string]string, 0)
+	items := make([]dryrun.Warning, 0)
 	if len(warnings) > 0 {
 		_ = json.Unmarshal(warnings, &items)
 	}
-	items = append(items, map[string]string{
-		"code":    strings.TrimSpace(code),
-		"message": strings.TrimSpace(message),
+	items = append(items, dryrun.Warning{
+		Code:    dryrun.WarningCode(strings.TrimSpace(code)),
+		Message: strings.TrimSpace(message),
 	})
 	return uc.marshalWarnings(items)
 }

@@ -146,22 +146,31 @@ func (r listReq) toInput() datasource.ListInput {
 
 // updateReq represents data source update request.
 type updateReq struct {
-	ID           string          `json:"-"`
-	Name         string          `json:"name" example:"TikTok VinFast Crawler v2"`
-	Description  string          `json:"description" example:"Updated description"`
-	Config       json.RawMessage `json:"config,omitempty" swaggertype:"object"`
-	AccountRef   json.RawMessage `json:"account_ref,omitempty" swaggertype:"object"`
-	MappingRules json.RawMessage `json:"mapping_rules,omitempty" swaggertype:"object"`
+	ID                   string          `json:"-"`
+	Name                 string          `json:"name" example:"TikTok VinFast Crawler v2"`
+	Description          string          `json:"description" example:"Updated description"`
+	Config               json.RawMessage `json:"config,omitempty" swaggertype:"object"`
+	AccountRef           json.RawMessage `json:"account_ref,omitempty" swaggertype:"object"`
+	MappingRules         json.RawMessage `json:"mapping_rules,omitempty" swaggertype:"object"`
+	CrawlIntervalMinutes *int            `json:"crawl_interval_minutes,omitempty" example:"11"`
+}
+
+func (r updateReq) validate() error {
+	if r.CrawlIntervalMinutes != nil && *r.CrawlIntervalMinutes <= 0 {
+		return errInvalidCrawlInterval
+	}
+	return nil
 }
 
 func (r updateReq) toInput() datasource.UpdateInput {
 	return datasource.UpdateInput{
-		ID:           strings.TrimSpace(r.ID),
-		Name:         strings.TrimSpace(r.Name),
-		Description:  r.Description,
-		Config:       r.Config,
-		AccountRef:   r.AccountRef,
-		MappingRules: r.MappingRules,
+		ID:                   strings.TrimSpace(r.ID),
+		Name:                 strings.TrimSpace(r.Name),
+		Description:          r.Description,
+		Config:               r.Config,
+		AccountRef:           r.AccountRef,
+		MappingRules:         r.MappingRules,
+		CrawlIntervalMinutes: r.CrawlIntervalMinutes,
 	}
 }
 
@@ -626,7 +635,7 @@ func (r createTargetGroupReq) validate(targetType model.TargetType) error {
 			return err
 		}
 	}
-	if r.CrawlIntervalMinutes <= 0 {
+	if r.CrawlIntervalMinutes < 0 {
 		return errInvalidTargetInterval
 	}
 	return nil

@@ -28,6 +28,7 @@ type QueueName string
 const (
 	QueueNameTikTokTasks   QueueName = QueueName(constants.QueueTikTokTasks)
 	QueueNameFacebookTasks QueueName = QueueName(constants.QueueFacebookTasks)
+	QueueNameYouTubeTasks  QueueName = QueueName(constants.QueueYouTubeTasks)
 )
 
 type ActionName string
@@ -57,6 +58,12 @@ const (
 	ParamKeyDryrunWarningCode    = "dryrun_warning_code"
 	ParamKeyDryrunWarningMessage = "dryrun_warning_message"
 )
+
+// Warning describes a non-fatal dryrun issue that callers should show without failing the run.
+type Warning struct {
+	Code    WarningCode `json:"code"`
+	Message string      `json:"message"`
+}
 
 // DispatchSpec is the normalized runtime dispatch shape for one dryrun.
 type DispatchSpec struct {

@@ -56,6 +56,10 @@ func (h *handler) processUpdateReq(c *gin.Context) (updateReq, error) {
 		h.l.Warnf(c.Request.Context(), "datasource.delivery.processUpdateReq.validatePath: %v", detailErr)
 		return req, detailErr
 	}
+	if err := req.validate(); err != nil {
+		h.l.Warnf(c.Request.Context(), "datasource.delivery.processUpdateReq.validate: %v", err)
+		return req, err
+	}
 	return req, nil
 }
 

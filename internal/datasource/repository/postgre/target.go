@@ -42,13 +42,15 @@ func (r *implRepository) CreateTarget(ctx context.Context, opt repository.Create
 		sqlboiler.CrawlTargetColumns.Values,
 		sqlboiler.CrawlTargetColumns.IsActive,
 		sqlboiler.CrawlTargetColumns.Priority,
-		sqlboiler.CrawlTargetColumns.CrawlIntervalMinutes,
 	}
 	if opt.Label != "" {
 		insertColumns = append(insertColumns, sqlboiler.CrawlTargetColumns.Label)
 	}
 	if len(opt.PlatformMeta) > 0 {
 		insertColumns = append(insertColumns, sqlboiler.CrawlTargetColumns.PlatformMeta)
+	}
+	if opt.CrawlIntervalMinutes > 0 {
+		insertColumns = append(insertColumns, sqlboiler.CrawlTargetColumns.CrawlIntervalMinutes)
 	}
 
 	if err := row.Insert(ctx, r.db, boil.Whitelist(insertColumns...)); err != nil {
