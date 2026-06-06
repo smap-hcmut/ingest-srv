@@ -17,18 +17,3 @@ type Scope struct {
 	Role     string `json:"role"` // ADMIN, ANALYST, or VIEWER
 	JTI      string `json:"jti"`
 }
-
-// IsAdmin checks if the scope has admin role
-func (s Scope) IsAdmin() bool {
-	return s.Role == RoleAdmin
-}
-
-// IsAnalyst checks if the scope has analyst role
-func (s Scope) IsAnalyst() bool {
-	return s.Role == RoleAnalyst
-}
-
-// IsViewer checks if the scope has viewer role
-func (s Scope) IsViewer() bool {
-	return s.Role == RoleViewer
-}

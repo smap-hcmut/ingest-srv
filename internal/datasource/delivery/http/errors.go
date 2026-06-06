@@ -38,8 +38,6 @@ var (
 	errCrawlModeNotAllowed       = &pkgErrors.HTTPError{Code: 20, Message: "Crawl mode update is not allowed for this datasource", StatusCode: http.StatusBadRequest}
 	errActivationReadinessFailed = &pkgErrors.HTTPError{Code: 21, Message: "Project activation readiness failed", StatusCode: http.StatusBadRequest}
 	errInvalidReadinessCommand   = &pkgErrors.HTTPError{Code: 22, Message: "Invalid activation readiness command", StatusCode: http.StatusBadRequest}
-	errInternal                  = &pkgErrors.HTTPError{Code: 99, Message: "Internal server error", StatusCode: http.StatusInternalServerError}
-
 	// CrawlTarget errors — 101+ range.
 	errTargetNotFound             = &pkgErrors.HTTPError{Code: 101, Message: "Crawl target not found", StatusCode: http.StatusNotFound}
 	errTargetValuesRequired       = &pkgErrors.HTTPError{Code: 102, Message: "Crawl target values are required", StatusCode: http.StatusBadRequest}

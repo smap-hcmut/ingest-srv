@@ -119,7 +119,7 @@ func (uc *implUseCase) buildKeywordSampleParams(keyword string, sampleLimit int)
 		"keyword":                  keyword,
 		"limit":                    sampleLimit,
 		"threshold":                0.5,
-		"comment_count":            50,
+		"comment_count":            8,
 		dryrun.ParamKeyRuntimeKind: string(dryrun.RuntimeKindDryrun),
 	}
 }
@@ -237,19 +237,6 @@ func (uc *implUseCase) markDatasourceRunning(ctx context.Context, sourceID, resu
 	})
 	if err != nil {
 		uc.l.Errorf(ctx, "dryrun.usecase.markDatasourceRunning.dsUC.MarkDryrunRunning: source_id=%s result_id=%s err=%v", sourceID, resultID, err)
-		return model.DataSource{}, dryrun.ErrUpdateFailed
-	}
-	return output.DataSource, nil
-}
-
-func (uc *implUseCase) applyDatasourceResult(ctx context.Context, sourceID, resultID string, status model.DryrunStatus) (model.DataSource, error) {
-	output, err := uc.dsUC.ApplyDryrunResult(ctx, datasource.ApplyDryrunResultInput{
-		ID:                 strings.TrimSpace(sourceID),
-		DryrunLastResultID: strings.TrimSpace(resultID),
-		DryrunStatus:       string(status),
-	})
-	if err != nil {
-		uc.l.Errorf(ctx, "dryrun.usecase.applyDatasourceResult.dsUC.ApplyDryrunResult: source_id=%s result_id=%s status=%s err=%v", sourceID, resultID, status, err)
 		return model.DataSource{}, dryrun.ErrUpdateFailed
 	}
 	return output.DataSource, nil

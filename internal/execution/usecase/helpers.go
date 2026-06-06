@@ -615,20 +615,6 @@ func (uc *implUseCase) getModeMultiplier(mode model.CrawlMode) (float64, error) 
 	}
 }
 
-func (uc *implUseCase) derefCrawlMode(mode *model.CrawlMode) string {
-	if mode == nil {
-		return ""
-	}
-	return string(*mode)
-}
-
-func (uc *implUseCase) formatTimePtr(value *time.Time) string {
-	if value == nil {
-		return ""
-	}
-	return value.Format(time.RFC3339)
-}
-
 func (uc *implUseCase) extractKeywords(values []string) []string {
 	keywords := make([]string, 0, len(values))
 	for _, value := range values {

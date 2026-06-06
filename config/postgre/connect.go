@@ -98,18 +98,6 @@ func Connect(ctx context.Context, cfg config.PostgresConfig) (*sql.DB, error) {
 	return instance, err
 }
 
-// GetClient returns the singleton PostgreSQL client instance.
-// Panics if the client has not been initialized by calling Connect() first.
-func GetClient() *sql.DB {
-	mu.RLock()
-	defer mu.RUnlock()
-
-	if instance == nil {
-		panic("PostgreSQL client not initialized. Call Connect() first")
-	}
-	return instance
-}
-
 // Disconnect closes the PostgreSQL connection and resets the singleton instance.
 // This allows a new connection to be established by calling Connect() again.
 func Disconnect(ctx context.Context, db *sql.DB) error {
@@ -125,83 +113,5 @@ func Disconnect(ctx context.Context, db *sql.DB) error {
 		initErr = nil
 		once = sync.Once{} // Reset to allow reconnection
 	}
-	return nil
-}
-
-// HealthCheck performs a health check on the PostgreSQL connection by pinging the database.
-// Returns an error if the connection is not initialized or the ping fails.
-func HealthCheck(ctx context.Context) error {
-	mu.RLock()
-	defer mu.RUnlock()
-
-	if instance == nil {
-		return fmt.Errorf("PostgreSQL client not initialized")
-	}
-
-	if err := instance.PingContext(ctx); err != nil {
-		return fmt.Errorf("PostgreSQL health check failed: %w", err)
-	}
-
-	return nil
-}
-
-// IsConnected checks if the PostgreSQL client instance exists.
-// Note: This only checks if the instance is initialized, not if the connection is actually alive.
-// Use HealthCheck() to verify the connection is working.
-func IsConnected() bool {
-	mu.RLock()
-	defer mu.RUnlock()
-
-	return instance != nil
-}
-
-// Reconnect closes the existing PostgreSQL connection and establishes a new one.
-// This is useful when you need to reconnect after a connection loss or configuration change.
-func Reconnect(ctx context.Context, cfg config.PostgresConfig) error {
-	mu.Lock()
-	defer mu.Unlock()
-
-	// Close existing connection if present
-	if instance != nil {
-		_ = instance.Close()
-		instance = nil
-	}
-
-	// Reset sync.Once and error state to allow new connection
-	once = sync.Once{}
-	initErr = nil
-
-	// Build connection string with configurable SSL mode
-	sslMode := cfg.SSLMode
-	if sslMode == "" {
-		sslMode = "disable"
-	}
-	dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
-		cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.DBName, sslMode)
-
-	// Open new database connection
-	db, err := sql.Open("postgres", dsn)
-	if err != nil {
-		return fmt.Errorf("failed to create new PostgreSQL connection: %w", err)
-	}
-
-	// Configure connection pool settings
-	db.SetMaxIdleConns(defaultMaxIdleConns)
-	db.SetMaxOpenConns(defaultMaxOpenConns)
-	db.SetConnMaxLifetime(defaultConnMaxLifetime)
-	db.SetConnMaxIdleTime(defaultConnMaxIdleTime)
-
-	// Verify connection with timeout
-	connectCtx, cancel := context.WithTimeout(ctx, defaultConnectTimeout)
-	defer cancel()
-
-	if pingErr := db.PingContext(connectCtx); pingErr != nil {
-		// Close connection to prevent resource leak
-		_ = db.Close()
-		return fmt.Errorf("failed to connect to PostgreSQL: %w", pingErr)
-	}
-
-	instance = db
-
 	return nil
 }

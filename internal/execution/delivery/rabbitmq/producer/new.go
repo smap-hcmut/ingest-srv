@@ -2,6 +2,7 @@ package producer
 
 import (
 	"context"
+	"sync"
 
 	execution "ingest-srv/internal/execution"
 	executionRabbit "ingest-srv/internal/execution/delivery/rabbitmq"
@@ -20,6 +21,7 @@ type Producer interface {
 type implProducer struct {
 	l                   log.Logger
 	conn                rabbitmq.IRabbitMQ
+	mu                  sync.Mutex
 	tikTokTasksWriter   rabbitmq.IChannel
 	facebookTasksWriter rabbitmq.IChannel
 	youtubeTasksWriter  rabbitmq.IChannel
@@ -34,6 +36,9 @@ func New(l log.Logger, rabbitConn rabbitmq.IRabbitMQ) Producer {
 }
 
 func (p *implProducer) Run() error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	var err error
 
 	p.tikTokTasksWriter, err = p.getWriterWithQueue(
@@ -69,13 +74,19 @@ func (p *implProducer) Run() error {
 }
 
 func (p *implProducer) Close() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	if p.tikTokTasksWriter != nil {
 		_ = p.tikTokTasksWriter.Close()
+		p.tikTokTasksWriter = nil
 	}
 	if p.facebookTasksWriter != nil {
 		_ = p.facebookTasksWriter.Close()
+		p.facebookTasksWriter = nil
 	}
 	if p.youtubeTasksWriter != nil {
 		_ = p.youtubeTasksWriter.Close()
+		p.youtubeTasksWriter = nil
 	}
 }
