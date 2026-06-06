@@ -13,6 +13,17 @@ const (
 	YoutubeTasksRoutingKey  = constants.QueueYouTubeTasks
 )
 
+// queueWithDLX mirrors execution/rabbitmq/constants.go so the dryrun producer
+// declares the same DLX arguments. Without this the second boot path would
+// race PRECONDITION_FAILED against the queue created by the execution
+// producer.
+func queueWithDLX(routingKey string) map[string]interface{} {
+	return map[string]interface{}{
+		"x-dead-letter-exchange":    "ingest_dlx",
+		"x-dead-letter-routing-key": routingKey,
+	}
+}
+
 var (
 	TikTokTasksExchange = rmq.ExchangeArgs{
 		Name:       constants.ExchangeTikTokTasks,
@@ -41,14 +52,17 @@ var (
 	TikTokTasksQueue = rmq.QueueArgs{
 		Name:    constants.QueueTikTokTasks,
 		Durable: true,
+		Args:    queueWithDLX(TikTokTasksRoutingKey),
 	}
 	FacebookTasksQueue = rmq.QueueArgs{
 		Name:    constants.QueueFacebookTasks,
 		Durable: true,
+		Args:    queueWithDLX(FacebookTasksRoutingKey),
 	}
 	YoutubeTasksQueue = rmq.QueueArgs{
 		Name:    constants.QueueYouTubeTasks,
 		Durable: true,
+		Args:    queueWithDLX(YoutubeTasksRoutingKey),
 	}
 	IngestDryrunCompletionsQueue = rmq.QueueArgs{
 		Name:    constants.QueueIngestDryrunCompletions,
