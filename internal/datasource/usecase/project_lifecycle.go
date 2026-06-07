@@ -260,74 +260,29 @@ func (uc *implUseCase) UpdateProjectCrawlMode(ctx context.Context, input datasou
 
 	projectID := strings.TrimSpace(input.ProjectID)
 	mode := strings.TrimSpace(input.CrawlMode)
-	triggerType := strings.TrimSpace(input.TriggerType)
-	reason := strings.TrimSpace(input.Reason)
-	eventRef := strings.TrimSpace(input.EventRef)
 
-	sources, err := uc.repo.ListDataSources(ctx, repo.ListDataSourcesOptions{ProjectID: projectID})
+	// Single-transaction bulk apply: 1 count + 1 UPDATE…RETURNING +
+	// 1 multi-row INSERT. Old path was N × (Find + Update + Insert) which
+	// scaled linearly with the number of crawl datasources and caused
+	// 20-second crisis fan-out spikes during high-load periods.
+	bulkOut, err := uc.repo.BulkApplyProjectCrawlMode(ctx, repo.BulkApplyProjectCrawlModeOptions{
+		ProjectID:   projectID,
+		TargetMode:  mode,
+		TriggerType: strings.TrimSpace(input.TriggerType),
+		Reason:      strings.TrimSpace(input.Reason),
+		EventRef:    strings.TrimSpace(input.EventRef),
+	})
 	if err != nil {
-		uc.l.Errorf(ctx, "datasource.usecase.UpdateProjectCrawlMode.repo.ListDataSources: project_id=%s err=%v", projectID, err)
-		return datasource.ProjectLifecycleOutput{}, datasource.ErrListFailed
-	}
-
-	affected := 0
-	eligible := 0
-	alreadyTarget := 0
-	for _, source := range sources {
-		if source.SourceCategory != model.SourceCategoryCrawl {
-			continue
-		}
-
-		switch source.Status {
-		case model.SourceStatusReady, model.SourceStatusActive, model.SourceStatusPaused:
-		default:
-			continue
-		}
-
-		if source.CrawlMode == nil || source.CrawlIntervalMinutes == nil || *source.CrawlIntervalMinutes <= 0 {
-			continue
-		}
-
-		eligible++
-		if string(*source.CrawlMode) == mode {
-			alreadyTarget++
-			continue
-		}
-
-		_, updateErr := uc.repo.UpdateDataSource(ctx, repo.UpdateDataSourceOptions{
-			ID:        source.ID,
-			CrawlMode: mode,
-		})
-		if updateErr != nil {
-			uc.l.Errorf(ctx, "datasource.usecase.UpdateProjectCrawlMode.repo.UpdateDataSource: source_id=%s err=%v", source.ID, updateErr)
-			return datasource.ProjectLifecycleOutput{}, datasource.ErrUpdateFailed
-		}
-
-		if _, changeErr := uc.repo.CreateCrawlModeChange(ctx, repo.CreateCrawlModeChangeOptions{
-			SourceID:            source.ID,
-			ProjectID:           source.ProjectID,
-			TriggerType:         triggerType,
-			FromMode:            string(*source.CrawlMode),
-			ToMode:              mode,
-			FromIntervalMinutes: *source.CrawlIntervalMinutes,
-			ToIntervalMinutes:   *source.CrawlIntervalMinutes,
-			Reason:              reason,
-			EventRef:            eventRef,
-			TriggeredBy:         "",
-		}); changeErr != nil {
-			uc.l.Errorf(ctx, "datasource.usecase.UpdateProjectCrawlMode.repo.CreateCrawlModeChange: source_id=%s err=%v", source.ID, changeErr)
-			return datasource.ProjectLifecycleOutput{}, datasource.ErrUpdateFailed
-		}
-
-		affected++
+		uc.l.Errorf(ctx, "datasource.usecase.UpdateProjectCrawlMode.repo.BulkApplyProjectCrawlMode: project_id=%s err=%v", projectID, err)
+		return datasource.ProjectLifecycleOutput{}, datasource.ErrUpdateFailed
 	}
 
 	noopReason := ""
-	if affected == 0 {
+	if bulkOut.Affected == 0 {
 		switch {
-		case eligible == 0:
+		case bulkOut.Eligible == 0:
 			noopReason = "no eligible crawl datasource"
-		case alreadyTarget == eligible:
+		case bulkOut.AlreadyTarget == bulkOut.Eligible:
 			noopReason = "all eligible crawl datasources already target mode"
 		default:
 			noopReason = "no crawl mode changes required"
@@ -336,7 +291,7 @@ func (uc *implUseCase) UpdateProjectCrawlMode(ctx context.Context, input datasou
 
 	return datasource.ProjectLifecycleOutput{
 		ProjectID:               projectID,
-		AffectedDataSourceCount: affected,
+		AffectedDataSourceCount: bulkOut.Affected,
 		NoopReason:              noopReason,
 	}, nil
 }

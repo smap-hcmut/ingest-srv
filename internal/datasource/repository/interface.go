@@ -24,6 +24,7 @@ type Repository interface {
 	DeleteDataSource(ctx context.Context, id string) error
 	CountActiveTargets(ctx context.Context, dataSourceID string) (int64, error)
 	CreateCrawlModeChange(ctx context.Context, opt CreateCrawlModeChangeOptions) (model.CrawlModeChange, error)
+	BulkApplyProjectCrawlMode(ctx context.Context, opt BulkApplyProjectCrawlModeOptions) (BulkApplyProjectCrawlModeOutput, error)
 
 	// CrawlTarget sub-resource operations.
 	CreateTarget(ctx context.Context, opt CreateTargetOptions) (model.CrawlTarget, error)

@@ -145,3 +145,23 @@ type CreateCrawlModeChangeOptions struct {
 	EventRef            string
 	TriggeredBy         string
 }
+
+// BulkApplyProjectCrawlModeOptions flips crawl_mode for every eligible crawl
+// datasource in a project in a single transaction. Eliminates the N-roundtrip
+// per-source loop the usecase used to do (Find + Update + Insert per source).
+type BulkApplyProjectCrawlModeOptions struct {
+	ProjectID   string
+	TargetMode  string
+	TriggerType string
+	Reason      string
+	EventRef    string
+	TriggeredBy string
+}
+
+// BulkApplyProjectCrawlModeOutput summarises what the bulk apply touched so
+// the usecase can build the same noopReason it produced row-by-row.
+type BulkApplyProjectCrawlModeOutput struct {
+	Affected      int
+	Eligible      int
+	AlreadyTarget int
+}
